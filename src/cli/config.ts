@@ -31,12 +31,12 @@ const nanoid4 = customAlphabet("abcdefghijklmnopqrstuvwxyz0123456789", 4);
 /** XDG on every platform, macOS included. One less branch. */
 export function configPath(env: NodeJS.ProcessEnv = process.env): string {
   const base = env["XDG_CONFIG_HOME"] ?? path.join(os.homedir(), ".config");
-  return path.join(base, "geode", "config.json");
+  return path.join(base, "geodemd", "config.json");
 }
 
 export function defaultDbPath(env: NodeJS.ProcessEnv = process.env): string {
   const base = env["XDG_DATA_HOME"] ?? path.join(os.homedir(), ".local", "share");
-  return path.join(base, "geode", "db.sqlite");
+  return path.join(base, "geodemd", "db.sqlite");
 }
 
 /**

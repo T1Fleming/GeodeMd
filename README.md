@@ -2,7 +2,7 @@
   <img src="./assets/banner.svg" alt="Geode — spaced repetition over an ordinary directory of Markdown files" width="900">
 </p>
 
-# Geode
+# GeodeMD
 
 A spaced repetition system where **everything durable is plain text in an ordinary directory of Markdown files**. Notes hold card content, append-only JSONL logs hold review history, and a SQLite database outside that directory holds nothing but a rebuildable cache.
 
@@ -38,7 +38,7 @@ npm link          # puts `geode` on your PATH
 geode init ~/notes
 ```
 
-That writes `~/.config/geode/config.json`. The database goes to `~/.local/share/geode/db.sqlite` — outside your notes, deliberately, because it is a cache and a live database file is the worst thing to put under a sync or backup tool.
+That writes `~/.config/geodemd/config.json`. The database goes to `~/.local/share/geodemd/db.sqlite` — outside your notes, deliberately, because it is a cache and a live database file is the worst thing to put under a sync or backup tool.
 
 **2. Look before it writes.**
 
@@ -106,7 +106,7 @@ Nothing else in your notes is touched. A file with CRLF line endings keeps them;
 |---|---|
 | **Cards** | in your notes, as the lines you wrote |
 | **Review history** | `<notes>/.sr/log/<device>-YYYY-MM.jsonl` — append-only, one line per review |
-| **Everything else** | `~/.local/share/geode/db.sqlite` — a cache |
+| **Everything else** | `~/.local/share/geodemd/db.sqlite` — a cache |
 
 The first two are durable and are what you back up. The database is **fully derivable**: delete it, run `geode rebuild`, and it comes back identical. There is no column in it that does not come from your notes or your logs, and the test suite asserts that by comparing every table after a rebuild.
 

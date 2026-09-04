@@ -25,7 +25,7 @@ import {
   readConfig,
 } from "./config.js";
 
-const USAGE = `geode — spaced repetition over a directory of Markdown files
+const USAGE = `GeodeMD — spaced repetition over a directory of Markdown files
 
   geode init <path> [--force]   write the config file
   geode sync [--full] [--dry-run]

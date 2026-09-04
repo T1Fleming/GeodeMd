@@ -12,6 +12,8 @@ import {
   parseArgs,
 } from "./index.js";
 import {
+  configPath,
+  defaultDbPath,
   defaultDevice,
   initConfig,
   InitRefused,
@@ -51,6 +53,26 @@ describe("parseArgs", () => {
   it("ignores a nonsense limit rather than crashing", () => {
     expect(parseArgs(["review", "-n", "zero"]).limit).toBeUndefined();
     expect(parseArgs(["review", "-n", "-5"]).limit).toBeUndefined();
+  });
+});
+
+describe("XDG paths", () => {
+  it("uses the geodemd directory, while the command stays `geode`", () => {
+    // The project is GeodeMD; the binary is deliberately the shorter `geode`.
+    // These are two separate decisions and each is easy to change by accident.
+    const env = { XDG_CONFIG_HOME: "/x/cfg", XDG_DATA_HOME: "/x/data" } as NodeJS.ProcessEnv;
+    expect(configPath(env)).toBe(path.join("/x/cfg", "geodemd", "config.json"));
+    expect(defaultDbPath(env)).toBe(path.join("/x/data", "geodemd", "db.sqlite"));
+  });
+
+  it("falls back to ~/.config and ~/.local/share when XDG is unset", () => {
+    const home = os.homedir();
+    expect(configPath({} as NodeJS.ProcessEnv)).toBe(
+      path.join(home, ".config", "geodemd", "config.json"),
+    );
+    expect(defaultDbPath({} as NodeJS.ProcessEnv)).toBe(
+      path.join(home, ".local", "share", "geodemd", "db.sqlite"),
+    );
   });
 });
 

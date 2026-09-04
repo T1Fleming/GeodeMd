@@ -1,10 +1,10 @@
-# Geode — Phase 1 Design Spec
+# GeodeMD — Phase 1 Design Spec
 
 A spaced repetition system where **everything durable is plain text in an ordinary directory of Markdown files** — notes hold card content, append-only JSONL logs hold review history — and a SQLite database outside that directory holds nothing but a rebuildable cache.
 
 This document is a build brief. Phase 1 is a CLI. A later phase is an Electron app. The structure below exists so that later phase is an interface swap, not a rewrite.
 
-The tool is named `geode` throughout — the binary, `~/.config/geode/`, and `~/.local/share/geode/`.
+The project is **GeodeMD**; the command you type is `geode`, kept short deliberately. Its directories are `~/.config/geodemd/` and `~/.local/share/geodemd/`.
 
 ---
 
@@ -59,8 +59,8 @@ Build and run: `tsc` to `dist/`, a `bin` entry pointing at `dist/cli/index.js` b
 One JSON file, three keys, read in exactly one place:
 
 ```
-~/.config/geode/config.json     { "notesPath": "...", "device": "mac-k3f9", "dbPath": "..." }
-~/.local/share/geode/db.sqlite  default DB location, overridable
+~/.config/geodemd/config.json     { "notesPath": "...", "device": "mac-k3f9", "dbPath": "..." }
+~/.local/share/geodemd/db.sqlite  default DB location, overridable
 ```
 
 XDG paths on every platform, macOS included. One less branch, and two string constants instead of an afternoon with `env-paths`.
@@ -526,7 +526,7 @@ One consequence is worth knowing before it surprises you: due cards are served a
 CLI:
 
 ```
-geode init <path>       write ~/.config/geode/config.json
+geode init <path>       write ~/.config/geodemd/config.json
        [--force]       overwrite an existing config; device is kept regardless
 geode sync [--full] [--dry-run]
                        walk notes, stamp IDs, ingest logs, update db

@@ -1,12 +1,16 @@
 {
-  "name": "geode",
+  "name": "geodemd",
   "version": "0.1.0",
   "description": "Spaced repetition over an ordinary directory of Markdown files",
   "type": "module",
-  "bin": { "geode": "dist/cli/index.js" },
+  "bin": {
+    "geode": "dist/cli/index.js"
+  },
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
-  "engines": { "node": ">=20" },
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "build": "tsc",
     "test": "vitest run",
