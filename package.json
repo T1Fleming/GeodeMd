@@ -1,0 +1,27 @@
+{
+  "name": "geode",
+  "version": "0.1.0",
+  "description": "Spaced repetition over an ordinary directory of Markdown files",
+  "type": "module",
+  "bin": { "geode": "dist/cli/index.js" },
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "engines": { "node": ">=20" },
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "better-sqlite3": "11.7.0",
+    "nanoid": "5.0.9",
+    "ts-fsrs": "4.6.1"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "7.6.12",
+    "@types/node": "22.10.2",
+    "typescript": "5.7.2",
+    "vitest": "2.1.8"
+  }
+}
