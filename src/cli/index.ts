@@ -11,7 +11,9 @@
  *   2  unexpected internal error
  */
 
+import { realpathSync } from "node:fs";
 import * as readline from "node:readline";
+import { fileURLToPath } from "node:url";
 import { Core, ConfigError } from "../core/index.js";
 import type { SyncSummary } from "../core/index.js";
 import { Store } from "../store/index.js";
@@ -292,8 +294,24 @@ export async function main(argv: string[]): Promise<number> {
   }
 }
 
-const isEntry =
-  process.argv[1] !== undefined && import.meta.url === new URL(`file://${process.argv[1]}`).href;
+/**
+ * Is this module the process entry point?
+ *
+ * `process.argv[1]` is whatever path invoked us, which under `npm link` is a
+ * symlink in a bin directory, while `import.meta.url` is always the resolved
+ * file. Comparing them directly makes the installed binary a no-op — it exits 0
+ * having done nothing — so both sides are resolved before comparing.
+ */
+export function isEntryPoint(metaUrl: string, argv1: string | undefined): boolean {
+  if (argv1 === undefined) return false;
+  try {
+    return realpathSync(fileURLToPath(metaUrl)) === realpathSync(argv1);
+  } catch {
+    return false;
+  }
+}
+
+const isEntry = isEntryPoint(import.meta.url, process.argv[1]);
 
 if (isEntry) {
   main(process.argv.slice(2))

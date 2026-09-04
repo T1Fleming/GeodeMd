@@ -2,7 +2,8 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
-import { formatSummary, interpretKey, LEGEND, parseArgs } from "./index.js";
+import { pathToFileURL } from "node:url";
+import { formatSummary, interpretKey, isEntryPoint, LEGEND, parseArgs } from "./index.js";
 import {
   defaultDevice,
   initConfig,
@@ -170,5 +171,31 @@ describe("interpretKey", () => {
     for (const word of ["again", "hard", "good", "easy"]) {
       expect(LEGEND).toContain(word);
     }
+  });
+});
+
+describe("isEntryPoint", () => {
+  it("recognises the module when invoked through a symlink", async () => {
+    // `npm link` puts a symlink on PATH, so argv[1] is the link while
+    // import.meta.url is the resolved file. Comparing them unresolved makes the
+    // installed binary silently do nothing.
+    const real = path.join(dir, "real.js");
+    const link = path.join(dir, "link.js");
+    await fs.writeFile(real, "", "utf8");
+    await fs.symlink(real, link);
+
+    expect(isEntryPoint(pathToFileURL(real).href, link)).toBe(true);
+    expect(isEntryPoint(pathToFileURL(real).href, real)).toBe(true);
+  });
+
+  it("is false for an unrelated entry, or none at all", async () => {
+    const a = path.join(dir, "a.js");
+    const b = path.join(dir, "b.js");
+    await fs.writeFile(a, "", "utf8");
+    await fs.writeFile(b, "", "utf8");
+
+    expect(isEntryPoint(pathToFileURL(a).href, b)).toBe(false);
+    expect(isEntryPoint(pathToFileURL(a).href, undefined)).toBe(false);
+    expect(isEntryPoint(pathToFileURL(a).href, path.join(dir, "missing.js"))).toBe(false);
   });
 });
