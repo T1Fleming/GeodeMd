@@ -138,6 +138,30 @@ describe("the write guard", () => {
     expect(store.getCard("sr-aaaaaaaaaaaa")).toBeDefined();
   });
 
+  it("re-reads a deferred file on the next sync rather than calling it unchanged", async () => {
+    // The bug this pins: recording the `files` row on a deferred pass makes the
+    // next sync's fast path skip the file, so "waits for the next sync"
+    // silently becomes "waits forever" and the card is never stamped.
+    const abs = path.join(notes, "a.md");
+    await fs.writeFile(abs, "Q :: A\n", "utf8");
+
+    const first = await core.sync(new Date());
+    expect(first.filesDeferred).toBe(1);
+
+    const second = await core.sync(new Date());
+    expect(second.filesUnchanged).toBe(0);
+    expect(second.filesRead).toBe(1);
+  });
+
+  it("still records a deferred file that needed no minting", async () => {
+    // Nothing was left undone, so the fast path may legitimately skip it later.
+    const abs = path.join(notes, "a.md");
+    await fs.writeFile(abs, "Q :: A <!-- sr-aaaaaaaaaaaa -->\n", "utf8");
+
+    expect((await core.sync(new Date())).filesDeferred).toBe(1);
+    expect((await core.sync(new Date())).filesUnchanged).toBe(1);
+  });
+
   it("picks the deferred card up once the file goes quiet", async () => {
     const abs = path.join(notes, "a.md");
     await fs.writeFile(abs, "Q :: A\n", "utf8");

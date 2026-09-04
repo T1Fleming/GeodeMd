@@ -181,7 +181,13 @@ export class Core {
 
       // Step 5: reconcile.
       if (!dryRun) {
-        this.reconcileFile(cand.relPath, outcome.confirmed, outcome.stat, summary);
+        this.reconcileFile(
+          cand.relPath,
+          outcome.confirmed,
+          outcome.stat,
+          summary,
+          outcome.pending,
+        );
       } else {
         for (const c of outcome.confirmed) {
           if (!this.store.getCard(c.id!)) summary.cardsNew++;
@@ -238,13 +244,15 @@ export class Core {
     dryRun: boolean;
     idsSeenThisPass: Set<string>;
     summary: SyncSummary;
-  }): Promise<{ confirmed: ParsedCard[]; stat: files.StatInfo } | null> {
+  }): Promise<{ confirmed: ParsedCard[]; stat: files.StatInfo; pending: boolean } | null> {
     const { relPath, text, parsed, stat, deferred, dryRun, idsSeenThisPass, summary } = args;
 
     const lines = splitLines(text);
     const confirmed: ParsedCard[] = [];
     const toStamp: Array<{ card: ParsedCard; id: string }> = [];
     const seenInThisFile = new Set<string>();
+    /** Work this pass could not finish, so the file must be re-read next time. */
+    let pending = false;
 
     for (const card of parsed) {
       // Three ways an id on this line can turn out to belong to someone else.
@@ -281,6 +289,12 @@ export class Core {
         // here is skipped entirely rather than upserted: its id IS on disk, but
         // it belongs to the first occurrence, so upserting would overwrite that
         // card's row with the copy's path and text.
+        //
+        // Record that work remains. Without this the `files` row is written
+        // with the current (mtime, size), the next sync's fast path calls the
+        // file unchanged, and the card is never stamped at all — "waits for the
+        // next sync" silently becomes "waits forever".
+        pending = true;
         continue;
       }
       if (duplicate) summary.duplicatesReminted++;
@@ -290,7 +304,7 @@ export class Core {
       toStamp.push({ card, id: fresh });
     }
 
-    if (toStamp.length === 0) return { confirmed, stat };
+    if (toStamp.length === 0) return { confirmed, stat, pending };
 
     // Reconstruct from lines, rejoining by concatenation so a CRLF file — or one
     // with no trailing newline — comes back byte-identical apart from the
@@ -306,14 +320,14 @@ export class Core {
     if (dryRun) {
       // Writes nothing — not a stamp, not a row — but reports what would happen.
       for (const { card, id } of toStamp) confirmed.push({ ...card, id });
-      return { confirmed, stat };
+      return { confirmed, stat, pending };
     }
 
     const after = await files.writeIfUnchanged(this.config.notesPath, relPath, out.join(""), stat);
     if (!after) return null;
 
     for (const { card, id } of toStamp) confirmed.push({ ...card, id });
-    return { confirmed, stat: after };
+    return { confirmed, stat: after, pending };
   }
 
   /** Step 5. */
@@ -322,6 +336,7 @@ export class Core {
     cards: ParsedCard[],
     stat: files.StatInfo,
     summary: SyncSummary,
+    pending = false,
   ): void {
     this.store.transaction(() => {
       const keep: string[] = [];
@@ -355,7 +370,11 @@ export class Core {
       }
 
       summary.cardsPruned += this.store.deleteVanishedInFile(relPath, keep);
-      this.store.upsertFile(relPath, stat.mtimeMs, stat.size);
+
+      // Only record the file as seen when this pass finished with it. Leaving
+      // the row stale (or absent) is what makes the next sync re-read a
+      // deferred file instead of calling it unchanged.
+      if (!pending) this.store.upsertFile(relPath, stat.mtimeMs, stat.size);
     });
   }
 

@@ -3,7 +3,14 @@ import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
 import { pathToFileURL } from "node:url";
-import { formatSummary, interpretKey, isEntryPoint, LEGEND, parseArgs } from "./index.js";
+import {
+  deferralNote,
+  formatSummary,
+  interpretKey,
+  isEntryPoint,
+  LEGEND,
+  parseArgs,
+} from "./index.js";
 import {
   defaultDevice,
   initConfig,
@@ -144,6 +151,43 @@ describe("formatSummary", () => {
   it("stays quiet about zero-valued incidentals", () => {
     expect(formatSummary(base)).not.toContain("pruned");
     expect(formatSummary(base)).not.toContain("deferred");
+  });
+});
+
+describe("deferralNote", () => {
+  const base = {
+    filesEnumerated: 1,
+    filesUnchanged: 0,
+    filesRead: 1,
+    filesDeferred: 0,
+    cardsFound: 3,
+    cardsNew: 0,
+    cardsUpdated: 0,
+    cardsPruned: 0,
+    reconciled: false,
+    duplicatesReminted: 0,
+    symlinkedDirsSkipped: 0,
+    logShardsSkipped: 0,
+    logBytesRead: 0,
+    reviewsIngested: 0,
+    filesSkippedOnError: 0,
+    logLinesSkipped: 0,
+    elapsedMs: 1,
+  };
+
+  it("says nothing when nothing was deferred", () => {
+    expect(deferralNote(base)).toBeNull();
+  });
+
+  it("explains a deferral and says what to do about it", () => {
+    // "3 cards found, 0 new" reads as a failure without this.
+    const note = deferralNote({ ...base, filesDeferred: 1 })!;
+    expect(note).toContain("1 file was");
+    expect(note).toContain("geode sync");
+  });
+
+  it("agrees with itself about plurals", () => {
+    expect(deferralNote({ ...base, filesDeferred: 2 })!).toContain("2 files were");
   });
 });
 

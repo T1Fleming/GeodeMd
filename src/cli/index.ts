@@ -88,6 +88,25 @@ export function formatSummary(s: SyncSummary): string {
   return `${parts.join(", ")} — ${s.elapsedMs}ms`;
 }
 
+/**
+ * Explain a deferral, because otherwise it looks like a failure.
+ *
+ * A file modified in the last couple of seconds is assumed to be open in an
+ * editor, so nothing is minted in it (spec section 8 step 4). That is correct,
+ * but on a first run — where the note was created moments ago — the summary
+ * reads "3 cards found, 0 new" and the user has no idea why. The counts alone
+ * do not carry the explanation, so the CLI adds it.
+ */
+export function deferralNote(s: SyncSummary): string | null {
+  if (s.filesDeferred === 0) return null;
+  const n = s.filesDeferred;
+  const files = n === 1 ? "file was" : "files were";
+  return (
+    `note: ${n} ${files} modified in the last couple of seconds and left alone, ` +
+    `in case you have them open. Run \`geode sync\` again to pick them up.`
+  );
+}
+
 export const LEGEND = "1 again · 2 hard · 3 good · 4 easy · q quit";
 
 export type KeyAction =
@@ -257,6 +276,8 @@ export async function main(argv: string[]): Promise<number> {
             : await core.sync(new Date(), opts);
         if (opts.dryRun) process.stdout.write("dry run — nothing was written\n");
         process.stdout.write(`${formatSummary(summary)}\n`);
+        const note = deferralNote(summary);
+        if (note) process.stdout.write(`${note}\n`);
         return 0;
       } finally {
         store.close();
