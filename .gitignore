@@ -1,0 +1,28 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+build/
+*.tsbuildinfo
+
+# Test / coverage
+coverage/
+
+# Local database and config (rebuildable cache — never committed)
+*.sqlite
+*.sqlite-journal
+*.sqlite-wal
+*.sqlite-shm
+
+# Environment
+.env
+.env.local
+
+# Editor
+.vscode/
+.idea/
+*.swp
+
+# macOS
+.DS_Store
