@@ -1,0 +1,68 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 250" width="1080" height="250" role="img" aria-label="Geode — spaced repetition over an ordinary directory of Markdown files">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#111827"/>
+      <stop offset="1" stop-color="#1f2937"/>
+    </linearGradient>
+    <linearGradient id="rock" x1="0.2" y1="0" x2="0.8" y2="1">
+      <stop offset="0" stop-color="#8b95a5"/>
+      <stop offset="1" stop-color="#4b5563"/>
+    </linearGradient>
+    <linearGradient id="rockDark" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#5b6472"/>
+      <stop offset="1" stop-color="#39414d"/>
+    </linearGradient>
+    <radialGradient id="cavity" cx="0.5" cy="0.4" r="0.75">
+      <stop offset="0" stop-color="#0b1220"/>
+      <stop offset="1" stop-color="#131d30"/>
+    </radialGradient>
+  </defs>
+
+  <rect x="0" y="0" width="1080" height="250" rx="18" fill="url(#bg)"/>
+  <rect x="0.75" y="0.75" width="1078.5" height="248.5" rx="17.25" fill="none" stroke="#334155" stroke-width="1.5"/>
+
+  <g transform="translate(6,4)">
+    <!-- arms -->
+    <path d="M88 140 C58 146 40 160 30 180" fill="none" stroke="url(#rockDark)" stroke-width="18" stroke-linecap="round"/>
+    <path d="M212 140 C242 146 260 160 270 180" fill="none" stroke="url(#rockDark)" stroke-width="18" stroke-linecap="round"/>
+    <!-- fists, faceted so they read as rock rather than blobs -->
+    <path d="M30 162 L47 170 L49 189 L32 198 L16 189 L15 170 Z" fill="url(#rock)" stroke="#2f3742" stroke-width="2.5" stroke-linejoin="round"/>
+    <path d="M20 176 h22 M22 185 h18" stroke="#2f3742" stroke-width="2.2" stroke-linecap="round" opacity="0.65"/>
+    <path d="M270 162 L287 170 L289 189 L272 198 L256 189 L255 170 Z" fill="url(#rock)" stroke="#2f3742" stroke-width="2.5" stroke-linejoin="round"/>
+    <path d="M260 176 h22 M262 185 h18" stroke="#2f3742" stroke-width="2.2" stroke-linecap="round" opacity="0.65"/>
+
+    <!-- boulder -->
+    <path d="M150 50 L204 68 L228 118 L218 174 L170 204 L122 202 L82 168 L74 116 L104 66 Z"
+          fill="url(#rock)" stroke="#2f3742" stroke-width="3" stroke-linejoin="round"/>
+    <path d="M150 50 L104 66 L74 116 L122 202 L150 128 Z" fill="#000000" opacity="0.13"/>
+    <path d="M204 68 L228 118 L218 174 L150 128 Z" fill="#ffffff" opacity="0.07"/>
+
+    <!-- cracked open, crystals inside: what a geode actually is -->
+    <path d="M110 152 L138 138 L166 140 L196 152 L184 188 L150 200 L120 186 Z"
+          fill="url(#cavity)" stroke="#2b3446" stroke-width="2.5" stroke-linejoin="round"/>
+    <path d="M125 180 L133 150 L142 180 Z" fill="#5eead4"/>
+    <path d="M142 184 L151 143 L160 184 Z" fill="#a78bfa"/>
+    <path d="M159 181 L168 152 L176 181 Z" fill="#38bdf8"/>
+    <path d="M133 150 L142 180 L137 181 Z" fill="#ffffff" opacity="0.28"/>
+    <path d="M151 143 L160 184 L155 184 Z" fill="#ffffff" opacity="0.24"/>
+    <path d="M168 152 L176 181 L172 181 Z" fill="#ffffff" opacity="0.22"/>
+
+    <!-- brow and eyes -->
+    <path d="M102 96 L140 105 M198 96 L160 105" stroke="#2f3742" stroke-width="8.5" stroke-linecap="round"/>
+    <ellipse cx="127" cy="117" rx="14.5" ry="12.5" fill="#f8fafc"/>
+    <ellipse cx="173" cy="117" rx="14.5" ry="12.5" fill="#f8fafc"/>
+    <circle cx="130" cy="118" r="6.2" fill="#0f172a"/>
+    <circle cx="176" cy="118" r="6.2" fill="#0f172a"/>
+    <circle cx="132.4" cy="115.2" r="2.1" fill="#ffffff"/>
+    <circle cx="178.4" cy="115.2" r="2.1" fill="#ffffff"/>
+  </g>
+
+  <g transform="translate(330,0)" font-family="ui-sans-serif, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif">
+    <text x="0" y="108" font-size="60" font-weight="700" fill="#f1f5f9" letter-spacing="-1.5">Geode</text>
+    <text x="3" y="144" font-size="17" font-weight="400" fill="#94a3b8">Spaced repetition over a directory of Markdown files</text>
+
+    <rect x="0" y="166" width="392" height="40" rx="9" fill="#0b1220" stroke="#334155" stroke-width="1.5"/>
+    <!-- one text element with tspans, so the parts cannot collide -->
+    <text x="18" y="192" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="15" fill="#cbd5e1">Default Lambda timeout<tspan fill="#5eead4" font-weight="700"> :: </tspan>3 seconds</text>
+  </g>
+</svg>

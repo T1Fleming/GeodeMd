@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="./assets/banner.svg" alt="Geode — spaced repetition over an ordinary directory of Markdown files" width="900">
+</p>
+
 # Geode
 
 A spaced repetition system where **everything durable is plain text in an ordinary directory of Markdown files**. Notes hold card content, append-only JSONL logs hold review history, and a SQLite database outside that directory holds nothing but a rebuildable cache.
@@ -117,7 +121,7 @@ Measured on a 50,000-file tree, warm cache: enumerating a million files takes ab
 ## Development
 
 ```sh
-npm test          # 174 tests
+npm test          # 179 tests
 npm run test:watch
 npm run typecheck
 npm run build
