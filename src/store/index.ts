@@ -372,8 +372,20 @@ export class Store {
     );
   }
 
+  /**
+   * Joined to `cards` on purpose, so this counts the same population
+   * `dueCards` draws from. `card_state` deliberately outlives the card it
+   * belongs to — see `upsertCard`, where a restored card's state is what keeps
+   * it out of the new queue — so counting state alone reports cards that no
+   * longer exist, and `geode stats` could print due + new greater than total.
+   */
   countDue(now: string): number {
-    return this.one<{ n: number }>("SELECT COUNT(*) AS n FROM card_state WHERE due <= ?", now)!.n;
+    return this.one<{ n: number }>(
+      `SELECT COUNT(*) AS n
+         FROM card_state s JOIN cards c ON c.id = s.card_id
+        WHERE s.due <= ?`,
+      now,
+    )!.n;
   }
 
   /** Section 9: "due before local midnight" is a forecast, not the queue. */

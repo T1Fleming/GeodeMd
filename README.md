@@ -38,7 +38,7 @@ npm link          # puts `geode` on your PATH
 geode init ~/notes
 ```
 
-That writes `~/.config/geodemd/config.json`. The database goes to `~/.local/share/geodemd/db.sqlite` — outside your notes, deliberately, because it is a cache and a live database file is the worst thing to put under a sync or backup tool.
+That writes `~/.config/geodemd/config.json` — `notesPath`, `device`, `dbPath`, and an optional `editor` you can add later. The database goes to `~/.local/share/geodemd/db.sqlite` — outside your notes, deliberately, because it is a cache and a live database file is the worst thing to put under a sync or backup tool.
 
 **2. Look before it writes.**
 
@@ -74,7 +74,15 @@ geode review -n 200   # a bigger session
 geode stats
 ```
 
-Any key reveals the answer, then `1` again · `2` hard · `3` good · `4` easy. `q` quits. Each card shows its source line — `algorithms/Sorting.md:142` — so you can open exactly where you wrote it.
+Any key reveals the answer — except `q`, which quits there and then without recording anything. Once the answer is showing: `1` again · `2` hard · `3` good · `4` easy, and `q` to stop. Each card shows its source line — `algorithms/Sorting.md:142` — and `o` opens that note at that line in your editor and drops you back on the same card when you close it. If any note you opened changed during the session, the last line says so, because the queue is holding the text from your last `geode sync`.
+
+Your editor is `editor` in the config file if you set it, then `$VISUAL`, then `$EDITOR`, and failing all three whatever your OS opens a `.md` with:
+
+```json
+{ "notesPath": "/Users/you/notes", "device": "mac-k3f9", "dbPath": "...", "editor": "nvim" }
+```
+
+It jumps to the line for the editors that can be told to (`vim +142`, `code --goto file:142`, `hx file:142`, and so on) and opens the file plainly for the ones that can't.
 
 ## Commands
 
@@ -82,7 +90,7 @@ Any key reveals the answer, then `1` again · `2` hard · `3` good · `4` easy. 
 |---|---|
 | `geode init <path> [--force]` | Write the config file. Refuses to overwrite without `--force`, and keeps your `device` name either way. |
 | `geode sync [--full] [--dry-run]` | Walk the notes, stamp new cards, ingest the logs. `--dry-run` writes nothing; `--full` re-reads every file, ignoring the mtime cache. |
-| `geode review [-n N]` | The review loop. Needs an interactive terminal. Default 50 cards. |
+| `geode review [-n N]` | The review loop. Needs an interactive terminal. Default 50 cards. `o` opens the card's note in your editor. |
 | `geode stats` | Total, due now, due before local midnight, new. |
 | `geode rebuild` | Drop the database and rebuild it from your notes and logs. |
 
@@ -121,7 +129,7 @@ Measured on a 50,000-file tree, warm cache: enumerating a million files takes ab
 ## Development
 
 ```sh
-npm test          # 179 tests
+npm test          # 219 tests
 npm run test:watch
 npm run typecheck
 npm run build

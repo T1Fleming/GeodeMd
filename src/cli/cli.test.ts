@@ -129,6 +129,31 @@ describe("init", () => {
     expect(second.notesPath).not.toBe(first.notesPath);
   });
 
+  it("reads an editor when one is set, and nothing when it is not", async () => {
+    const file = path.join(dir, "config.json");
+    await initConfig(file, dir);
+    expect((await readConfig(file))!.editor).toBeUndefined();
+
+    await fs.writeFile(
+      file,
+      JSON.stringify({ notesPath: dir, device: "d", dbPath: "db", editor: "nvim" }),
+      "utf8",
+    );
+    expect((await readConfig(file))!.editor).toBe("nvim");
+  });
+
+  it("preserves editor under --force, like device", async () => {
+    // Re-running init to fix a notesPath typo should not silently discard a
+    // setting it never asked about.
+    const file = path.join(dir, "config.json");
+    await initConfig(file, dir);
+    const withEditor = { ...(await readConfig(file))!, editor: "nvim" };
+    await fs.writeFile(file, JSON.stringify(withEditor), "utf8");
+
+    const second = await initConfig(file, path.join(dir, "elsewhere"), { force: true });
+    expect(second.editor).toBe("nvim");
+  });
+
   it("returns null for a missing or malformed config", async () => {
     expect(await readConfig(path.join(dir, "nope.json"))).toBeNull();
     const bad = path.join(dir, "bad.json");
@@ -226,6 +251,11 @@ describe("interpretKey", () => {
     }
   });
 
+  it("opens the source note on o", () => {
+    expect(interpretKey("o")).toEqual({ kind: "open" });
+    expect(interpretKey("O")).toEqual({ kind: "open" });
+  });
+
   it("ignores anything else rather than recording a wrong rating", () => {
     for (const k of ["5", "0", "x", " ", ""]) {
       expect(interpretKey(k)).toEqual({ kind: "ignore" });
@@ -237,6 +267,10 @@ describe("interpretKey", () => {
     for (const word of ["again", "hard", "good", "easy"]) {
       expect(LEGEND).toContain(word);
     }
+  });
+
+  it("offers the source note in the legend, since nothing else advertises it", () => {
+    expect(LEGEND).toContain("open");
   });
 });
 
