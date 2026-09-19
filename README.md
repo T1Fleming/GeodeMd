@@ -129,13 +129,13 @@ Measured on a 50,000-file tree, warm cache: enumerating a million files takes ab
 ## Development
 
 ```sh
-npm test          # 219 tests
+npm test          # the whole suite, about a second
 npm run test:watch
 npm run typecheck
 npm run build
 ```
 
-The test suite covers the five places [`plan.md`](./plan.md) identifies as expensive to get wrong — the parser, sync, incremental sync, prune, and rebuild — plus a scale harness that asserts ratios and counts rather than wall-clock ceilings, and a suite that enforces the module boundaries so that `core` importing `cli`, SQL outside `store/`, or a clock in `parser/` fail the build.
+The test suite covers the five places [`docs/design/testing.md`](./docs/design/testing.md) identifies as expensive to get wrong — the parser, sync, incremental sync, prune, and rebuild — plus a scale harness that asserts ratios and counts rather than wall-clock ceilings, and a suite that enforces the module boundaries so that `core` importing `cli`, SQL outside `store/`, or a clock in `parser/` fail the build.
 
 ```
 src/parser/     pure: text -> cards. No filesystem, no database, no clock.
@@ -146,8 +146,8 @@ src/core/       sync, getDueCards, reviewCard, rebuild — the public API
 src/cli/        argv, config, review loop
 ```
 
-[`plan.md`](./plan.md) is the design brief and explains *why* each of those decisions is what it is — the identity rules, the data model, the sync algorithm, and the reasoning behind things that look odd until you know what they prevent.
+[`docs/design/`](./docs/design/) describes how each piece works now — the parser, the data model, the sync algorithm, the review flow. [`docs/decisions/`](./docs/decisions/) records *why* each choice is what it is, next to the alternative it beat, which is the reasoning behind things that look odd until you know what they prevent.
 
 ## Status
 
-Phase 1 is complete: a single-machine CLI. A later phase is an Electron app, structured so that it is an interface swap rather than a rewrite — the module boundaries above are what make that true. Cross-device sync is a possible phase after that; the append-only log layout deliberately does not foreclose it, but nothing here is built for it yet.
+The single-machine CLI is complete. An Electron app is planned **alongside it, not instead of it** — the two are peer interfaces over the same core, and the CLI stays because it composes with scripts and because a terminal review loop is the fast path when you are already in a terminal. The module boundaries above are what let one core serve both. Cross-device sync is a possible phase after that; the append-only log layout deliberately does not foreclose it, but nothing here is built for it yet.
