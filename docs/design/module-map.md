@@ -4,6 +4,34 @@ How the source is divided, and what each division is protecting.
 
 ## The modules
 
+```mermaid
+flowchart TD
+    cli["cli/<br/>argv · config · review loop"]
+    core["core/<br/>sync · getDueCards · reviewCard · rebuild"]
+    parser["parser/<br/>text to cards — PURE"]
+    files["files/<br/>walk · read · stamp · log append"]
+    store["store/<br/>every SQL statement"]
+    sched["scheduler/<br/>FSRS, parameters pinned"]
+
+    term(["the terminal"])
+    disk(["notes/ and .sr/log/"])
+    sqlite(["db.sqlite"])
+    tsfsrs(["ts-fsrs"])
+
+    cli --> core
+    core --> parser
+    core --> files
+    core --> store
+    core --> sched
+
+    cli -.- term
+    files -.- disk
+    store -.- sqlite
+    sched -.- tsfsrs
+```
+
+Solid arrows are imports; they run one way and never back. Dotted lines mark the **sole owner** of an external resource — no other module may reach that thing at all.
+
 ```
 src/
   parser/     text -> cards            PURE: no fs, no db, no clock
@@ -15,7 +43,7 @@ src/
   index.ts    the public API: re-exports Core, Store, FsrsScheduler, parser fns
 ```
 
-Dependencies run one way: `cli` → `core` → {`files`, `store`, `scheduler`, `parser`}. Nothing below `cli` imports it.
+Note what the diagram does *not* contain: an arrow from anything back into `cli`, or a second line touching any of the four external resources. Both absences are asserted by `boundaries.test.ts`.
 
 ## One module per external resource
 

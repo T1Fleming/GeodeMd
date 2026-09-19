@@ -8,7 +8,28 @@ Three stores, only two of which are durable.
 | Review history | `<notes>/.sr/log/<device>-YYYY-MM.jsonl` | yes |
 | Everything else | `~/.local/share/geodemd/db.sqlite` | no — a cache |
 
-Every column in SQLite is checked against one property: it must be derivable from the notes or the logs. See [ADR 0001](../decisions/0001-plain-text-is-the-durable-store.md).
+```mermaid
+flowchart LR
+    subgraph durable["DURABLE — plain text, inside the notes directory"]
+        notes["notes/**.md<br/>cards, as the lines you wrote"]
+        log[".sr/log/DEVICE-YYYY-MM.jsonl<br/>append-only review history"]
+    end
+
+    subgraph derived["DERIVABLE — outside the notes directory, delete freely"]
+        db["db.sqlite<br/>cards · files · reviews · log_files · card_state"]
+    end
+
+    notes -->|"sync steps 1-6: walk, stamp, reconcile"| db
+    log -->|"sync step 7: ingest, then replay"| db
+    review["geode review"] -->|"1 - append, then fsync"| log
+    review -->|"2 - insert and upsert"| db
+```
+
+Two things the arrows are saying.
+
+**Everything flows left to right.** Nothing in `db.sqlite` originates there, which is why `rebuild` can drop every table and arrive at a byte-identical database. See [ADR 0001](../decisions/0001-plain-text-is-the-durable-store.md).
+
+**`reviewCard` writes the log before the database**, and the numbering is the ordering. A crash between the two leaves a review in the log and not in SQLite, which the next ingest repairs. The reverse order loses it outright.
 
 ## The review log
 
