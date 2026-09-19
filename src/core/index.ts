@@ -56,6 +56,9 @@ export interface DueCard {
   id: string;
   question: string;
   answer: string;
+  /** Relative to notesPath, exactly as stored. */
+  filePath: string;
+  lineNo: number | null;
   /** "algorithms/Sorting.md:142" — relative to notesPath. Display only. */
   locator: string;
 }
@@ -566,6 +569,8 @@ function toDueCard(row: DueRow): DueCard {
     id: row.id,
     question: row.question,
     answer: row.answer,
+    filePath: row.file_path,
+    lineNo: row.line_no,
     locator: `${row.file_path}:${row.line_no ?? 0}`,
   };
 }

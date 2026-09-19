@@ -12,10 +12,12 @@
  */
 
 import { realpathSync } from "node:fs";
+import { stat } from "node:fs/promises";
+import * as path from "node:path";
 import * as readline from "node:readline";
 import { fileURLToPath } from "node:url";
 import { Core, ConfigError } from "../core/index.js";
-import type { SyncSummary } from "../core/index.js";
+import type { DueCard, SyncSummary } from "../core/index.js";
 import { Store } from "../store/index.js";
 import {
   configPath,
@@ -24,12 +26,26 @@ import {
   newId,
   readConfig,
 } from "./config.js";
+import type { FileConfig } from "./config.js";
+import { openInEditor, resolveEditor } from "./editor.js";
+import {
+  emptyCounts,
+  renderAnswer,
+  renderHeader,
+  renderNote,
+  renderPrompt,
+  renderStaleNote,
+  renderSummary,
+} from "./render.js";
+import { colorEnabled, columns, styler } from "./style.js";
+
+export { LEGEND } from "./render.js";
 
 const USAGE = `GeodeMD — spaced repetition over a directory of Markdown files
 
   geode init <path> [--force]   write the config file
   geode sync [--full] [--dry-run]
-  geode review [-n N]
+  geode review [-n N]           any key flips a card; o opens its note
   geode stats
   geode rebuild
 
@@ -107,11 +123,10 @@ export function deferralNote(s: SyncSummary): string | null {
   );
 }
 
-export const LEGEND = "1 again · 2 hard · 3 good · 4 easy · q quit";
-
 export type KeyAction =
   | { kind: "quit" }
   | { kind: "rate"; rating: 1 | 2 | 3 | 4 }
+  | { kind: "open" }
   | { kind: "ignore" };
 
 /** Ctrl-C as it arrives from a raw-mode keypress. */
@@ -124,22 +139,37 @@ const ETX = String.fromCharCode(3);
 export function interpretKey(key: string): KeyAction {
   if (key === "q" || key === "Q" || key === ETX || key === "escape") return { kind: "quit" };
   if (key >= "1" && key <= "4") return { kind: "rate", rating: Number(key) as 1 | 2 | 3 | 4 };
+  if (key === "o" || key === "O") return { kind: "open" };
   return { kind: "ignore" };
 }
 
-async function openCore(): Promise<{ core: Core; store: Store }> {
+async function openCore(): Promise<{ core: Core; store: Store; config: FileConfig }> {
   const file = configPath();
   const config = await readConfig(file);
   if (!config) {
     throw new ConfigError(`no config at ${file} — run \`geode init <path>\` first`);
   }
   const store = new Store(config.dbPath);
-  const core = new Core({ ...config, newId }, store);
-  return { core, store };
+  // Named fields rather than a spread: `editor` is the CLI's business and has
+  // no place in core's Config.
+  const core = new Core(
+    { notesPath: config.notesPath, device: config.device, dbPath: config.dbPath, newId },
+    store,
+  );
+  return { core, store, config };
+}
+
+/** Null when the file cannot be read — an unreadable note is not an error here. */
+async function mtimeOf(file: string): Promise<number | null> {
+  try {
+    return (await stat(file)).mtimeMs;
+  } catch {
+    return null;
+  }
 }
 
 /** Section 9's review loop. Requires a TTY; restores the terminal on any exit. */
-async function reviewLoop(core: Core, limit: number): Promise<void> {
+async function reviewLoop(core: Core, config: FileConfig, limit: number): Promise<void> {
   if (!process.stdin.isTTY) {
     // A line-buffered fallback that half works is worse than a clear refusal,
     // and there is no use for scripted review.
@@ -149,27 +179,45 @@ async function reviewLoop(core: Core, limit: number): Promise<void> {
   await core.ingestLogs(new Date());
   const now = new Date();
   const queue = core.getDueCards(now, limit);
-  const total = core.countDue(now);
+  // What the queue was drawn FROM, which is both halves of section 9's two
+  // queries. `countDue` alone counts only cards with scheduling state, so a
+  // first session — every card new — headed itself "2 of 0 due".
+  const available = core.stats(now);
+  const total = available.dueNow + available.newCards;
+
+  const s = styler(colorEnabled(process.env, Boolean(process.stdout.isTTY)));
+  const width = columns(process.stdout);
 
   if (queue.length === 0) {
-    process.stdout.write("Nothing due.\n");
+    process.stdout.write(`\n${renderNote("Nothing due.", s)}`);
     return;
   }
-  process.stdout.write(`${queue.length} of ${total} due\n\n`);
+  process.stdout.write(renderHeader(queue.length, total, s));
 
   readline.emitKeypressEvents(process.stdin);
-  process.stdin.setRawMode(true);
+  const setRaw = (on: boolean): void => {
+    if (process.stdin.isTTY) process.stdin.setRawMode(on);
+    if (on) process.stdin.resume();
+    else process.stdin.pause();
+  };
+  setRaw(true);
+
   let restored = false;
   const restore = (): void => {
     if (restored) return;
     restored = true;
-    if (process.stdin.isTTY) process.stdin.setRawMode(false);
-    process.stdin.pause();
+    setRaw(false);
   };
   // A process that dies in raw mode leaves echo off, which reads as a broken
   // shell rather than as a quit. Every rating already given is safe by the
   // log-first rule, so a clean exit is honest.
+  //
+  // While an editor holds the terminal, though, a Ctrl-C is aimed at *it*:
+  // stdio is inherited, so the signal reaches this process as well, and acting
+  // on it would end the session out from under the editor.
+  let editorRunning = false;
   const onSigint = (): void => {
+    if (editorRunning) return;
     restore();
     process.stdout.write("\n");
     process.exit(0);
@@ -186,20 +234,87 @@ async function reviewLoop(core: Core, limit: number): Promise<void> {
       process.stdin.on("keypress", handler);
     });
 
+  /**
+   * Notes opened this session, against the mtime each had when it was first
+   * opened. Checked once at the end rather than when the editor exits: a
+   * terminal editor holds the terminal until you quit it, but `code`, `subl`,
+   * `zed` and every OS opener hand the file to a running instance and return in
+   * milliseconds — long before anything has been typed. Comparing around the
+   * spawn would therefore report nothing in exactly the setup where the user is
+   * most likely to keep editing while the session runs.
+   */
+  const openedNotes = new Map<string, number | null>();
+
+  /** Open the note this card was written in, then hand the terminal back. */
+  const openContext = async (card: DueCard): Promise<string | null> => {
+    const abs = path.join(config.notesPath, card.filePath);
+    if (!openedNotes.has(card.filePath)) openedNotes.set(card.filePath, await mtimeOf(abs));
+    const editor = resolveEditor(config.editor, process.env);
+
+    editorRunning = true;
+    setRaw(false);
+    try {
+      return await openInEditor(abs, card.lineNo, editor);
+    } finally {
+      setRaw(true);
+      editorRunning = false;
+    }
+  };
+
+  const counts = emptyCounts();
+
+  /**
+   * Every exit path ends here. Editing a card would otherwise leave the
+   * database quietly holding the old text until the next sync, with no sign
+   * that it had.
+   */
+  const sessionEnd = async (): Promise<string> => {
+    const changed: string[] = [];
+    for (const [rel, before] of openedNotes) {
+      // `!==` covers a note that was created or removed while it was open, not
+      // only one that was rewritten; two unreadable reads compare equal and are
+      // correctly not a change.
+      if ((await mtimeOf(path.join(config.notesPath, rel))) !== before) changed.push(rel);
+    }
+    // Summary first: it carries the blank line that separates the session from
+    // the last card, and the note that wants acting on then sits last, where
+    // the eye lands.
+    return renderSummary(counts, s) + renderStaleNote(changed, s);
+  };
+
   try {
-    let done = 0;
+    let index = 0;
     for (const card of queue) {
-      process.stdout.write(`${card.question}\n`);
-      process.stdout.write(`  ${card.locator}\n`);
-      await key();
-      process.stdout.write(`\n  ${card.answer}\n\n  ${LEGEND}\n`);
+      index++;
+      const prompt = renderPrompt(card, index, queue.length, s, width);
+      const answer = renderAnswer(card, s, width);
+
+      process.stdout.write(prompt);
+      // Any key flips, but `q` still quits: a question you cannot escape from
+      // without answering it is not what the legend promises.
+      if (interpretKey(await key()).kind === "quit") {
+        process.stdout.write(await sessionEnd());
+        return;
+      }
+      process.stdout.write(answer);
 
       let rating: 1 | 2 | 3 | 4 | null = null;
       while (rating === null) {
         const action = interpretKey(await key());
         if (action.kind === "quit") {
-          process.stdout.write(`\n${done} reviewed.\n`);
+          process.stdout.write(await sessionEnd());
           return;
+        }
+        if (action.kind === "open") {
+          const failure = await openContext(card);
+          // A terminal editor has scribbled over the card. Put it back, so the
+          // rating is given against something still on screen — and put any
+          // complaint about the editor *after* it, where the cursor is, rather
+          // than above a full card render where it scrolls out of the eye.
+          process.stdout.write(prompt);
+          process.stdout.write(answer);
+          if (failure !== null) process.stdout.write(renderNote(failure, s));
+          continue;
         }
         if (action.kind === "rate") rating = action.rating;
       }
@@ -210,15 +325,16 @@ async function reviewLoop(core: Core, limit: number): Promise<void> {
         // WAL allows one writer. By now the rating is already fsynced into the
         // log, so this is precisely the condition the next ingest repairs.
         if (isBusy(err)) {
-          process.stdout.write("  database busy; reviews are in the log and will sync later\n");
+          process.stdout.write(
+            renderNote("database busy; reviews are in the log and will sync later", s),
+          );
         } else {
           throw err;
         }
       }
-      done++;
-      process.stdout.write("\n");
+      counts[rating]++;
     }
-    process.stdout.write(`${done} reviewed.\n`);
+    process.stdout.write(await sessionEnd());
   } finally {
     process.off("SIGINT", onSigint);
     restore();
@@ -285,9 +401,9 @@ export async function main(argv: string[]): Promise<number> {
     }
 
     case "review": {
-      const { core, store } = await openCore();
+      const { core, store, config } = await openCore();
       try {
-        await reviewLoop(core, args.limit ?? 50);
+        await reviewLoop(core, config, args.limit ?? 50);
         return 0;
       } finally {
         store.close();

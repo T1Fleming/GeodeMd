@@ -98,6 +98,16 @@ describe("getDueCards", () => {
     await core.sync(T0);
     expect(core.getDueCards(T0)[0]!.locator).toBe("algorithms/Sorting.md:2");
   });
+
+  it("carries the path and line as data, not only as a display string", async () => {
+    // The CLI opens the note in an editor, and re-parsing the locator to get
+    // there would guess wrong on any path containing a colon.
+    await write("algorithms/Sorting.md", "intro\nQ :: A\n");
+    await core.sync(T0);
+    const card = core.getDueCards(T0)[0]!;
+    expect(card.filePath).toBe("algorithms/Sorting.md");
+    expect(card.lineNo).toBe(2);
+  });
 });
 
 describe("reviewCard", () => {
@@ -179,5 +189,30 @@ describe("stats", () => {
     expect(s.newCards).toBe(1);
     // A lapsed card is due within the hour, so before midnight either way.
     expect(s.dueBeforeMidnight).toBeGreaterThanOrEqual(s.dueNow);
+  });
+
+  it("does not count a deleted card's surviving state as due", async () => {
+    // `card_state` outlives the card on purpose — that is what keeps a restored
+    // card out of the new queue — so a count over `card_state` alone reports
+    // cards that no longer exist. It showed up as a review header reading
+    // "1 of 2 due" against a one-card database, and as due + new > total here.
+    await write("a.md", "A :: 1\nB :: 2\n");
+    await core.sync(T0);
+    await core.reviewCard("sr-000000000001", 1, T0);
+    expect(store.getState("sr-000000000001")).toBeDefined();
+
+    const later = new Date(T0.getTime() + 3_600_000);
+    await write("a.md", "B :: 2 <!-- sr-000000000002 -->\n");
+    await core.sync(later);
+    expect(store.getState("sr-000000000001")).toBeDefined();
+
+    const s = core.stats(later);
+    expect(s.total).toBe(1);
+    expect(s.dueNow).toBe(0);
+    expect(s.dueBeforeMidnight).toBe(0);
+    expect(s.newCards).toBe(1);
+    // The header the CLI prints is drawn from exactly this sum, so it has to
+    // match what `getDueCards` can actually hand back.
+    expect(s.dueNow + s.newCards).toBe(core.getDueCards(later, 50).length);
   });
 });

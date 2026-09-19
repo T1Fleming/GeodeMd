@@ -56,10 +56,11 @@ Build and run: `tsc` to `dist/`, a `bin` entry pointing at `dist/cli/index.js` b
 
 ## 2a. Configuration and paths
 
-One JSON file, three keys, read in exactly one place:
+One JSON file, three required keys and one optional one, read in exactly one place:
 
 ```
-~/.config/geodemd/config.json     { "notesPath": "...", "device": "mac-k3f9", "dbPath": "..." }
+~/.config/geodemd/config.json     { "notesPath": "...", "device": "mac-k3f9", "dbPath": "...",
+                                    "editor": "nvim" }
 ~/.local/share/geodemd/db.sqlite  default DB location, overridable
 ```
 
@@ -68,6 +69,8 @@ XDG paths on every platform, macOS included. One less branch, and two string con
 `cli` reads the file, applies `--notes` as an override, and passes one plain object into `core`. `core` never reads the filesystem for config and never touches `process.env` (section 6, rule 3). `device` defaults to slugified `os.hostname()` plus a short random suffix, fixed once at `init` — section 5a explains what the suffix protects; `dbPath` defaults as above. `geode init <notesPath>` writes the file, so first run is not "hand-author some JSON".
 
 `init` prints two lines of advice before exiting: commit the notes directory first if it is under version control, then run `geode sync --dry-run`. The first real sync stamps every file holding a card, and that is much better learned from a dry run than from a diff.
+
+`editor` is the only optional key and `init` never writes one. It names what section 9's `o` opens a card's note in, and **absent means "fall through to `$VISUAL`, then `$EDITOR`, then the OS opener"** — a better answer than any value `init` could invent on a machine it knows nothing about. `--force` preserves it for the same reason it preserves `device`: re-running `init` to fix a `notesPath` typo should not silently discard a setting it never asked about.
 
 `init` **refuses to overwrite an existing config unless `--force`, and preserves `device` even then.** It should be re-runnable to fix a `notesPath` typo without that doubling as a way to change the machine's identity: regenerating `device` silently starts a second log file and scatters one machine's history across two names. Nothing is lost when that happens — ingest reads every `.jsonl` — but nothing is gained either. Only a config with no `device` mints one.
 
@@ -543,7 +546,18 @@ Single keypresses mean raw mode, and three things follow from that:
 
 - **Require a TTY.** If `process.stdin.isTTY` is false — piped input, cron, CI — exit non-zero with `review requires an interactive terminal`. A line-buffered fallback that half works is worse than a clear refusal, and there is no use for scripted review.
 - **Restore the terminal on every exit path.** Put the mode restore in a `finally`, and install a `SIGINT` handler that restores it and exits 0. A process that dies in raw mode leaves echo off, which reads as a broken shell rather than as a quit — and by the log-first rule every rating already given is safe, so a clean exit is honest.
-- **Print the legend**: `1 again · 2 hard · 3 good · 4 easy · q quit`, under the locator. FSRS's four ratings are not guessable from their numbers.
+- **Print the legend**: `1 again  2 hard  3 good  4 easy   o open · q quit`, under the answer. FSRS's four ratings are not guessable from their numbers, and neither is `o`.
+- **`q` is live before the flip too.** Any key reveals the answer, but a question you cannot get out of without answering it is not what the legend promises, so `q` quits from the question as well. It is the one key the "any key" rule excludes.
+
+**`o` opens the card's note at its line**, and is offered only once the answer is showing — the locator is a promise that you can get back to where you wrote something, and asking the user to go and do that by hand in another window costs them the session. Precedence is config `editor`, `$VISUAL`, `$EDITOR`, then the platform opener — `open`, `xdg-open`, and on Windows `rundll32 url.dll,FileProtocolHandler` rather than `cmd /c start`, because `cmd.exe` re-parses its arguments and Node quotes one only when it holds a space, tab, or quote: a note named `note&calc.md` would otherwise reach a shell with its `&` intact. Nothing here goes through a shell, for the same reason the `editor` value is split on whitespace instead of shell-parsed. The line is passed only in the form the named editor actually understands (`+142`, `--goto file:142`, `file:142`) and omitted entirely for an editor that is not recognised, because handing an unknown program `+142` risks creating a file with that name.
+
+Three consequences follow from spawning it with the terminal inherited, and all three are easy to get wrong. Drop out of raw mode around the spawn and wait for the child to exit — right for a terminal editor, which holds the TTY, and harmless for a GUI opener, which returns at once. **Ignore `SIGINT` while it runs**: a Ctrl-C aimed at `vim` reaches this process too, and ending the session out from under the editor is not what was asked. And **reprint the card afterwards**, because the editor has scribbled over it and a rating should be given against something still on screen.
+
+Opening is not a review, and neither is editing. Record each opened note's mtime the first time it is opened, and **check them all once at the end of the session**, naming what changed: the queue is holding the text from the last `sync`, and nothing else would tell the user that.
+
+Checking at the end rather than when the editor exits is the whole point, not an implementation shortcut. Only a terminal editor holds the terminal until you quit it; `code`, `subl`, `zed` and every OS opener hand the file to an already-running instance and return in milliseconds, before anything has been typed. An mtime comparison bracketing the spawn therefore reports nothing in precisely the setup where the user is *most* likely to keep editing while the session runs — a GUI editor sitting open beside it. One sweep at the end is correct for both shapes, and "run `geode sync`" is a post-session action anyway, so nothing is lost by saying it last.
+
+Card text is wrapped to a column rather than to the window, the locator and the legend are dimmed, and the counter (`2/12`) is repeated on every card — the `50 of 1240 due` line printed once at the top is no help by card thirty. Colour is off when `NO_COLOR` is set, when `TERM` is `dumb`, and when stdout is not a TTY. None of this is a redraw: the output stays append-only, so the session's scrollback survives it.
 
 A card rated `1` is **not** re-shown in the same session. The queue is materialized once by `getDueCards`, and FSRS puts a lapsed card a minute or so out, so it comes back on the next `geode review`. This is a decision, not an oversight: re-queueing inside the session is learning-steps logic, which section 1 rules out.
 

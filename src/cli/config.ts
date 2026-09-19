@@ -13,6 +13,12 @@ export interface FileConfig {
   notesPath: string;
   device: string;
   dbPath: string;
+  /**
+   * What `o` opens a card's note in, during review. Optional on purpose:
+   * absent means "fall through to $VISUAL, $EDITOR, then the OS default",
+   * which is a better answer than any value `init` could invent.
+   */
+  editor?: string;
 }
 
 const ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
@@ -59,11 +65,15 @@ export async function readConfig(file: string): Promise<FileConfig | null> {
     const raw = await fs.readFile(file, "utf8");
     const parsed = JSON.parse(raw) as Partial<FileConfig>;
     if (typeof parsed.notesPath !== "string") return null;
-    return {
+    const config: FileConfig = {
       notesPath: parsed.notesPath,
       device: typeof parsed.device === "string" ? parsed.device : defaultDevice(),
       dbPath: typeof parsed.dbPath === "string" ? parsed.dbPath : defaultDbPath(),
     };
+    if (typeof parsed.editor === "string" && parsed.editor.trim() !== "") {
+      config.editor = parsed.editor;
+    }
+    return config;
   } catch {
     return null;
   }
@@ -81,7 +91,9 @@ export class InitRefused extends Error {}
  * and preserves `device` even then. It should be re-runnable to fix a
  * notesPath typo without that doubling as a way to change the machine's
  * identity — regenerating `device` silently starts a second log file and
- * scatters one machine's history across two names.
+ * scatters one machine's history across two names. `editor` is preserved for
+ * the same reason: re-running `init` should not silently discard a setting it
+ * never asked about.
  */
 export async function initConfig(
   file: string,
@@ -97,6 +109,7 @@ export async function initConfig(
     device: existing?.device ?? defaultDevice(),
     dbPath: opts.dbPath ?? existing?.dbPath ?? defaultDbPath(),
   };
+  if (existing?.editor !== undefined) config.editor = existing.editor;
   await writeConfig(file, config);
   return config;
 }
