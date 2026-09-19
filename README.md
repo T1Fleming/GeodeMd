@@ -150,4 +150,4 @@ src/cli/        argv, config, review loop
 
 ## Status
 
-Phase 1 is complete: a single-machine CLI. A later phase is an Electron app, structured so that it is an interface swap rather than a rewrite — the module boundaries above are what make that true. Cross-device sync is a possible phase after that; the append-only log layout deliberately does not foreclose it, but nothing here is built for it yet.
+The single-machine CLI is complete. An Electron app is planned **alongside it, not instead of it** — the two are peer interfaces over the same core, and the CLI stays because it composes with scripts and because a terminal review loop is the fast path when you are already in a terminal. The module boundaries above are what let one core serve both. Cross-device sync is a possible phase after that; the append-only log layout deliberately does not foreclose it, but nothing here is built for it yet.

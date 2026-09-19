@@ -95,6 +95,8 @@ It strips comments before matching, because these modules *document* the rules t
 
 Note that this runs as a **test**, not as a compile step. `npm run build` is `tsc` and will happily compile a boundary violation; `npm test` is what catches it.
 
-The reason this is enforced rather than trusted: phase 1 is a CLI and a later phase is an Electron app. If these rules hold, that app is `core` plus a renderer. If they don't, it is a rewrite.
+The reason this is enforced rather than trusted: `core` is meant to serve **two** interfaces — this CLI and a planned Electron app — permanently, with neither replacing the other ([ADR 0013](../decisions/0013-cli-and-electron-are-peers.md)). If these rules hold, the second interface is `core` plus a renderer. If they don't, it is a rewrite, and the CLI is stuck carrying logic the GUI needs.
+
+That also sets where new code goes: anything both interfaces would want belongs in `core`, not in whichever one asked for it first.
 
 See [ADR 0006](../decisions/0006-module-boundaries-enforced-by-test.md).

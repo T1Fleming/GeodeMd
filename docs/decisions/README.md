@@ -4,7 +4,7 @@ One decision per file, numbered, **immutable once merged**. A decision that turn
 
 ADRs 0001–0012 were **backfilled on 2026-09-19**, after `docs/` existed but long after the decisions were taken. Their provenance is the [phase-1 brief](../design/phase-1-brief.md), which argued each one at the time; the `Source` line on each ADR names the section it came from. Their dates are the backfill date, not the decision date, which is not recoverable at this remove.
 
-New decisions from here get an ADR when they are made, not in a later sweep.
+New decisions from here get an ADR when they are made, not in a later sweep — 0013 onward are written at the time, and their dates are real.
 
 | # | Decision | Status |
 |---|---|---|
@@ -20,6 +20,7 @@ New decisions from here get an ADR when they are made, not in a later sweep.
 | [0010](0010-absence-is-not-deletion.md) | Absence is not deletion: no tombstones | Accepted |
 | [0011](0011-enumeration-is-a-seam.md) | Enumeration is a seam: walk now, snapshot later | Accepted |
 | [0012](0012-open-the-note-from-review.md) | Review can open the note, and detects edits by an end-of-session sweep | Accepted |
+| [0013](0013-cli-and-electron-are-peers.md) | The CLI and the Electron app are peer interfaces, permanently | Accepted |
 
 ## Writing one
 
