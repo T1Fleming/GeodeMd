@@ -2,7 +2,7 @@
 
 - **Status:** Accepted
 - **Date:** 2026-09-19 (backfilled)
-- **Source:** plan.md §5a
+- **Source:** [phase-1 brief](../design/phase-1-brief.md) §5a
 
 ## Context
 

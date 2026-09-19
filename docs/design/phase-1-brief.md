@@ -1,5 +1,11 @@
 # GeodeMD — Phase 1 Design Spec
 
+> **Retired. Historical — do not update.**
+>
+> This was the brief phase 1 was built from, written before any code existed. Phase 1 has shipped, so it is in the wrong tense throughout: it says what to build, not what exists. It is kept because 83 comments in `src/` cite it by section number, and because it argues each decision next to the alternative it beat.
+>
+> For how the system works now, see [the design docs](README.md). For why a decision went the way it did, see [the ADRs](../decisions/). The section-to-document map is in [README.md](README.md#reading-source-citations).
+
 A spaced repetition system where **everything durable is plain text in an ordinary directory of Markdown files** — notes hold card content, append-only JSONL logs hold review history — and a SQLite database outside that directory holds nothing but a rebuildable cache.
 
 This document is a build brief. Phase 1 is a CLI. A later phase is an Electron app. The structure below exists so that later phase is an interface swap, not a rewrite.

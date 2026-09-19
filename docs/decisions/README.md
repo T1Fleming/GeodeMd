@@ -2,7 +2,7 @@
 
 One decision per file, numbered, **immutable once merged**. A decision that turns out to be wrong is not edited — a new ADR supersedes it, and the old one gains a `Superseded by` line. The record of having believed something is the point.
 
-ADRs 0001–0012 were **backfilled on 2026-09-19**, after `docs/` existed but long after the decisions were taken. Their provenance is [`plan.md`](../../plan.md), the phase 1 design brief, which argued each one at the time; the `Source` line on each ADR names the section it came from. Their dates are the backfill date, not the decision date, which is not recoverable at this remove.
+ADRs 0001–0012 were **backfilled on 2026-09-19**, after `docs/` existed but long after the decisions were taken. Their provenance is the [phase-1 brief](../design/phase-1-brief.md), which argued each one at the time; the `Source` line on each ADR names the section it came from. Their dates are the backfill date, not the decision date, which is not recoverable at this remove.
 
 New decisions from here get an ADR when they are made, not in a later sweep.
 

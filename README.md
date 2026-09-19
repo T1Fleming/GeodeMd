@@ -129,13 +129,13 @@ Measured on a 50,000-file tree, warm cache: enumerating a million files takes ab
 ## Development
 
 ```sh
-npm test          # 219 tests
+npm test          # the whole suite, about a second
 npm run test:watch
 npm run typecheck
 npm run build
 ```
 
-The test suite covers the five places [`plan.md`](./plan.md) identifies as expensive to get wrong — the parser, sync, incremental sync, prune, and rebuild — plus a scale harness that asserts ratios and counts rather than wall-clock ceilings, and a suite that enforces the module boundaries so that `core` importing `cli`, SQL outside `store/`, or a clock in `parser/` fail the build.
+The test suite covers the five places [`docs/design/testing.md`](./docs/design/testing.md) identifies as expensive to get wrong — the parser, sync, incremental sync, prune, and rebuild — plus a scale harness that asserts ratios and counts rather than wall-clock ceilings, and a suite that enforces the module boundaries so that `core` importing `cli`, SQL outside `store/`, or a clock in `parser/` fail the build.
 
 ```
 src/parser/     pure: text -> cards. No filesystem, no database, no clock.
@@ -146,7 +146,7 @@ src/core/       sync, getDueCards, reviewCard, rebuild — the public API
 src/cli/        argv, config, review loop
 ```
 
-[`plan.md`](./plan.md) is the design brief and explains *why* each of those decisions is what it is — the identity rules, the data model, the sync algorithm, and the reasoning behind things that look odd until you know what they prevent.
+[`docs/design/`](./docs/design/) describes how each piece works now — the parser, the data model, the sync algorithm, the review flow. [`docs/decisions/`](./docs/decisions/) records *why* each choice is what it is, next to the alternative it beat, which is the reasoning behind things that look odd until you know what they prevent.
 
 ## Status
 

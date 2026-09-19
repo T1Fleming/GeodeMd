@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-GeodeMD (`geode`) is a spaced repetition CLI where everything durable is plain text: cards live as one-line `::` entries inside the user's own Markdown notes, review history is an append-only JSONL log next to those notes, and the SQLite database is a fully rebuildable cache stored elsewhere. `README.md` covers what it is, why it's built this way, and quickstart usage (install, `geode init`, `geode sync --dry-run`, writing cards, `geode review`) — read it for user-facing behavior. `plan.md` is the design brief and explains *why* the data model, sync algorithm, and identity rules are shaped the way they are — read it before changing sync, the parser, or the store schema.
+GeodeMD (`geode`) is a spaced repetition CLI where everything durable is plain text: cards live as one-line `::` entries inside the user's own Markdown notes, review history is an append-only JSONL log next to those notes, and the SQLite database is a fully rebuildable cache stored elsewhere. `README.md` covers what it is, why it's built this way, and quickstart usage (install, `geode init`, `geode sync --dry-run`, writing cards, `geode review`) — read it for user-facing behavior. `docs/design/` describes how each subsystem works now; read the relevant one before changing sync, the parser, or the store schema.
 
 ## Documentation map
 
@@ -16,6 +16,8 @@ docs/design/      how the system works now — living, kept in sync with the cod
 docs/guides/      how to do a specific task — living.
 docs/reference/   config, API, schemas — often generated; check for a generator before hand-editing.
 ```
+
+Start at [`docs/design/README.md`](docs/design/README.md): it indexes the subsystem docs and maps the brief's section numbers onto them. `docs/design/phase-1-brief.md` is the original pre-code spec — **historical, do not update it**; when it disagrees with a design doc, the design doc is right.
 
 ## Commands
 
@@ -91,7 +93,7 @@ Other properties the test suite asserts rather than assumes (regressions here ar
 
 **Purity is split from I/O even inside `cli`.** `render.ts` builds strings and `index.ts` decides when to print them; `editor.ts` keeps `resolveEditor`/`editorCommand` pure and confines the `spawn` to one place. The payoff is that output and editor-command construction are tested without a pseudo-terminal. Follow the same split when adding to `cli`.
 
-**Source comments cite `plan.md` by section.** Module headers say things like "section 6 rule 2" or "section 8 step 4". When code looks odd, that citation is where the rationale lives — and new code that encodes a spec decision should cite it the same way.
+**Source comments cite the original brief by section.** Module headers say things like "section 6 rule 2" or "section 8 step 4", referring to `docs/design/phase-1-brief.md` — retired, historical, still the target of 83 such citations. `docs/design/README.md` maps each section onto the document that now owns it. When code looks odd, that citation is where the rationale lives. **New code should cite the design docs or an ADR, not a brief section.**
 
 **Exit codes are contract** (`cli/index.ts`): `0` success — *including* a run that skipped an unreadable file, since a skip is a reported outcome and making it non-zero would break every script the first time a note has bad permissions; `1` configuration or usage error; `2` unexpected internal error.
 
