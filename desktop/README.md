@@ -39,10 +39,20 @@ of the problem rather than a workaround:
 `src/cli/**` is excluded from the desktop build; the app is a peer of the CLI,
 not a consumer of it (ADR 0013).
 
-## After changing the Electron version
+## The ABI rebuild runs itself
 
-Re-run the ABI rebuild, or every `Store` call fails at `new Database`:
+`postinstall` runs `electron-rebuild` after every install here, because the
+failure mode of forgetting it is an error that reads like a code fault:
 
-```sh
-npm --prefix desktop run rebuild
 ```
+The module '.../better_sqlite3.node' was compiled against a different
+Node.js version using NODE_MODULE_VERSION 141. This version of Node.js
+requires NODE_MODULE_VERSION 130.
+```
+
+It costs about a minute per install. That is the right trade against a
+message that sends you looking in the wrong place — this is documented here
+because I wrote this file telling myself to run the step, and then skipped it.
+
+After changing the Electron version, `npm install --prefix desktop` is enough.
+To force it by hand: `npm --prefix desktop run rebuild`.

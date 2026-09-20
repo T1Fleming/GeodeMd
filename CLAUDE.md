@@ -104,3 +104,15 @@ Cards are `<question> :: <answer>`, with `::` requiring whitespace on both sides
 Cards are *not* read from fenced or indented code blocks, inline code spans, tables, YAML frontmatter, blockquotes, or headings. The reason that skip list is longer than a card parser seems to need: a false positive does not merely produce a junk card, **it writes a stamp into the user's note**. Weigh any change to the recognition rules against that.
 
 Lines keep their own terminators end to end (`splitLines` splits *after* the newline), which is how a CRLF file stays CRLF and a file with no trailing newline keeps that too.
+
+## Things that cost an hour
+
+Not discoverable from the code, and each one presented as something other than what it was.
+
+**A `<script type="module">` on a `file://` page is blocked by CORS and silently never executes.** The renderer loads and does nothing — no error, no clue. Electron pages here are loaded with `loadFile`, so use a plain `<script>` unless you are genuinely importing.
+
+**The `write()` helper in `src/core/sync.test.ts` backdates mtime on purpose**, to keep fixtures out of the 2-second deferral window. A test that needs a file to *be* deferred must write it directly with `fs.writeFile`, as the existing deferral tests do. Using the helper gives a test that asserts a deferral which cannot happen.
+
+**Two builds, two dependency sets.** `npm run build` is the CLI and needs nothing from `desktop/`. `npm run build:desktop` emits to `desktop/dist/` — it must, because Node resolves `node_modules` by walking *up*, and output under `dist/` finds the root Node-ABI `better-sqlite3` rather than the Electron-ABI one. The root tsconfig therefore excludes exactly the files that `import "electron"`; everything else under `src/electron/` stays type-checked and testable. See `desktop/README.md`.
+
+**Anything awaiting an external process needs a timeout.** Three separate failures in this app presented as a silent hang rather than an error — a worker that could not load, a completion event subscribed to too late, and a page script that never ran. Each cost far more to diagnose than the bug deserved. `measure.bench.ts` and the renderer self-test both have hard timeouts for this reason.

@@ -6,7 +6,9 @@ How the source is divided, and what each division is protecting.
 
 ```mermaid
 flowchart TD
-    cli["cli/<br/>argv · config · review loop"]
+    cli["cli/<br/>argv · review loop · ANSI"]
+    electron["electron/<br/>window · IPC · renderer"]
+    host["host/<br/>config · paths · error kinds"]
     core["core/<br/>sync · getDueCards · reviewCard · rebuild"]
     parser["parser/<br/>text to cards — PURE"]
     files["files/<br/>walk · read · stamp · log append"]
@@ -14,17 +16,23 @@ flowchart TD
     sched["scheduler/<br/>FSRS, parameters pinned"]
 
     term(["the terminal"])
+    gui(["a window"])
     disk(["notes/ and .sr/log/"])
     sqlite(["db.sqlite"])
     tsfsrs(["ts-fsrs"])
 
+    cli --> host
+    electron --> host
     cli --> core
+    electron --> core
+    host --> core
     core --> parser
     core --> files
     core --> store
     core --> sched
 
     cli -.- term
+    electron -.- gui
     files -.- disk
     store -.- sqlite
     sched -.- tsfsrs
@@ -32,14 +40,18 @@ flowchart TD
 
 Solid arrows are imports; they run one way and never back. Dotted lines mark the **sole owner** of an external resource — no other module may reach that thing at all.
 
+`cli` and `electron` are **peers** ([ADR 0013](../decisions/0013-cli-and-electron-are-peers.md)): neither imports the other, and what they share lives in `host`. The line between `host` and `core` is ambient state — `host` may read `process.env`, `os.hostname()` and the config file; `core` may read none of it and takes everything as arguments ([ADR 0016](../decisions/0016-config-lives-in-host.md)).
+
 ```
 src/
   parser/     text -> cards            PURE: no fs, no db, no clock
   files/      the only module that touches the filesystem, log included
   store/      the only module that touches SQLite
   scheduler/  ts-fsrs behind a two-method interface
-  core/       the Core class; orchestration
-  cli/        argv, config, terminal I/O
+  core/       the Core class; orchestration. Knows only its arguments
+  host/       this machine: XDG paths, env, hostname, config, error kinds
+  cli/        argv, terminal I/O                  one of two interfaces
+  electron/   window, IPC contract, renderer      the other
   index.ts    the public API: re-exports Core, Store, FsrsScheduler, parser fns
 ```
 

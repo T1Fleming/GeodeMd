@@ -16,10 +16,20 @@
     "verbatimModuleSyntax": true
   },
   "include": ["src/**/*.ts"],
-  // src/electron/** is excluded on purpose: it needs Electron's types, which
-  // live in desktop/node_modules. Including it here would make `npm install`
-  // + `npm run typecheck` fail on a fresh clone unless you also installed the
-  // desktop deps — and this build produces the CLI, which does not need them.
-  // tsconfig.desktop.json builds that code, and requires those deps honestly.
-  "exclude": ["src/**/*.test.ts", "src/electron/**"]
+  // Only the files that genuinely import `electron` are excluded — their types
+  // live in desktop/node_modules, and including them here would make a fresh
+  // `npm install && npm run typecheck` fail unless you also installed the
+  // desktop deps. tsconfig.desktop.json builds those, and needs them honestly.
+  //
+  // Everything else under src/electron/ — the IPC contract, the runner — is
+  // deliberately free of Electron imports so it stays type-checked here and
+  // testable under plain vitest. That is what makes any of this coverable in
+  // a repo with no mocks.
+  "exclude": [
+    "src/**/*.test.ts",
+    "src/electron/main/index.ts",
+    "src/electron/preload.cts",
+    "src/electron/measure.bench.ts",
+    "src/electron/worker/**"
+  ]
 }

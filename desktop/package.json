@@ -2,11 +2,13 @@
   "name": "geodemd-desktop",
   "private": true,
   "version": "0.0.0",
-  "description": "Electron runtime and native-ABI deps. Holds no source — see ../src/electron.",
+  "description": "Electron runtime and native-ABI deps. Holds no source \u2014 see ../src/electron.",
   "type": "module",
   "scripts": {
     "rebuild": "electron-rebuild -f -w better-sqlite3",
-    "measure": "electron dist/electron/measure.bench.js"
+    "measure": "electron dist/electron/measure.bench.js",
+    "start": "electron dist/electron/main/index.js",
+    "postinstall": "electron-rebuild -f -w better-sqlite3"
   },
   "dependencies": {
     "better-sqlite3": "11.7.0"
