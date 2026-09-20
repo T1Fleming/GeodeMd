@@ -54,6 +54,17 @@ function stripComments(text: string): string {
   return text.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|[^:])\/\/.*$/gm, "$1");
 }
 
+/**
+ * Matches an import of a sibling module by directory name.
+ *
+ * The trailing slash is load-bearing. Written as `[^"']*\/cli` it also matches
+ * `react-dom/client` — `cli` is a prefix of `client` — and the rule fires on an
+ * innocent dependency while looking like a real violation. A boundary test that
+ * cries wolf gets weakened, which is worse than not having it.
+ */
+const importsModule = (name: string): RegExp =>
+  new RegExp(`from\\s+["'][^"']*\\/${name}\\/`);
+
 /** One file, for rules that are about a specific file rather than a module. */
 async function readFile(rel: string): Promise<string> {
   return stripComments(await fs.readFile(path.join(SRC, rel), "utf8"));
@@ -67,12 +78,12 @@ async function readAll(dir: string): Promise<string> {
 
 describe("section 6 hard rules", () => {
   it("rule 1: core never imports cli", async () => {
-    expect(await readAll("core")).not.toMatch(/from\s+["'][^"']*cli/);
+    expect(await readAll("core")).not.toMatch(importsModule("cli"));
   });
 
   it("rule 1: no module below cli imports cli", async () => {
     for (const dir of ["core", "store", "files", "parser", "scheduler", "host"]) {
-      expect(await readAll(dir), `${dir} imports cli`).not.toMatch(/from\s+["'][^"']*\/cli/);
+      expect(await readAll(dir), `${dir} imports cli`).not.toMatch(importsModule("cli"));
     }
   });
 
@@ -174,7 +185,7 @@ describe("host, shared by both interfaces", () => {
     // Rule 3 the other way round. host reads ambient state; if core could
     // import it, core could reach that state through the back door.
     for (const dir of ["core", "store", "files", "parser", "scheduler"]) {
-      expect(await readAll(dir), `${dir} imports host`).not.toMatch(/from\s+["'][^"']*\/host/);
+      expect(await readAll(dir), `${dir} imports host`).not.toMatch(importsModule("host"));
     }
   });
 });
@@ -186,18 +197,14 @@ describe("host, shared by both interfaces", () => {
  */
 describe("electron, the second interface", () => {
   it("does not import cli, and cli does not import it", async () => {
-    expect(await readAll("electron"), "electron imports cli").not.toMatch(
-      /from\s+["'][^"']*\/cli/,
-    );
-    expect(await readAll("cli"), "cli imports electron").not.toMatch(
-      /from\s+["'][^"']*\/electron/,
-    );
+    expect(await readAll("electron"), "electron imports cli").not.toMatch(importsModule("cli"));
+    expect(await readAll("cli"), "cli imports electron").not.toMatch(importsModule("electron"));
   });
 
   it("nothing below the interfaces imports electron", async () => {
     for (const dir of ["core", "store", "files", "parser", "scheduler", "host"]) {
       expect(await readAll(dir), `${dir} imports electron`).not.toMatch(
-        /from\s+["'][^"']*\/electron/,
+        importsModule("electron"),
       );
     }
   });

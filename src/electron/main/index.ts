@@ -7,8 +7,9 @@
  * bench in `measure.bench.ts` is how you find out.
  */
 
-import { app, BrowserWindow, ipcMain } from "electron";
+import { app, BrowserWindow, ipcMain, net, protocol } from "electron";
 import { mkdir, writeFile } from "node:fs/promises";
+import { pathToFileURL } from "node:url";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Core } from "../../core/index.js";
@@ -151,6 +152,29 @@ async function captureTo(name: string): Promise<void> {
   }
 }
 
+/**
+ * The renderer is served from `app://` rather than `file://`.
+ *
+ * Not a preference. Vite emits `<script type="module">`, and Chromium blocks
+ * ES modules on `file://` under its CORS rules — the page loads and silently
+ * does nothing, with no error anywhere. A custom scheme has a real origin, so
+ * modules load, relative assets resolve, and the CSP in index.html means
+ * something.
+ */
+const RENDERER = path.join(HERE, "..", "renderer");
+
+function serveRenderer(): void {
+  protocol.handle("app", (request) => {
+    const url = new URL(request.url);
+    // Confined to the renderer directory: a crafted path must not be able to
+    // read the rest of the disk through this handler.
+    const rel = path.normalize(decodeURIComponent(url.pathname)).replace(/^([/\\])+/, "");
+    const file = path.join(RENDERER, rel === "" ? "index.html" : rel);
+    if (!file.startsWith(RENDERER)) return new Response("no", { status: 403 });
+    return net.fetch(pathToFileURL(file).toString());
+  });
+}
+
 async function createWindow(): Promise<void> {
   win = new BrowserWindow({
     show: !SELFTEST,
@@ -191,8 +215,7 @@ async function createWindow(): Promise<void> {
     }
   });
 
-  const query = SELFTEST ? { search: "selftest" } : {};
-  await win.loadFile(path.join(HERE, "..", "renderer", "index.html"), query);
+  await win.loadURL(`app://local/index.html${SELFTEST ? "?selftest" : ""}`);
 
   // A self-test that hangs looks exactly like one that is slow, and the last
   // two times something in this app went wrong it presented as a silent wait.
@@ -204,7 +227,16 @@ async function createWindow(): Promise<void> {
   }
 }
 
+// Must be called before the app is ready, and before any window exists.
+protocol.registerSchemesAsPrivileged([
+  {
+    scheme: "app",
+    privileges: { standard: true, secure: true, supportFetchAPI: true },
+  },
+]);
+
 void app.whenReady().then(async () => {
+  serveRenderer();
   register();
   await createWindow();
 });

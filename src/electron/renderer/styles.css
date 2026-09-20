@@ -1,0 +1,168 @@
+/*
+ * Reviewing is reading one short thing and deciding. Everything here is in
+ * service of that: one column, generous space around the card, and the
+ * machinery (counter, locator, legend) recessive enough to ignore until you
+ * want it.
+ */
+
+:root {
+  --ink: #16181d;
+  --muted: #6b7280;
+  --line: #e5e7eb;
+  --bg: #ffffff;
+  --accent: #2563eb;
+  color-scheme: light dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ink: #e8eaed;
+    --muted: #9aa0a6;
+    --line: #2d3138;
+    --bg: #16181d;
+    --accent: #7aa2f7;
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  /* The whole window is a keyboard surface; a stray selection from a
+     double-click is noise. */
+  user-select: none;
+}
+
+.app { min-height: 100vh; display: flex; flex-direction: column; }
+
+.review {
+  flex: 1;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  max-width: 44rem;
+  width: 100%;
+  margin: 0 auto;
+  padding: 1.5rem 2rem 1.25rem;
+}
+
+/* --- the bar above the card ------------------------------------------- */
+
+.meta {
+  display: flex;
+  gap: 1rem;
+  align-items: baseline;
+  font-size: 0.8125rem;
+  color: var(--muted);
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 0.75rem;
+}
+
+/* The counter repeats on every card on purpose: a "50 of 1240 due" line
+   printed once is no help by card thirty. */
+.meta .locator { margin-left: auto; font-family: ui-monospace, monospace; }
+.meta .backlog { color: var(--muted); }
+
+/* --- the card --------------------------------------------------------- */
+
+.card {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 1.75rem;
+  padding: 3rem 0;
+}
+
+.question {
+  margin: 0;
+  font-size: 1.5rem;
+  line-height: 1.4;
+  user-select: text;
+}
+
+.answer {
+  margin: 0;
+  font-size: 1.25rem;
+  line-height: 1.5;
+  color: var(--ink);
+  padding-top: 1.75rem;
+  border-top: 1px solid var(--line);
+  user-select: text;
+}
+
+.prompt { margin: 0; color: var(--muted); font-size: 0.9375rem; }
+
+/* --- the legend ------------------------------------------------------- */
+
+.legend {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  border-top: 1px solid var(--line);
+  padding-top: 1rem;
+  font-size: 0.875rem;
+}
+
+.legend .spacer { flex: 1; }
+
+button {
+  font: inherit;
+  font-size: 0.875rem;
+  color: var(--ink);
+  background: transparent;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 0.4rem 0.7rem;
+  cursor: pointer;
+}
+
+button:hover { border-color: var(--accent); }
+
+kbd {
+  font-family: ui-monospace, monospace;
+  font-size: 0.8125rem;
+  color: var(--accent);
+  padding-right: 0.15rem;
+}
+
+.hint { color: var(--muted); }
+
+/* --- the end ---------------------------------------------------------- */
+
+/* Overrides .review's three-row grid rather than living inside its first row,
+   which pinned the summary to the top with an empty screen beneath it. */
+.done {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+
+.done h2 { margin: 0; font-size: 1.375rem; font-weight: 600; }
+.breakdown { margin: 0; padding: 0; list-style: none; color: var(--muted); display: flex; gap: 1rem; }
+.stale { color: var(--muted); font-size: 0.9375rem; max-width: 34rem; }
+
+.muted { color: var(--muted); }
+.error { color: #b91c1c; padding: 2rem; font-family: ui-monospace, monospace; }
+code { font-family: ui-monospace, monospace; font-size: 0.9em; }
+
+/* --- the quiet notice ------------------------------------------------- */
+
+/* SQLITE_BUSY is a success with a qualifier, not a failure: the rating is
+   already durable in the log. This must never look like an error dialog. */
+.toast {
+  position: fixed;
+  bottom: 1.25rem;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--ink);
+  color: var(--bg);
+  font-size: 0.8125rem;
+  padding: 0.5rem 0.9rem;
+  border-radius: 6px;
+  opacity: 0.9;
+  cursor: pointer;
+}
