@@ -64,6 +64,8 @@ Print question → any key → print answer → read `1`–`4` → record → ne
 - **`q` quits from either state.** Any key reveals the answer *except* `q`, which quits there and then without recording; it is the one key the "any key" rule excludes.
 - **Legend:** `1 again  2 hard  3 good  4 easy   o open · q quit`, under the answer. FSRS's four ratings are not guessable from their numbers, and neither is `o`.
 - **`o` opens the card's note at its line**, offered only once the answer is showing. See [ADR 0012](../decisions/0012-open-the-note-from-review.md).
+- **Both interfaces open it the same way.** Which program to run, and how it is told a line, come from `host/editor.ts` — one table, so `o` cannot mean `code --goto` in the terminal and "whatever owns `.md`" in the app. What differs is the spawn: the CLI inherits the TTY and waits, the app detaches and returns at once. See [the module map](module-map.md).
+- **At the end of the session, notes that changed are named.** Every note opened is recorded with the mtime it had at the time, and the comparison happens once, when the session ends — not when the editor returns. Only a terminal editor holds the process until you quit it; `code`, `subl` and every OS opener return in milliseconds, so checking around the spawn would report nothing in exactly the setup where the user is most likely to still be typing. The queue is a snapshot, so a note edited mid-session is stale on screen, and this line is the only thing that says so.
 - **A card rated `1` is not re-shown in the same session.** The queue is materialized once, and FSRS puts a lapsed card a minute or so out, so it returns on the next `geode review`. Re-queueing inside the session is learning-steps logic, which is out of scope.
 
 ### Raw mode

@@ -64,6 +64,26 @@ export async function runSelfTest(): Promise<void> {
       b.textContent?.trim(),
     );
     check('every action key is advertised', actions.length === 2, actions.join(' / '));
+    check('open is one of them', actions.some((a) => a?.includes('open')), actions.join(' / '));
+
+    // Press `o` for real.
+    //
+    // What this CAN check is that the app does not blow up and does not lose
+    // the card — the handler is async and crosses IPC, so a broken one used to
+    // surface as a dead screen rather than an error. What it CANNOT check is
+    // that an editor opened: main spawns detached and deliberately does not
+    // wait, and a headless CI machine has no editor to spawn anyway. In that
+    // environment `o` fails and shows a toast, which is itself the evidence
+    // that the channel is wired rather than still a stub.
+    const before = text(".question");
+    await key("o");
+    await settle(400);
+    check("o does not throw or lose the card", text(".question") === before, text(".question"));
+    check(
+      "o reaches the open channel rather than the old stub",
+      !text(".toast").includes("not wired up"),
+      text(".toast"),
+    );
 
     await key("3");
     await settle(200);
@@ -81,6 +101,17 @@ export async function runSelfTest(): Promise<void> {
     await settle(200);
     check("q ends the session", exists(".done"), text(".done h2"));
     check("the tally counts only answered cards", text(".done h2").startsWith("1 reviewed"), text(".done h2"));
+
+    // The end-of-session check is an IPC round trip that stats every opened
+    // note, so the screen renders before the answer arrives. Wait for it
+    // rather than for a timer — and note this only has anything to report
+    // because the self-test's stand-in editor really does touch the file.
+    for (let i = 0; i < 40 && !exists(".stale"); i++) await settle(50);
+    check(
+      "a note edited during the session is named at the end",
+      text(".stale").includes(".md") && text(".stale").includes("geode sync"),
+      text(".stale"),
+    );
     await shot("review-03-done");
 
     const failed = results.some((r) => r.includes("FAIL"));

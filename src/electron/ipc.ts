@@ -62,6 +62,18 @@ export interface Rated {
   applied: "db" | "log-only";
 }
 
+/**
+ * What `note/open` answers.
+ *
+ * A `Result`, and `launched` inside it, so a missing editor is a message the
+ * renderer can show as a dim note rather than a thrown error — the same
+ * treatment a busy database gets. Failing to open a note must never cost the
+ * user the session.
+ */
+export interface NoteOpened {
+  launched: boolean;
+}
+
 export interface RunStarted {
   runId: string;
   /** True when an identical run was already in flight and this joined it. */
@@ -112,6 +124,8 @@ export const CH = {
   cardsReview: "geode:cards/review",
   runStart: "geode:run/start",
   runStatus: "geode:run/status",
+  noteOpen: "geode:note/open",
+  noteChanged: "geode:note/changed",
   // Events, main → renderer.
   runProgress: "geode:run/progress",
   runFinished: "geode:run/finished",
@@ -125,6 +139,14 @@ export interface GeodeApi {
   cardsReview(cardId: string, rating: 1 | 2 | 3 | 4): Promise<Result<Rated>>;
   runStart(kind: "sync" | "rebuild", req: SyncRequest): Promise<Result<RunStarted>>;
   runStatus(): Promise<Result<RunStatus>>;
+  /** Open a card's note. `filePath` is relative to notesPath, as stored. */
+  noteOpen(filePath: string, line: number | null): Promise<Result<NoteOpened>>;
+  /**
+   * Which of the notes opened this session have changed since they were
+   * opened. Asked once at the end: a GUI editor returns long before anything
+   * has been typed, so asking sooner reports nothing (ADR 0012).
+   */
+  noteChanged(filePaths: readonly string[]): Promise<Result<string[]>>;
   onRunProgress(fn: (p: RunProgress) => void): () => void;
   onRunFinished(fn: (f: RunFinished) => void): () => void;
 }

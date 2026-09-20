@@ -12,7 +12,6 @@
  */
 
 import { realpathSync } from "node:fs";
-import { stat } from "node:fs/promises";
 import * as path from "node:path";
 import * as readline from "node:readline";
 import { fileURLToPath } from "node:url";
@@ -21,6 +20,7 @@ import type { DueCard, SyncSummary } from "../core/index.js";
 import { Store } from "../store/index.js";
 import { configPath, initConfig, InitRefused } from "../host/config.js";
 import type { FileConfig } from "../host/config.js";
+import { OpenedNotes, resolveEditor } from "../host/editor.js";
 import { isBusy } from "../host/errors.js";
 import { interpretKey } from "../host/present.js";
 import type { KeyAction } from "../host/present.js";
@@ -28,7 +28,7 @@ import { openCore as openCoreWith, readAppConfig } from "../host/open.js";
 
 export { interpretKey };
 export type { KeyAction };
-import { openInEditor, resolveEditor } from "./editor.js";
+import { openInEditor } from "./editor.js";
 import {
   emptyCounts,
   renderAnswer,
@@ -142,15 +142,6 @@ async function openCore(): Promise<{ core: Core; store: Store; config: FileConfi
   return { ...openCoreWith(config), config };
 }
 
-/** Null when the file cannot be read — an unreadable note is not an error here. */
-async function mtimeOf(file: string): Promise<number | null> {
-  try {
-    return (await stat(file)).mtimeMs;
-  } catch {
-    return null;
-  }
-}
-
 /** Section 9's review loop. Requires a TTY; restores the terminal on any exit. */
 async function reviewLoop(core: Core, config: FileConfig, limit: number): Promise<void> {
   if (!process.stdin.isTTY) {
@@ -219,19 +210,16 @@ async function reviewLoop(core: Core, config: FileConfig, limit: number): Promis
 
   /**
    * Notes opened this session, against the mtime each had when it was first
-   * opened. Checked once at the end rather than when the editor exits: a
-   * terminal editor holds the terminal until you quit it, but `code`, `subl`,
-   * `zed` and every OS opener hand the file to a running instance and return in
-   * milliseconds — long before anything has been typed. Comparing around the
-   * spawn would therefore report nothing in exactly the setup where the user is
-   * most likely to keep editing while the session runs.
+   * opened. The app keeps the same record for the same reason, which is why
+   * this lives in `host` — see `OpenedNotes` for why the check is deferred to
+   * the end of the session rather than made when the editor returns.
    */
-  const openedNotes = new Map<string, number | null>();
+  const openedNotes = new OpenedNotes(config.notesPath);
 
   /** Open the note this card was written in, then hand the terminal back. */
   const openContext = async (card: DueCard): Promise<string | null> => {
     const abs = path.join(config.notesPath, card.filePath);
-    if (!openedNotes.has(card.filePath)) openedNotes.set(card.filePath, await mtimeOf(abs));
+    await openedNotes.opened(card.filePath);
     const editor = resolveEditor(config.editor, process.env);
 
     editorRunning = true;
@@ -252,13 +240,7 @@ async function reviewLoop(core: Core, config: FileConfig, limit: number): Promis
    * that it had.
    */
   const sessionEnd = async (): Promise<string> => {
-    const changed: string[] = [];
-    for (const [rel, before] of openedNotes) {
-      // `!==` covers a note that was created or removed while it was open, not
-      // only one that was rewritten; two unreadable reads compare equal and are
-      // correctly not a change.
-      if ((await mtimeOf(path.join(config.notesPath, rel))) !== before) changed.push(rel);
-    }
+    const changed = await openedNotes.changed();
     // Summary first: it carries the blank line that separates the session from
     // the last card, and the note that wants acting on then sits last, where
     // the eye lands.

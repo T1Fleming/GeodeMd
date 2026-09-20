@@ -73,7 +73,17 @@ This is not purity for its own sake. Without it, two whole classes of test canno
 
 `core` never prints, never exits, never prompts. Long operations take an optional `onProgress(done, total, phase)` callback rather than writing to the terminal — at the top of the scale range a sync runs for seconds and a rebuild for minutes, so `cli` renders a counter from it.
 
-Inside `cli`, the same split repeats one level down: `render.ts` builds strings and `index.ts` decides when to print them; `editor.ts` keeps `resolveEditor` and `editorCommand` pure and confines the `spawn` to one function. The payoff is that output and editor-command construction are tested without a pseudo-terminal.
+Inside `cli`, the same split repeats one level down: `render.ts` builds strings and `index.ts` decides when to print them. The payoff is that output is tested without a pseudo-terminal.
+
+Opening a note is the same split drawn across the two interfaces instead of inside one. `host/editor.ts` holds the pure half — `resolveEditor`, `editorCommand`, the `+142` / `--goto` / `:142` tables, and the `OpenedNotes` mtime record — and each interface keeps its own `spawn`, because the two spawns are not the same call:
+
+| | `cli/editor.ts` | `electron/main/open.ts` |
+| --- | --- | --- |
+| stdio | `inherit` — `vim` takes over the TTY | `ignore` — there is no TTY to hand over |
+| lifetime | awaited; returns when the editor exits | `detached` + `unref`; returns when it starts |
+| a failure | one dim line, session continues | a `Result`, shown as a note |
+
+Sharing the table is what keeps `o` meaning the same thing in both; splitting the spawn is what keeps the app from blocking for as long as a note stays open. `boundaries.test.ts` asserts both halves — that neither interface carries an editor table, and that each one spawns its own way.
 
 ## Three types cross the boundaries
 

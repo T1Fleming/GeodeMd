@@ -22,6 +22,8 @@ const CH = {
   cardsReview: "geode:cards/review",
   runStart: "geode:run/start",
   runStatus: "geode:run/status",
+  noteOpen: "geode:note/open",
+  noteChanged: "geode:note/changed",
   runProgress: "geode:run/progress",
   runFinished: "geode:run/finished",
 } as const;
@@ -45,6 +47,12 @@ contextBridge.exposeInMainWorld("geode", {
     ipcRenderer.invoke(CH.cardsReview, cardId, rating),
   runStart: (kind: string, req: unknown) => ipcRenderer.invoke(CH.runStart, kind, req),
   runStatus: () => ipcRenderer.invoke(CH.runStatus),
+  noteOpen: (filePath: string, line: number | null) =>
+    ipcRenderer.invoke(CH.noteOpen, filePath, line),
+  noteChanged: (filePaths: readonly string[]) =>
+    // A plain array crosses; a readonly one is the same object to
+    // `structuredClone`, and the annotation is only about this side.
+    ipcRenderer.invoke(CH.noteChanged, [...filePaths]),
   onRunProgress: (fn: (p: unknown) => void) => on(CH.runProgress, fn),
   onRunFinished: (fn: (f: unknown) => void) => on(CH.runFinished, fn),
 });

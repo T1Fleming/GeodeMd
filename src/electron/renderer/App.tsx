@@ -27,6 +27,8 @@ const LIMIT = 50;
 export function App(): React.JSX.Element {
   const [screen, setScreen] = useState<Screen>({ at: "loading" });
   const [note, setNote] = useState<string | null>(null);
+  /** Notes edited during the session. Null until the session ends. */
+  const [stale, setStale] = useState<string[] | null>(null);
 
   const load = useCallback(async () => {
     setScreen({ at: "loading" });
@@ -57,13 +59,31 @@ export function App(): React.JSX.Element {
     }
   }, []);
 
-  const onOpen = useCallback((_card: DueCard) => {
-    // Not wired yet: opening a note needs its own spawn in main, because the
-    // CLI's uses stdio:"inherit" and a GUI must not.
-    setNote("opening notes from the app is not wired up yet");
+  const onOpen = useCallback(async (card: DueCard) => {
+    // Main does the spawn — detached, so the app is not held open by an editor
+    // the user leaves running. Nothing here waits for the note to be closed.
+    const r = await window.geode.noteOpen(card.filePath, card.lineNo);
+    // A failure is a dim note, not a dialog: not being able to open a note is
+    // no reason to lose the session.
+    if (!r.ok) setNote(r.message);
   }, []);
 
-  const onDone = useCallback((_s: Session) => {}, []);
+  /**
+   * At the end of the session, ask which of the opened notes actually changed.
+   *
+   * Once, at the end — not per card. Only a terminal editor holds the process
+   * until you quit it; `code`, `subl` and every OS opener return in
+   * milliseconds, so checking around the open would report nothing in exactly
+   * the setup where the user is most likely to still be typing (ADR 0012).
+   */
+  const onDone = useCallback((s: Session) => {
+    if (s.opened.length === 0) return setStale([]);
+    void window.geode.noteChanged(s.opened).then((r) => {
+      // Fall back to the paths that were opened: a failed check should still
+      // say something, because the queue really is a snapshot either way.
+      setStale(r.ok ? r.value : [...s.opened]);
+    });
+  }, []);
 
   return (
     <div className="app">
@@ -81,6 +101,7 @@ export function App(): React.JSX.Element {
         <Review
           queue={screen.queue}
           backlog={screen.backlog}
+          stale={stale}
           onRate={onRate}
           onOpen={onOpen}
           onDone={onDone}

@@ -14,10 +14,13 @@ import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Core } from "../../core/index.js";
 import type { Store } from "../../store/index.js";
+import type { FileConfig } from "../../host/config.js";
+import { OpenedNotes, resolveEditor } from "../../host/editor.js";
 import { classify, isBusy } from "../../host/errors.js";
 import { openCore, readAppConfig } from "../../host/open.js";
 import { CH } from "../ipc.js";
-import type { AppConfig, Rated, Result, Stats, SyncRequest } from "../ipc.js";
+import type { AppConfig, NoteOpened, Rated, Result, Stats, SyncRequest } from "../ipc.js";
+import { openDetached } from "./open.js";
 import { Runner } from "./runs.js";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -26,6 +29,13 @@ let core: Core | null = null;
 let store: Store | null = null;
 let runner: Runner | null = null;
 let win: BrowserWindow | null = null;
+let config: FileConfig | null = null;
+/**
+ * Kept beside the Core rather than in the renderer: the renderer cannot stat a
+ * file, and it is the mtime at open time — not the path — that makes the
+ * end-of-session answer possible.
+ */
+let opened: OpenedNotes | null = null;
 
 /**
  * Lazily, on the first command that needs it — never at startup. On a first run
@@ -34,13 +44,15 @@ let win: BrowserWindow | null = null;
  */
 async function ensureCore(): Promise<Core> {
   if (core) return core;
-  const config = await readAppConfig();
-  if (!config) throw new NoConfig();
-  const opened = openCore(config);
-  core = opened.core;
-  store = opened.store;
+  const c = await readAppConfig();
+  if (!c) throw new NoConfig();
+  config = c;
+  opened = new OpenedNotes(c.notesPath);
+  const it = openCore(c);
+  core = it.core;
+  store = it.store;
   runner = new Runner({
-    core: opened.core,
+    core: it.core,
     emit: (p) => win?.webContents.send(CH.runProgress, p),
     finish: (runId, kind, result) => win?.webContents.send(CH.runFinished, { runId, kind, result }),
   });
@@ -122,6 +134,50 @@ function register(): void {
   ipcMain.handle(CH.runStatus, () =>
     guard(() => runner?.status() ?? ({ state: "never" } as const)),
   );
+
+  /**
+   * Open the note a card was written in — the app's half of `o`.
+   *
+   * `ensureCore` first, for the config rather than the Core: the notes path
+   * and the `editor` setting both live there, and a first run has neither.
+   *
+   * A failure crosses as `ok: false` and is tagged `config`, not `internal`:
+   * "you have no editor installed" is something the user fixes by setting one,
+   * and `internal` means a bug. Either way it is a message the renderer shows
+   * as a dim note — the session survives an editor that will not start.
+   */
+  ipcMain.handle(CH.noteOpen, async (_e, filePath: string, line: number | null) => {
+    const r = await guard<Result<NoteOpened>>(async () => {
+      await ensureCore();
+      const c = config!;
+      // Resolve, then check the prefix. `filePath` comes from a card row and is
+      // relative by construction, but a stored `..` must not be able to reach
+      // out of the notes directory and hand an arbitrary file to a spawn.
+      const root = path.resolve(c.notesPath);
+      const abs = path.resolve(root, filePath);
+      if (!abs.startsWith(root + path.sep)) {
+        return { ok: false, kind: "config", message: `${filePath} is outside your notes folder` };
+      }
+      // Recorded before the spawn: afterwards the editor may already have
+      // touched the file, and the baseline would be the edited mtime.
+      await opened!.opened(filePath);
+      const editor = SELFTEST ? SELFTEST_EDITOR : resolveEditor(c.editor, process.env);
+      const result = await openDetached(abs, line, editor);
+      if (result.launched) return { ok: true, value: { launched: true } };
+      return { ok: false, kind: "editor", message: result.message ?? "could not open the note" };
+    });
+    // Two Results: the guard's, which catches a missing config, and this
+    // handler's own. Unwrap rather than nest — the same shape as run/start.
+    return r.ok ? r.value : r;
+  });
+
+  /**
+   * Which opened notes changed. Asked once, at the end of a session — see
+   * `OpenedNotes` for why not sooner.
+   */
+  ipcMain.handle(CH.noteChanged, (_e, filePaths: string[]) =>
+    guard<string[]>(async () => (opened ? opened.changed(filePaths) : [])),
+  );
 }
 
 /**
@@ -130,6 +186,22 @@ function register(): void {
  * buttons, which means in practice it does not get checked.
  */
 const SELFTEST = process.env["GEODE_SELFTEST"] === "1";
+
+/**
+ * What `o` runs under the self-test.
+ *
+ * The harness presses `o` for real, which is the point — a handler bound to
+ * the wrong thing passes every channel-level check. Resolving the real editor
+ * would launch whatever owns `.md` on that machine, and a test suite that
+ * opens TextEdit is one people stop running.
+ *
+ * `touch` rather than `true` because it stands in for the editor's *effect*:
+ * it bumps the mtime and exits, which is what makes the end-of-session "this
+ * note changed" path reachable from the harness at all. Nothing appears on
+ * screen and no content is written — a smaller footprint than the real review
+ * this same run records in the log.
+ */
+const SELFTEST_EDITOR = "touch";
 
 /**
  * Where `SHOT` writes. Defaults next to the build so a stray run cannot

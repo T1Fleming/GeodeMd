@@ -1,5 +1,8 @@
-import { describe, expect, it } from "vitest";
-import { editorCommand, resolveEditor } from "./editor.js";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import * as fs from "node:fs/promises";
+import * as os from "node:os";
+import * as path from "node:path";
+import { OpenedNotes, editorCommand, resolveEditor } from "./editor.js";
 
 const env = (o: Record<string, string>): NodeJS.ProcessEnv => o as NodeJS.ProcessEnv;
 const FILE = "/notes/algorithms/Sorting.md";
@@ -86,5 +89,82 @@ describe("editorCommand", () => {
     for (const platform of ["darwin", "linux", "win32"] as const) {
       expect(editorCommand(null, FILE, 142, platform).args.join(" ")).not.toContain("142");
     }
+  });
+});
+
+/**
+ * The mtime comparison both interfaces make at the end of a session. Real
+ * files and real mtimes: the whole point is that it notices an edit made by a
+ * program this one never sees.
+ */
+describe("OpenedNotes", () => {
+  let dir: string;
+
+  beforeEach(async () => {
+    dir = await fs.mkdtemp(path.join(os.tmpdir(), "geode-opened-"));
+  });
+  afterEach(async () => {
+    await fs.rm(dir, { recursive: true, force: true });
+  });
+
+  const write = async (rel: string, text: string): Promise<void> => {
+    await fs.mkdir(path.dirname(path.join(dir, rel)), { recursive: true });
+    await fs.writeFile(path.join(dir, rel), text);
+  };
+
+  /** mtime resolution is coarse enough that an immediate rewrite can tie. */
+  const touch = async (rel: string, text: string): Promise<void> => {
+    await write(rel, text);
+    const when = new Date(Date.now() + 2000);
+    await fs.utimes(path.join(dir, rel), when, when);
+  };
+
+  it("reports a note that was edited while it was open", async () => {
+    await write("aws/lambda.md", "before");
+    const opened = new OpenedNotes(dir);
+    await opened.opened("aws/lambda.md");
+    await touch("aws/lambda.md", "after");
+    expect(await opened.changed()).toEqual(["aws/lambda.md"]);
+  });
+
+  it("says nothing about a note that was only looked at", async () => {
+    await write("aws/lambda.md", "before");
+    const opened = new OpenedNotes(dir);
+    await opened.opened("aws/lambda.md");
+    expect(await opened.changed()).toEqual([]);
+  });
+
+  it("keeps the mtime from the FIRST open, not the most recent", async () => {
+    // Re-opening a note mid-edit must not adopt the edited mtime as the
+    // baseline — that would silently forget the change the user just made.
+    await write("aws/lambda.md", "before");
+    const opened = new OpenedNotes(dir);
+    await opened.opened("aws/lambda.md");
+    await touch("aws/lambda.md", "after");
+    await opened.opened("aws/lambda.md");
+    expect(await opened.changed()).toEqual(["aws/lambda.md"]);
+  });
+
+  it("counts a note that disappeared, and one that appeared", async () => {
+    await write("gone.md", "here");
+    const opened = new OpenedNotes(dir);
+    await opened.opened("gone.md");
+    await opened.opened("never.md");
+    await fs.rm(path.join(dir, "gone.md"));
+    // `never.md` was unreadable at both ends and compares equal, correctly.
+    expect(await opened.changed()).toEqual(["gone.md"]);
+  });
+
+  it("narrows to the paths asked about", async () => {
+    // A long-lived process outlives a session; the previous session's notes
+    // are not this session's news.
+    await write("a.md", "a");
+    await write("b.md", "b");
+    const opened = new OpenedNotes(dir);
+    await opened.opened("a.md");
+    await opened.opened("b.md");
+    await touch("a.md", "a!");
+    await touch("b.md", "b!");
+    expect(await opened.changed(["b.md"])).toEqual(["b.md"]);
   });
 });
