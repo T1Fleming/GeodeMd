@@ -247,6 +247,35 @@ describe("identity across moves and copies", () => {
     expect(await read("b.md")).toContain("<!-- sr-000000000002 -->");
   });
 
+  it("tells a copy from a move within ONE file, per card", async () => {
+    // Step 5 now decides copy-versus-move in an async pre-pass over every card
+    // in the file, before the transaction opens, because a transaction cannot
+    // await. A file holding one of each is what catches a pre-pass that
+    // over-skips, or that lets one card's outcome decide another's.
+    await write("orig/keep.md", "Kept :: A\n");
+    await write("orig/gone.md", "Moved :: B\n");
+    await core.sync(T0);
+    // By path, not by mint order — which file gets id 1 is the walk's business.
+    const keptId = store.cardIdsInFile("orig/keep.md")[0]!;
+    const movedId = store.cardIdsInFile("orig/gone.md")[0]!;
+    expect(keptId).toBeTruthy();
+    expect(movedId).toBeTruthy();
+
+    // keep.md stays put and its line is ALSO copied into a new file — a copy.
+    // gone.md is deleted, so its line in the new file is a move.
+    await fs.rm(path.join(notes, "orig/gone.md"));
+    await write("mixed.md", `Kept :: A <!-- ${keptId} -->\nMoved :: B <!-- ${movedId} -->\n`);
+    await core.sync(new Date());
+
+    expect(store.getCard(keptId)!.file_path).toBe("orig/keep.md"); // original untouched
+    expect(store.getCard(movedId)!.file_path).toBe("mixed.md"); // move followed its card
+    expect(store.countCards()).toBe(3); // original, its fresh copy, the moved one
+
+    const mixed = await read("mixed.md");
+    expect(mixed).toContain(`<!-- ${movedId} -->`); // move kept its stamp
+    expect(mixed).not.toContain(`<!-- ${keptId} -->`); // copy was re-minted
+  });
+
   it("keeps the id for a card MOVED to a second file", async () => {
     await write("a.md", "Q :: A\n");
     await core.sync(T0);

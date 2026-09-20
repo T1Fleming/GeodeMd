@@ -7,8 +7,7 @@
  *   5. long operations take onProgress rather than printing
  */
 
-import { readFileSync } from "node:fs";
-import { stat as statAsync } from "node:fs/promises";
+import { readFile as readFileAsync, stat as statAsync } from "node:fs/promises";
 import * as path from "node:path";
 import * as files from "../files/index.js";
 import { parse, splitLines, stampLine } from "../parser/index.js";
@@ -184,7 +183,7 @@ export class Core {
 
       // Step 5: reconcile.
       if (!dryRun) {
-        this.reconcileFile(
+        await this.reconcileFile(
           cand.relPath,
           outcome.confirmed,
           outcome.stat,
@@ -272,7 +271,7 @@ export class Core {
         } else {
           const existing = this.store.getCard(card.id);
           if (existing && existing.file_path !== relPath) {
-            duplicate = idIsInFile(this.config.notesPath, existing.file_path, card.id);
+            duplicate = await idIsInFile(this.config.notesPath, existing.file_path, card.id);
           }
         }
       }
@@ -334,27 +333,46 @@ export class Core {
   }
 
   /** Step 5. */
-  private reconcileFile(
+  private async reconcileFile(
     relPath: string,
     cards: ParsedCard[],
     stat: files.StatInfo,
     summary: SyncSummary,
     pending = false,
-  ): void {
+  ): Promise<void> {
+    // Copies were already re-minted in step 4, where the fresh id could be
+    // written to disk. A surviving path change is therefore a MOVE — except in
+    // a deferred file, where nothing could be written, so a copy is skipped
+    // entirely rather than allowed to steal the original's row.
+    //
+    // Deciding that needs to read the old file, and a better-sqlite3
+    // transaction cannot await. So the reads happen HERE, before the
+    // transaction opens, and the transaction runs over their plain-data
+    // result. That is the better shape regardless: the transaction is now pure
+    // and holds the write lock only for as long as it writes.
+    const copiesElsewhere = new Set<string>();
+    for (const card of cards) {
+      const id = card.id!;
+      const existing = this.store.getCard(id);
+      if (existing && existing.file_path !== relPath) {
+        if (await idIsInFile(this.config.notesPath, existing.file_path, id)) {
+          copiesElsewhere.add(id);
+        }
+      }
+    }
+
     this.store.transaction(() => {
       const keep: string[] = [];
 
       for (const card of cards) {
         const id = card.id!;
-        const existing = this.store.getCard(id);
+        if (copiesElsewhere.has(id)) continue;
 
-        // Copies were already re-minted in step 4, where the fresh id could be
-        // written to disk. A surviving path change is therefore a MOVE — except
-        // in a deferred file, where nothing could be written, so a copy is
-        // skipped entirely rather than allowed to steal the original's row.
-        if (existing && existing.file_path !== relPath) {
-          if (idIsInFile(this.config.notesPath, existing.file_path, id)) continue;
-        }
+        // Re-read inside the transaction rather than reusing the row from the
+        // pre-pass: the decision above only needed a path, while this needs the
+        // text to classify new-versus-updated, and it should see the same
+        // snapshot as the write that follows it.
+        const existing = this.store.getCard(id);
 
         keep.push(id);
         if (!existing) {
@@ -575,9 +593,21 @@ function toDueCard(row: DueRow): DueCard {
   };
 }
 
-function idIsInFile(root: string, relPath: string, id: string): boolean {
+/**
+ * Is `id` still stamped in the file its row names? The move-versus-copy test of
+ * section 4: gone from the old path means a MOVE, still there means the new
+ * occurrence is a COPY.
+ *
+ * Async, and that is not incidental. `files/` rejects `statSync` for the same
+ * reason (ADR 0013) — `core` is shared with an Electron peer, where a blocking
+ * whole-file read of a user's note is a frozen UI rather than an invisible
+ * pause in a process about to exit. Sitting off the no-change fast path is not
+ * a licence to block.
+ */
+async function idIsInFile(root: string, relPath: string, id: string): Promise<boolean> {
   try {
-    return readFileSync(path.join(root, relPath), "utf8").includes(`<!-- ${id} -->`);
+    const text = await readFileAsync(path.join(root, relPath), "utf8");
+    return text.includes(`<!-- ${id} -->`);
   } catch {
     return false;
   }
