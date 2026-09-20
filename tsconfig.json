@@ -13,7 +13,15 @@
     "exactOptionalPropertyTypes": false,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
-    "verbatimModuleSyntax": true
+    "verbatimModuleSyntax": true,
+    // Electron lives in desktop/node_modules, not here. An ABI is not a
+    // version and node_modules has one slot per package, so the Electron-ABI
+    // build of better-sqlite3 cannot share this tree — see desktop/README.md.
+    // This makes its TYPES resolvable without installing Electron twice.
+    "baseUrl": ".",
+    "paths": {
+      "electron": ["desktop/node_modules/electron/electron.d.ts"]
+    }
   },
   "include": ["src/**/*.ts"],
   "exclude": ["src/**/*.test.ts"]
