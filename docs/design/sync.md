@@ -98,6 +98,8 @@ Collect the card IDs where a row **actually inserted**, and replay exactly that 
 
 Read history `ORDER BY rated_at` — a range scan, since it is the primary key. Skip IDs with no card row, and set `cards.reviewed = 1` in the same transaction.
 
+That ordering is where the one accepted failure lives: `rated_at` comes from the clock of whichever device recorded the review, so a device whose clock is badly wrong mis-orders its own history permanently, and no rebuild repairs it — a rebuild faithfully replays what the log says. This is accepted rather than solved; see [ADR 0015](../decisions/0015-accept-clock-skew.md).
+
 Step 7 **never writes to the notes directory**, which is what lets `review` and `stats` run it implicitly.
 
 ## Invariants
