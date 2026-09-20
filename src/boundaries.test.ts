@@ -13,13 +13,34 @@ import { fileURLToPath } from "node:url";
 
 const SRC = path.dirname(fileURLToPath(import.meta.url));
 
+/**
+ * Recursive, and `.tsx` as well as `.ts`.
+ *
+ * Both matter more than they look. A one-level `readdir` returns nothing for a
+ * module that keeps its files in subdirectories — so every rule below would
+ * PASS while scanning no files at all, which is worse than having no rule. A
+ * renderer will be `.tsx`, and skipping that extension has the same effect.
+ * Neither is exercised today; both become load-bearing the moment a module
+ * with subdirectories exists.
+ */
 async function sourceFiles(dir: string): Promise<string[]> {
   const out: string[] = [];
-  for (const entry of await fs.readdir(path.join(SRC, dir), { withFileTypes: true })) {
-    if (!entry.isFile() || !entry.name.endsWith(".ts")) continue;
-    if (entry.name.endsWith(".test.ts")) continue;
-    out.push(path.join(SRC, dir, entry.name));
+
+  async function walk(abs: string): Promise<void> {
+    for (const entry of await fs.readdir(abs, { withFileTypes: true })) {
+      const child = path.join(abs, entry.name);
+      if (entry.isDirectory()) {
+        await walk(child);
+        continue;
+      }
+      if (!entry.isFile()) continue;
+      if (!entry.name.endsWith(".ts") && !entry.name.endsWith(".tsx")) continue;
+      if (entry.name.endsWith(".test.ts") || entry.name.endsWith(".test.tsx")) continue;
+      out.push(child);
+    }
   }
+
+  await walk(path.join(SRC, dir));
   return out;
 }
 
@@ -45,7 +66,7 @@ describe("section 6 hard rules", () => {
   });
 
   it("rule 1: no module below cli imports cli", async () => {
-    for (const dir of ["core", "store", "files", "parser", "scheduler"]) {
+    for (const dir of ["core", "store", "files", "parser", "scheduler", "host"]) {
       expect(await readAll(dir), `${dir} imports cli`).not.toMatch(/from\s+["'][^"']*\/cli/);
     }
   });
@@ -75,7 +96,7 @@ describe("section 6 hard rules", () => {
 
 describe("one module per external resource", () => {
   it("only store/ imports better-sqlite3", async () => {
-    for (const dir of ["core", "files", "parser", "scheduler", "cli"]) {
+    for (const dir of ["core", "files", "parser", "scheduler", "cli", "host"]) {
       expect(await readAll(dir), `${dir} imports better-sqlite3`).not.toMatch(
         /from\s+["']better-sqlite3["']/,
       );
@@ -84,7 +105,7 @@ describe("one module per external resource", () => {
   });
 
   it("only store/ writes SQL", async () => {
-    for (const dir of ["core", "files", "parser", "scheduler"]) {
+    for (const dir of ["core", "files", "parser", "scheduler", "host"]) {
       expect(await readAll(dir), `${dir} contains SQL`).not.toMatch(
         /\b(SELECT|INSERT INTO|UPDATE|DELETE FROM|CREATE TABLE)\b/,
       );
@@ -106,5 +127,34 @@ describe("one module per external resource", () => {
     // The weight vector is written out literally, so a ts-fsrs bump cannot
     // silently change what a rebuild produces from an unchanged log.
     expect(scheduler).toMatch(/w:\s*\[/);
+  });
+});
+
+/**
+ * ADR 0013: the CLI and the Electron app are peers over one `core`, forever.
+ * `host` is what they share — the code that knows about this machine. These
+ * rules are what stop "shared" from quietly becoming "whatever cli exported".
+ */
+describe("host, shared by both interfaces", () => {
+  it("never writes to the terminal", async () => {
+    // The distinction from `core`: host MAY read process.env — that is its
+    // whole job. What it may not do is assume a terminal is listening.
+    const host = await readAll("host");
+    expect(host).not.toMatch(/console\.(log|error|warn)/);
+    expect(host).not.toMatch(/process\.(exit|stdout|stderr)/);
+  });
+
+  it("is where ambient machine state is read, so core does not have to", async () => {
+    const host = await readAll("host");
+    expect(host).toMatch(/process\.env/);
+    expect(host).toMatch(/os\.homedir|os\.hostname/);
+  });
+
+  it("core does not import host either — it takes its config as an argument", async () => {
+    // Rule 3 the other way round. host reads ambient state; if core could
+    // import it, core could reach that state through the back door.
+    for (const dir of ["core", "store", "files", "parser", "scheduler"]) {
+      expect(await readAll(dir), `${dir} imports host`).not.toMatch(/from\s+["'][^"']*\/host/);
+    }
   });
 });

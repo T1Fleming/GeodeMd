@@ -19,14 +19,9 @@ import { fileURLToPath } from "node:url";
 import { Core, ConfigError } from "../core/index.js";
 import type { DueCard, SyncSummary } from "../core/index.js";
 import { Store } from "../store/index.js";
-import {
-  configPath,
-  initConfig,
-  InitRefused,
-  newId,
-  ensureConfig,
-} from "./config.js";
-import type { FileConfig } from "./config.js";
+import { configPath, initConfig, InitRefused } from "../host/config.js";
+import type { FileConfig } from "../host/config.js";
+import { openCore as openCoreWith, readAppConfig } from "../host/open.js";
 import { openInEditor, resolveEditor } from "./editor.js";
 import {
   emptyCounts,
@@ -143,23 +138,18 @@ export function interpretKey(key: string): KeyAction {
   return { kind: "ignore" };
 }
 
+/**
+ * The CLI's "or fail" wrapper. `host` returns null for a missing config
+ * because a first run is not an error there; here it is, because every command
+ * that calls this wants to exit non-zero.
+ */
 async function openCore(): Promise<{ core: Core; store: Store; config: FileConfig }> {
   const file = configPath();
-  // `ensureConfig`, not `readConfig`: everything reached through here can write
-  // a review log, and a config with no `device` would otherwise hand out a
-  // fresh name on every read.
-  const config = await ensureConfig(file);
+  const config = await readAppConfig(file);
   if (!config) {
     throw new ConfigError(`no config at ${file} — run \`geode init <path>\` first`);
   }
-  const store = new Store(config.dbPath);
-  // Named fields rather than a spread: `editor` is the CLI's business and has
-  // no place in core's Config.
-  const core = new Core(
-    { notesPath: config.notesPath, device: config.device, dbPath: config.dbPath, newId },
-    store,
-  );
-  return { core, store, config };
+  return { ...openCoreWith(config), config };
 }
 
 /** Null when the file cannot be read — an unreadable note is not an error here. */
