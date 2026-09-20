@@ -13,9 +13,13 @@ GeodeMD (`geode`) is a spaced repetition CLI where everything durable is plain t
 ```
 docs/decisions/   ADRs — immutable once written, numbered. Don't edit a past decision; add a new ADR that supersedes it.
 docs/design/      how the system works now — living, kept in sync with the code.
-docs/guides/      how to do a specific task — living.
-docs/reference/   config, API, schemas — often generated; check for a generator before hand-editing.
+docs/guides/      how to do a task — living.
+docs/reference/   what to look up: config keys, commands, exit codes.
 ```
+
+**Audience is the split, on top of stability** ([ADR 0018](docs/decisions/0018-user-docs-live-in-guides-and-reference.md)): `guides/` and `reference/` are written for people *using* GeodeMD; `design/` and `decisions/` for people *working on* it. Schemas are contributor material and live in `design/data-model.md`, not in `reference/`.
+
+`README.md` is the front door and stays one: install, quickstart, the command table. Anything longer than a screen becomes a guide and gets linked.
 
 Start at [`docs/design/README.md`](docs/design/README.md): it indexes the subsystem docs and maps the brief's section numbers onto them. `docs/design/phase-1-brief.md` is the original pre-code spec — **historical, do not update it**; when it disagrees with a design doc, the design doc is right.
 

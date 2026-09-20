@@ -25,6 +25,7 @@ New decisions from here get an ADR when they are made, not in a later sweep — 
 | [0015](0015-accept-clock-skew.md) | Accept clock skew; do not build vector clocks | Accepted |
 | [0016](0016-config-lives-in-host.md) | Configuration lives in `host/`, below both interfaces | Accepted |
 | [0017](0017-core-runs-in-the-main-process.md) | `core` runs in the Electron main process, and the seam stays | Accepted |
+| [0018](0018-user-docs-live-in-guides-and-reference.md) | User documentation lives in `guides/` and `reference/`, as plain Markdown | Accepted |
 
 ## Writing one
 
