@@ -38,7 +38,9 @@ All of it stays small enough to run in the default suite, because a suite people
 
 Two measurements decide open questions rather than guard invariants, and both must record **cold and warm separately** rather than pretending there is one number: a large-tree enumeration (which decides whether [sync](sync.md) step 1 stays a walk), and a million-review rebuild (which decides whether the bulk-load escape hatch is needed).
 
-Dropping the filesystem cache needs `sudo purge` on macOS, so these are commands a human runs, not something CI can fake.
+Dropping the filesystem cache needs `sudo purge` on macOS, so these are commands a human runs, not something CI can fake. **The enumeration one has now been run** — see [sync.md](sync.md#cold-cache); cold cost 1.09× warm, which settled the question rather than reopening it.
+
+Doing it correctly has one trap worth writing down: **the tree must already exist on disk before the purge.** A benchmark that builds its own tree and then measures it has warmed the cache for precisely the files it is about to read, and the "cold" number is fiction. Build first, purge, then measure in a single run — the second run is warm again.
 
 The enumeration one is now written — `src/files/enumerate.bench.test.ts`, gated so the default suite never runs it:
 

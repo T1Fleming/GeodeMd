@@ -47,7 +47,22 @@ The narrow shape is the realistic one for a vault of topic folders, and it is bo
 
 `statSync` measures faster still (2.69 and 5.91 µs/file) and is rejected anyway: it blocks the event loop for the length of the walk, and [ADR 0013](../decisions/0013-cli-and-electron-are-peers.md) makes the Electron app a peer interface over this same `core`, where that is a frozen UI rather than an invisible pause in a process about to exit.
 
-**Cold cache is still unmeasured** and remains the number most likely to decide whether this stays a walk. Enumeration is also only one of the per-file costs here — the indexed read in step 2 is sequential synchronous SQLite that this does not touch.
+#### Cold cache
+
+Measured, and the answer is that it barely matters. Same 20,000-file tree at 4 files per directory, built and left on disk, then `sudo purge` and a single run — only the first run after a purge is cold:
+
+| | ms | per file |
+|---|---|---|
+| Warm, median of 5 | 209.0 | 10.45 µs |
+| **Cold, first run after `sudo purge`** | **227.1** | **11.36 µs** |
+
+**A 1.09× penalty.** [ADR 0011](../decisions/0011-enumeration-is-a-seam.md) records the expectation that cold would be "plausibly an order of magnitude worse," and names it as the one number that could still change the decision to walk. It does not: on an NVMe SSD a cold `stat` is barely slower than a cached one.
+
+That was the open question, and the walk survives it.
+
+Two limits on the claim. This is local APFS on an SSD — a vault on a network mount, or on a cloud filesystem with online-only placeholders, is a different measurement entirely and the one place a watcher could still earn its dependency. And per-file cost is **not** flat with tree size, so do not extrapolate this to a million files; extrapolating is exactly how the previous figures went wrong.
+
+Enumeration is also only one of the per-file costs here — the indexed read in step 2 is sequential synchronous SQLite that this does not touch.
 
 ### 2. Classify — one indexed read, no write
 
