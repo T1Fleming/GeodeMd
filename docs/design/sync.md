@@ -166,4 +166,14 @@ An individual file that cannot be read or parsed is **skipped and counted**, nev
 
 ## Summary
 
-`SyncSummary` reports files enumerated / unchanged / read / deferred, cards found / new / updated / pruned, whether the reconciliation pass ran, duplicates re-minted, symlinked directories skipped, log shards skipped, log bytes read, reviews ingested, files skipped on error, log lines skipped, and elapsed milliseconds.
+`SyncSummary` reports files enumerated / unchanged / read / deferred / **stamped**, cards found / new / updated / pruned, whether the reconciliation pass ran, duplicates re-minted, symlinked directories skipped, log shards skipped, log bytes read, reviews ingested, files skipped on error, log lines skipped, and elapsed milliseconds.
+
+**`filesStamped` is the one a first run needs**, and it is not `cardsNew`: one file can hold fifty new cards. It answers "how many of my notes does this edit", which matters because the first sync of an existing collection rewrites every file containing a card. Under `--dry-run` it reports what *would* be written, having written nothing.
+
+## Progress
+
+`onProgress(done, total, phase)` is optional and fires in three phases — `scan`, `prune`, `ingest`.
+
+During `scan` it is called **once per enumerated file, including files the mtime cache skips**, so at the top of the scale range that is a million calls. A consumer must treat it as a hot path: record into a slot and let a timer render, never render inside the callback.
+
+`prune` and `ingest` each get a single call as they begin, with `done === total`, because neither knows its size up front. They are reported at all because the file loop is only steps 1–5: without them a progress bar sits pinned at 100% through the prune and through `ingestLogs`, which on a first ingest of a large log is the longest part of the whole run.

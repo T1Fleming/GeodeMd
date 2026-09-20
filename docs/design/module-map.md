@@ -59,7 +59,7 @@ This is not purity for its own sake. Without it, two whole classes of test canno
 
 ## `core` returns data
 
-`core` never prints, never exits, never prompts. Long operations take an optional `onProgress(done, total)` callback rather than writing to the terminal — at the top of the scale range a sync runs for seconds and a rebuild for minutes, so `cli` renders a counter from it.
+`core` never prints, never exits, never prompts. Long operations take an optional `onProgress(done, total, phase)` callback rather than writing to the terminal — at the top of the scale range a sync runs for seconds and a rebuild for minutes, so `cli` renders a counter from it.
 
 Inside `cli`, the same split repeats one level down: `render.ts` builds strings and `index.ts` decides when to print them; `editor.ts` keeps `resolveEditor` and `editorCommand` pure and confines the `spawn` to one function. The payoff is that output and editor-command construction are tested without a pseudo-terminal.
 
