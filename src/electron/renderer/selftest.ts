@@ -54,7 +54,16 @@ async function until(sel: string, tries = 60): Promise<boolean> {
 
 export async function runSelfTest(): Promise<void> {
   try {
-    // The app loads its queue over IPC, so wait for a card rather than a timer.
+    // Either the first-run sequence or the review screen, depending on whether
+    // a config exists. Both are driven: onboarding ENDS on review, so running
+    // it first simply means the review checks below start from a collection
+    // this harness set up itself.
+    for (let i = 0; i < 100; i++) {
+      if (exists(".setup") || exists(".question") || exists(".done")) break;
+      await settle(50);
+    }
+    if (exists(".setup")) await runSetupChecks();
+
     for (let i = 0; i < 100 && !exists(".question") && !exists(".done"); i++) await settle(50);
 
     check("the review screen renders a card", exists(".question"), text(".question"));
@@ -223,4 +232,117 @@ async function runStatsChecks(): Promise<void> {
     all(".tile .value").join(" / "),
   );
   await shot("stats-01");
+}
+
+/**
+ * The first-run sequence.
+ *
+ * Runs only when there is no config, and it really does write one and really
+ * does sync — which is the point: the sequence exists to make an irreversible
+ * step visible before it happens, and a harness that stops short of the step
+ * would not be checking the thing that matters.
+ *
+ * The folder picker is substituted (a native modal has no DOM to click); every
+ * screen after it is driven for real.
+ */
+async function runSetupChecks(): Promise<void> {
+  // Two ways in, and they must not look the same: a first run, and a config
+  // whose notesPath has gone. Greeting a year-old user with "GeodeMD —
+  // spaced repetition over your own Markdown notes" because a drive is
+  // unplugged is the bug this branch exists to prevent.
+  const repairing = text(".setup h2").includes("Where did your notes go");
+  if (repairing) {
+    check("a missing notes folder is a repair, not a first run", true, text(".setup h2"));
+    check(
+      "and says where they used to be",
+      text(".setup").includes("not there any more"),
+      text(".setup .lead"),
+    );
+    check("without claiming anything was lost", text(".setup").includes("Nothing has been lost"));
+    await shot("repair-01");
+  } else {
+    check("onboarding is shown when there is no config", exists(".setup"), text(".setup h2"));
+    await shot("setup-01-welcome");
+  }
+
+  await click(".setup button", "folder");
+  check("choosing a folder reports what is in it", await until(".tiles"), text(".path"));
+  check(
+    "including the markdown count, which is the check the CLI cannot make",
+    all(".tile .label").some((l) => l.includes("Markdown")),
+    all(".tile .value").join(" / "),
+  );
+  check("and whether it is version controlled", text(".tiles").includes("git"), text(".tiles"));
+  await shot("setup-02-folder");
+
+  await click(".controls.wizard button", "Continue");
+  check("the settings are shown before they are written", await until(".settings"), "");
+  check(
+    "including the device name and where the database goes",
+    all(".settings dt").length === 3,
+    all(".settings dt").join(" / "),
+  );
+  await shot("setup-03-settings");
+
+  // Only when there is a config to replace — a genuine first run has none.
+  // This is where `InitRefused` becomes a choice instead of an error, and it
+  // is reached by ASKING before writing rather than by catching a throw.
+  if (exists(".choice")) {
+    check("an existing config is a choice, not an error", true, text(".choice p"));
+    check(
+      "and the app says what it keeps, rather than keeping it silently",
+      // "is kept" / "are kept" depending on whether an editor is set too, so
+      // the assertion matches the claim rather than one of its two phrasings.
+      text(".choice").includes("device name") && /\b(is|are) kept\b/.test(text(".choice")),
+      text(".choice .small"),
+    );
+    const blockedByChoice = document.querySelector(
+      ".controls.wizard button.primary",
+    ) as HTMLButtonElement;
+    check("which must be answered before continuing", blockedByChoice?.disabled === true);
+    await shot("repair-02-choice");
+    await click(".choice button", "Use the new folder");
+  }
+
+  await click(".controls.wizard button", "Continue");
+  check("version control is raised before anything is written", exists(".check.big"), text("h2"));
+  check(
+    "and the warning says notes will be edited",
+    text(".setup").includes("id comment into every line"),
+    "",
+  );
+
+  // The gate. One explicit acknowledgement, and Continue must not work first.
+  const blocked = document.querySelector(".controls.wizard button.primary") as HTMLButtonElement;
+  check("continuing is blocked until it is acknowledged", blocked?.disabled === true);
+  check("and says why", exists(".blocker"), text(".blocker"));
+  await shot("setup-04-version-control");
+
+  (document.querySelector(".check.big input") as HTMLInputElement).click();
+  await settle();
+  await click(".controls.wizard button", "Continue");
+  check("the preview step is reached", text("h2").includes("What would change"), text("h2"));
+
+  // THE rule this sequence exists for: the real sync is unreachable until a
+  // preview has said what it would do.
+  const real = () =>
+    Array.from(document.querySelectorAll("button")).find((b) =>
+      (b.textContent ?? "").includes("Sync for real"),
+    );
+  check("the real sync is not even offered before a preview", real() === undefined);
+
+  await click(".setup button", "Preview");
+  check("a preview reports back", await until("strong"), "");
+  check(
+    "and leads with how many NOTES would be edited, not how many cards",
+    text(".setup").includes("would be edited"),
+    text("strong"),
+  );
+  check("only then is the real sync offered", real() !== undefined);
+  await shot("setup-05-preview");
+
+  real()!.click();
+  // The real sync writes a stamp into every file holding a card, then the app
+  // lands on review.
+  check("running it lands on the review screen", await until(".question", 200), text(".question"));
 }
