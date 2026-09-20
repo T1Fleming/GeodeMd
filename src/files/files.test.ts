@@ -79,6 +79,41 @@ describe("enumerate", () => {
     expect(candidates[0]!.size).toBe(5);
     expect(candidates[0]!.mtimeMs).toBeGreaterThan(0);
   });
+
+  it("interleaves files and subdirectories in sorted order, at every depth", async () => {
+    // Walk order decides which copy of a duplicated id keeps its history, so a
+    // file sorting after a directory must follow that directory's whole
+    // subtree — more than one level down, which nothing else here covers.
+    for (const p of ["a.md", "m/b.md", "m/n/c.md", "m/z.md", "n2/d.md", "z.md"]) {
+      await write(p, "Q :: A");
+    }
+    const { candidates } = await enumerate(root);
+    expect(candidates.map((c) => c.relPath)).toEqual([
+      "a.md",
+      "m/b.md",
+      "m/n/c.md",
+      "m/z.md",
+      "n2/d.md",
+      "z.md",
+    ]);
+  });
+
+  it("gives every candidate its OWN stat, not a neighbour's", async () => {
+    // Every other fixture here writes same-sized files, which would hide a stat
+    // landing on the wrong candidate. These are all different lengths.
+    const expected = new Map<string, number>();
+    for (let d = 0; d < 3; d++) {
+      for (let i = 0; i < 100; i++) {
+        const rel = `d${d}/n${String(i).padStart(3, "0")}.md`;
+        const body = "x".repeat(d * 100 + i + 1);
+        await write(rel, body);
+        expected.set(rel, body.length);
+      }
+    }
+    const { candidates } = await enumerate(root);
+    expect(candidates).toHaveLength(300);
+    for (const c of candidates) expect(c.size).toBe(expected.get(c.relPath));
+  });
 });
 
 describe("writeIfUnchanged", () => {

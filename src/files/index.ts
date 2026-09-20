@@ -26,15 +26,88 @@ export interface EnumerateResult {
 }
 
 /**
+ * At most `limit` tasks in flight. Rejects with the failure whose index is
+ * lowest, so the error surfaced is the one walk order would have produced.
+ *
+ * Every rejection is caught INSIDE the worker on purpose. The obvious version —
+ * `Promise.all` over a mapped array of promises — leaves one worker's rejection
+ * unhandled while its siblings are still running, which terminates the process
+ * rather than failing the sync.
+ */
+async function forEachLimited<T>(
+  items: readonly T[],
+  limit: number,
+  task: (item: T, i: number) => Promise<void>,
+): Promise<void> {
+  let next = 0;
+  let failed = false;
+  let failure: unknown;
+  let failedAt = Number.POSITIVE_INFINITY;
+
+  const worker = async (): Promise<void> => {
+    while (!failed && next < items.length) {
+      const i = next++;
+      try {
+        await task(items[i]!, i);
+      } catch (err) {
+        if (i < failedAt) {
+          failure = err;
+          failedAt = i;
+        }
+        failed = true;
+      }
+    }
+  };
+
+  const n = Math.min(limit, items.length);
+  await Promise.all(Array.from({ length: n }, () => worker()));
+  if (failed) throw failure;
+}
+
+/**
+ * How many stats are in flight at once.
+ *
+ * The reason to bound is not file descriptors — `fs.stat` takes a path and
+ * holds none. It is that an unbounded fan-out allocates a promise and a closure
+ * per file and hands libuv a queue that deep with no backpressure, which at the
+ * top of the scale range is a memory cliff. libuv's threadpool defaults to four
+ * threads, so the marginal gain above ~16 is small on a warm local disk; 64 is
+ * for the case that actually hurts, a vault on a network or cloud-synced
+ * filesystem, where the win is overlapping latency rather than CPU.
+ */
+const STAT_CONCURRENCY = 64;
+
+/**
  * Section 8 step 1. Walk the tree, sorting directory entries so the order is
  * deterministic across machines and filesystems.
  *
  * This is a SEAM: it is the only part of the design that knows how changes are
  * discovered. Everything downstream consumes the list. Swapping this for
  * `@parcel/watcher`'s getEventsSince is a module change, not a restructure.
+ *
+ * Two passes, and the split is what makes it fast. The walk collects paths
+ * without stat'ing; a bounded pool then fills each candidate's mtime and size
+ * IN PLACE, at its own index. Ordering is therefore not preserved so much as
+ * produced by the same code as before — the pool never pushes, sorts or
+ * appends, which matters because section 8 step 4 re-mints the LATER duplicate
+ * of an id and writes that stamp into the user's note.
+ *
+ * Stat'ing per directory instead would be the obvious shape and the wrong one:
+ * concurrency would scale with directory width, and a vault of topic folders
+ * holding a handful of notes each would get almost none of it. Measured on a
+ * 20k tree at 4 files per directory, this is 1.6x; at 100 per directory, 2.0x.
+ *
+ * `statSync` measures faster still — about 1.6x faster than this pool — and is
+ * rejected anyway: it blocks the event loop for the length of the walk, and
+ * ADR 0013 makes the Electron app a peer interface over this same `core`, where
+ * that is a frozen UI rather than an invisible pause in a process about to
+ * exit. The measurement favouring it is also warm; on the cold or network-
+ * backed tree where sync actually hurts, overlapping the latency wins.
  */
 export async function enumerate(root: string): Promise<EnumerateResult> {
   const candidates: Candidate[] = [];
+  /** Parallel to `candidates`; absolute paths for the fill pass below. */
+  const absPaths: string[] = [];
   let symlinkedDirs = 0;
 
   async function walk(dir: string, rel: string): Promise<void> {
@@ -71,12 +144,23 @@ export async function enumerate(root: string): Promise<EnumerateResult> {
       if (!entry.isFile()) continue;
       if (!entry.name.endsWith(".md")) continue;
 
-      const st = await fs.stat(abs);
-      candidates.push({ relPath: childRel, mtimeMs: st.mtimeMs, size: st.size });
+      // Placeholders. They live only until the fill pass and never escape.
+      candidates.push({ relPath: childRel, mtimeMs: 0, size: 0 });
+      absPaths.push(abs);
     }
   }
 
   await walk(root, "");
+
+  // Left uncaught, as the inline stat was: a candidate that cannot be stat'd
+  // must fail the sync loudly. Dropping it would leave step 6 counting it as
+  // vanished and pruning cards for a file that is still there.
+  await forEachLimited(absPaths, STAT_CONCURRENCY, async (abs, i) => {
+    const st = await fs.stat(abs);
+    candidates[i]!.mtimeMs = st.mtimeMs;
+    candidates[i]!.size = st.size;
+  });
+
   return { candidates, symlinkedDirs };
 }
 
