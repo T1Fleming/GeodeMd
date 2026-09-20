@@ -4,6 +4,8 @@ If your notes already exist — a vault you have been writing in for years, a fo
 
 If you are starting from an empty folder, none of this applies. Write a card, run `geode sync`, carry on.
 
+To rehearse it on something harmless, copy [`demo/`](../../demo/) and point GeodeMD at that — it is a real collection with 23 cards and the same stakes at a smaller scale.
+
 ## What the first sync does
 
 GeodeMD identifies a card by an ID it writes into the line, as an HTML comment:
