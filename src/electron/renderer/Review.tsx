@@ -13,12 +13,25 @@ interface Props {
   queue: DueCard[];
   /** Total due, which is not the queue length — the queue is capped. */
   backlog: number;
+  /**
+   * Which opened notes were actually edited. Null while the answer is still
+   * being fetched — the check is a stat of every opened file, so the finished
+   * screen renders first and fills this in rather than waiting on it.
+   */
+  stale: string[] | null;
   onRate: (cardId: string, rating: 1 | 2 | 3 | 4) => void;
   onOpen: (card: DueCard) => void;
   onDone: (session: Session) => void;
 }
 
-export function Review({ queue, backlog, onRate, onOpen, onDone }: Props): React.JSX.Element {
+export function Review({
+  queue,
+  backlog,
+  stale,
+  onRate,
+  onOpen,
+  onDone,
+}: Props): React.JSX.Element {
   const [session, setSession] = useState<Session>(() => begin(queue));
 
   const perform = useCallback(
@@ -59,7 +72,7 @@ export function Review({ queue, backlog, onRate, onOpen, onDone }: Props): React
   const card = current(session);
 
   if (isOver(session) || !card) {
-    return <Finished session={session} />;
+    return <Finished session={session} stale={stale} />;
   }
 
   return (
@@ -110,7 +123,13 @@ export function Review({ queue, backlog, onRate, onOpen, onDone }: Props): React
   );
 }
 
-function Finished({ session }: { session: Session }): React.JSX.Element {
+function Finished({
+  session,
+  stale,
+}: {
+  session: Session;
+  stale: string[] | null;
+}): React.JSX.Element {
   const done = reviewed(session);
   const breakdown = RATING_KEYS.filter(([k]) => session.counts[Number(k) as 1 | 2 | 3 | 4] > 0);
 
@@ -129,12 +148,15 @@ function Finished({ session }: { session: Session }): React.JSX.Element {
           ))}
         </ul>
       )}
-      {session.opened.length > 0 && (
-        // The queue holds text from the last sync, so a note edited during the
-        // session is stale on screen and nothing else would say so.
+      {/* Which notes CHANGED, not which were opened. Opening a note to read it
+          is the common case and needs no follow-up; only an edit does, because
+          the queue holds text from the last sync and a rewritten card is stale
+          in the database until the next one. Saying "you opened 3 notes, run
+          sync" after three read-only glances trains the user to ignore it. */}
+      {stale !== null && stale.length > 0 && (
         <p className="stale">
-          You opened {session.opened.length === 1 ? session.opened[0] : `${session.opened.length} notes`}.
-          Run <code>geode sync</code> to pick up any edits.
+          {stale.length === 1 ? <code>{stale[0]}</code> : `${stale.length} notes you opened`}{" "}
+          changed while you were reviewing — run <code>geode sync</code>.
         </p>
       )}
     </main>

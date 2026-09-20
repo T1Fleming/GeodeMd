@@ -22,6 +22,15 @@ export type ErrorKind =
   | "config"
   /** `init` refused to overwrite without --force. */
   | "init-refused"
+  /**
+   * The editor would not start — not installed, or the `editor` key is wrong.
+   *
+   * Its own kind rather than `config`, which an interface is entitled to read
+   * as "your notesPath is gone, let me help you repoint it". Being unable to
+   * open a note is user-fixable but changes nothing about the collection, and
+   * routing it to a repair screen would be worse than saying so in a line.
+   */
+  | "editor"
   /** Anything unexpected. */
   | "internal";
 

@@ -49,6 +49,8 @@ The value is split on whitespace, so `"code -w"` works. It is deliberately **not
 
 Line-jumping is applied only for editors that are recognised — `vim +142`, `code --goto file:142`, `hx file:142` and similar. An unrecognised editor is handed the file alone, because passing an unknown program `+142` risks creating a file by that name.
 
+**The same key is used by both interfaces.** `o` in `geode review` and the app's **open** button run the same program with the same arguments. They differ in one respect you may notice: the CLI waits for the editor to exit, because a terminal editor has taken over the window, while the app launches it and carries on. So `"editor": "vim"` works in the terminal and, in the app, starts a `vim` you have no terminal to type into — set a GUI editor if you review in the app.
+
 ## `geode init`
 
 ```

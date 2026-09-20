@@ -181,6 +181,30 @@ describe("host, shared by both interfaces", () => {
     }
   });
 
+  it("owns which program opens a note, and how it is told a line", async () => {
+    // Same argument as the rating table above, and the same failure mode: two
+    // editor tables would each stay self-consistent while `o` landed on line 1
+    // in one interface and line 142 in the other. `--goto` is the marker —
+    // it is the VS Code family's line flag and appears nowhere else.
+    const host = await readAll("host");
+    expect(host).toMatch(/resolveEditor/);
+    expect(host).toMatch(/--goto/);
+
+    for (const dir of ["cli", "electron"]) {
+      expect(await readAll(dir), `${dir} has its own editor table`).not.toMatch(/--goto/);
+    }
+  });
+
+  it("leaves the spawn to each interface, because the two are not the same", async () => {
+    // The pure half is shared; the spawn is NOT, and this is the one place the
+    // distinction is visible. `stdio: "inherit"` hands over the TTY and is
+    // right for vim; a GUI has no TTY and must detach. host does neither — it
+    // spawns nothing at all, which is what keeps it usable from both.
+    expect(await readAll("host")).not.toMatch(/from\s+["']node:child_process["']/);
+    expect(await readAll("cli")).toMatch(/stdio:\s*"inherit"/);
+    expect(await readAll("electron")).toMatch(/detached:\s*true/);
+  });
+
   it("core does not import host either — it takes its config as an argument", async () => {
     // Rule 3 the other way round. host reads ambient state; if core could
     // import it, core could reach that state through the back door.

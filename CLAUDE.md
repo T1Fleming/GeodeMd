@@ -73,7 +73,7 @@ src/files/      the only module that touches the filesystem, log included
 src/store/      the only module that touches SQLite
 src/scheduler/  FSRS, with its parameters pinned in source (not inherited from ts-fsrs defaults)
 src/core/       the Core class — sync, ingestLogs, getDueCards, countDue, reviewCard, stats, rebuild
-src/host/       this machine: XDG paths, env, hostname, config, error kinds, review vocabulary
+src/host/       this machine: XDG paths, env, hostname, config, error kinds, review vocabulary, editor resolution
 src/cli/        argv, review loop, ANSI              one of two interfaces
 src/electron/   window, IPC contract, renderer       the other
 src/index.ts    the public API: re-exports Core, Store, FsrsScheduler, and the parser functions
@@ -89,6 +89,7 @@ Hard rules enforced by `boundaries.test.ts` (know these before moving code betwe
 - `core` never writes to the terminal (`console.*`), never calls `process.exit`/`process.stdout`/`process.stderr`, and never reads `process.env` — it takes everything as arguments, which is what lets one core serve both interfaces.
 - `host` may read ambient machine state — that is its whole job — but never writes to the terminal, because a GUI shares it.
 - `host` owns the review vocabulary (`RATING_KEYS`, `interpretKey`). Neither interface may define its own rating table.
+- `host` also owns *which program opens a note* (`resolveEditor`, `editorCommand`, the `+142`/`--goto`/`:142` tables). Neither interface may define its own editor table — the test greps for `--goto` outside `host`. The `spawn` is the opposite case and stays split: `cli/` uses `stdio: "inherit"` and awaits the child because a terminal editor holds the TTY, `electron/` uses `detached: true` and returns at once because a GUI has no TTY and must not block for as long as a note stays open. `host` spawns nothing, which is what keeps it usable from both.
 - `parser` opens no file, touches no database, and calls no clock (`new Date()`/`Date.now()`) — it is pure text-in, cards-out.
 - Only `store/` imports `better-sqlite3` or contains raw SQL.
 - The append-only review log lives under `files/` (with `fsyncSync`), not `store/` — `store/` never calls fsync or uses `O_APPEND`, keeping SQLite-specific code separate from durability-critical log I/O.
@@ -103,7 +104,7 @@ Other properties the test suite asserts rather than assumes (regressions here ar
 
 **Time is injected, never read.** Every `Core` method takes `now: Date` as an explicit parameter — `sync(now, opts)`, `getDueCards(now, limit)`, `reviewCard(id, rating, now)`, and the rest. This is the practical form of "no ambient state": `core` and `parser` never call `Date.now()` themselves, which is what makes scheduling deterministic and rebuild-from-log reproducible. A new method on `Core` that needs the time takes it as an argument.
 
-**Purity is split from I/O even inside an interface.** `render.ts` builds strings and `index.ts` decides when to print them; `editor.ts` keeps `resolveEditor`/`editorCommand` pure and confines the `spawn` to one place. In `electron`, `main/runs.ts` holds single-flight and the progress throttle with no Electron imports at all, so it tests under plain vitest. The payoff is the same both times: the decisions are testable without a pseudo-terminal or a running app. Follow the split when adding to either.
+**Purity is split from I/O even inside an interface.** `render.ts` builds strings and `index.ts` decides when to print them; `host/editor.ts` keeps `resolveEditor`/`editorCommand` pure and each interface confines its own `spawn` to one place (`cli/editor.ts` inherits the TTY and waits, `electron/main/open.ts` detaches and returns). In `electron`, `main/runs.ts` holds single-flight and the progress throttle with no Electron imports at all, so it tests under plain vitest. The payoff is the same both times: the decisions are testable without a pseudo-terminal or a running app. Follow the split when adding to either.
 
 **Source comments cite the original brief by section.** Module headers say things like "section 6 rule 2" or "section 8 step 4", referring to `docs/design/phase-1-brief.md` — retired, historical, still the target of 83 such citations. `docs/design/README.md` maps each section onto the document that now owns it. When code looks odd, that citation is where the rationale lives. **New code should cite the design docs or an ADR, not a brief section.**
 
