@@ -5,26 +5,23 @@
  */
 
 import type { DueCard } from "../core/index.js";
+import {
+  ACTION_KEYS,
+  emptyCounts,
+  RATING_KEYS,
+  ratingBreakdown,
+} from "../host/present.js";
+import type { RatingCounts } from "../host/present.js";
 import type { Style } from "./style.js";
 import { PLAIN, wrap } from "./style.js";
+
+export { emptyCounts };
+export type { RatingCounts };
 
 const INDENT = "  ";
 const HANGING = "    ";
 const MARKER = "▸";
 const RULE = "─";
-
-/** The four FSRS ratings are not guessable from their numbers. Spec section 9. */
-const RATING_KEYS: ReadonlyArray<readonly [string, string]> = [
-  ["1", "again"],
-  ["2", "hard"],
-  ["3", "good"],
-  ["4", "easy"],
-];
-
-const ACTION_KEYS: ReadonlyArray<readonly [string, string]> = [
-  ["o", "open"],
-  ["q", "quit"],
-];
 
 /**
  * The key is what you press and the word is what it means, so the key stays
@@ -74,26 +71,15 @@ export function renderAnswer(card: DueCard, s: Style, width: number): string {
   return `\n${body}\n\n${INDENT}${renderLegend(s)}\n`;
 }
 
-export interface RatingCounts {
-  1: number;
-  2: number;
-  3: number;
-  4: number;
-}
-
-export function emptyCounts(): RatingCounts {
-  return { 1: 0, 2: 0, 3: 0, 4: 0 };
-}
-
 /**
  * Quiet about zero-valued buckets, for the same reason `formatSummary` is: a
  * tally reading "0 again · 0 hard" is noise around the number you wanted.
  */
 export function renderSummary(counts: RatingCounts, s: Style): string {
   const done = counts[1] + counts[2] + counts[3] + counts[4];
-  const parts = RATING_KEYS.filter(([key]) => counts[Number(key) as 1 | 2 | 3 | 4] > 0).map(
-    ([key, label]) => `${counts[Number(key) as 1 | 2 | 3 | 4]} ${label}`,
-  );
+  // Which buckets to mention is policy and lives in `host`; turning them into
+  // a dimmed sentence is this file's business.
+  const parts = ratingBreakdown(counts).map(({ label, count }) => `${count} ${label}`);
   const tail = parts.length > 0 ? s.dim(` · ${parts.join(" · ")}`) : "";
   return `\n${INDENT}${done} reviewed${tail}\n`;
 }
