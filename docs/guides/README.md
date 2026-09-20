@@ -14,6 +14,10 @@ The situations the [README](../../README.md) can only warn about in a sentence. 
 - **[When something looks wrong](recovery.md)** — the database is a cache and `geode rebuild` reconstructs it from your notes and logs. Worth saying plainly, because "delete it and rebuild" reads like data loss until you know the database holds nothing that is not derivable.
 - **[Moving your notes between machines](moving-notes.md)** — what to copy, what not to, and the conflict-copy problem that nothing filters for you.
 
+## Something to try them on
+
+[`demo/`](../../demo/) is a collection of notes with 23 cards in it, including a file that deliberately exercises the shapes the parser skips. Copy it rather than syncing it in place.
+
 ## Writing one
 
 Say what goes wrong as well as what to do. The parts of this tool that need a guide are the parts where the safe path and the obvious path differ — and a guide that only lists the happy path leaves the reader exactly where the README did.

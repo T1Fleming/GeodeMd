@@ -16,6 +16,14 @@ Sync stamps it with an ID in an HTML comment — invisible in every Markdown ren
 
 ---
 
+## Try it
+
+[`demo/`](./demo/) is a small collection of notes that looks like notes someone keeps — 23 cards across four files, including one that deliberately contains the awkward cases. Copy it before syncing, since a sync writes a stamp into every card line:
+
+```sh
+cp -r demo ~/geode-demo && geode init ~/geode-demo && geode sync --dry-run
+```
+
 ## Install
 
 Requires Node 20 or newer. `better-sqlite3` is a native module, so the Node version you build with is the one you must run with — the repo pins it in `.nvmrc`.
