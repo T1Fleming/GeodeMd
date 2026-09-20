@@ -225,6 +225,21 @@ describe("host, shared by both interfaces", () => {
     expect(await readAll("electron")).toMatch(/detached:\s*true/);
   });
 
+  it("is the only place above core that walks the notes tree", async () => {
+    // The first-run screen has to count the .md files in a folder, and the
+    // temptation is a six-line readdir in the app. It would be wrong within a
+    // week: `enumerate` skips dotted directories, ignores non-.md files, and
+    // refuses to follow directory symlinks, so a second walk reports a number
+    // the sync will not agree with — and a count that disagrees with what
+    // then happens is worse than no count.
+    expect(await readAll("host")).toMatch(importsModule("files"));
+    for (const dir of ["cli", "electron"]) {
+      expect(await readAll(dir), `${dir} walks the tree itself`).not.toMatch(
+        importsModule("files"),
+      );
+    }
+  });
+
   it("core does not import host either — it takes its config as an argument", async () => {
     // Rule 3 the other way round. host reads ambient state; if core could
     // import it, core could reach that state through the back door.

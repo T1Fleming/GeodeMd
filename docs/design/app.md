@@ -55,6 +55,26 @@ A five-file sync finishes in milliseconds. A component that mounts and *then* st
 
 `Core` takes no `AbortSignal`, and killing a rebuild halfway leaves an emptied database with nothing to say so. A button that cannot do what it says is worse than its absence. If cancellation is wanted it is a small clean change to `core` — `signal?: AbortSignal` checked at the top of the file loop — made on purpose rather than in a panic.
 
+## First run
+
+The CLI's `init` writes a config, prints two sentences of advice, and exits. A GUI cannot print-and-exit, and the stakes are specific: **the first real sync writes an id comment into every note that contains a card.** On an existing collection that is a diff across the whole tree. `init` can only warn about it; a window can make the number visible before it happens.
+
+The sequence is welcome → confirm the folder → preview the settings → version control → preview the sync → run it, and `renderer/model/setup.ts` holds it as a pure state machine. Three things in there are load-bearing:
+
+- **The real sync is unreachable without a preview.** `canSync` is false until a dry run has completed, and `picked` clears the preview — so choosing a different folder takes it back to false rather than letting the first folder's numbers authorise a sync of the second. That is the bug the model exists to prevent, and it is invisible in a screenshot.
+- **`filesStamped` is the number the preview leads with**, not `cardsNew`. One file can hold fifty cards, and the question being asked is *how many of my notes does this rewrite*.
+- **An empty folder is a warning, not a refusal.** Starting a collection from nothing is legitimate; pointing at a Downloads folder is the likeliest mistake. The count makes the second visible without blocking the first.
+
+The folder count comes from `host/setup.ts`, which calls the *same* `enumerate` a sync uses — same dotted-directory skip, same `.md` filter, same refusal to follow directory symlinks. A second walk would drift, and a count that disagrees with what then happens is worse than no count. `boundaries.test.ts` forbids either interface from importing `files/` for this reason.
+
+### An existing config is a choice, reached by asking
+
+`initConfig` refuses to overwrite without `force`, and preserves `device` and `editor` even then — regenerating `device` would silently start a second log shard and scatter one machine's history across two names. The app surfaces that as a choice by calling `setup/propose` **before** writing anything, rather than by catching `InitRefused`. Two reasons: an exception is the wrong control flow for an ordinary answer, and the user needs to be *told* what is preserved — a GUI that quietly keeps a field looks like it ignored the question.
+
+### A missing `notesPath` is a repair, not a first run
+
+Routine on a desktop: the folder moved, or a drive is unmounted. Both states reach the app as "no usable collection", and giving them the same screen would greet a year-old user with a welcome page because something is unplugged. `App.tsx` tells them apart by inspecting the configured folder after reading the config, and the same component opens at the folder step with different words.
+
 ## What the screens share with the CLI
 
 Anything both interfaces would want lives in `host`, not in whichever one asked for it first — the failure mode is two interfaces that each stay self-consistent while disagreeing, which no test catches:
@@ -88,4 +108,10 @@ GEODE_SELFTEST=1 npx electron dist/electron/main/index.js      # headless, exits
 
 The self-test drives every channel against a real database **and** clicks real buttons and presses real keys, because a button wired to the wrong handler passes every API-level check. `console.log("SHOT name")` from the renderer writes `name.png` of the window — the only way to find out whether anything rendered, whether text is legible, or whether a layout collapsed. Screenshots are diagnostic, never fixtures: comparing them byte-for-byte across machines fails on font rendering alone.
 
-Two substitutions keep the harness runnable rather than invasive: `o` spawns `touch` instead of the real editor, so a run does not open TextEdit but the end-of-session "this note changed" path still fires; and the rebuild confirmation is asserted without the rebuild being run, because on a real collection that is minutes.
+Three substitutions keep the harness runnable rather than invasive:
+
+- `o` spawns `touch` instead of the real editor, so a run does not open TextEdit but the end-of-session "this note changed" path still fires
+- the rebuild confirmation is asserted without the rebuild being run, because on a real collection that is minutes
+- `GEODE_SELFTEST_FOLDER` answers the folder picker, because a native modal has no DOM to click — everything downstream of the pick is driven for real
+
+With no config present and that variable set, the harness drives the whole first-run sequence and then continues into the review checks against the collection it just set up. **It performs a real first sync**, so point it at a copy.

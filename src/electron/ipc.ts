@@ -74,6 +74,39 @@ export interface NoteOpened {
   launched: boolean;
 }
 
+/**
+ * What the folder the user picked actually contains.
+ *
+ * The markdown count is the check `geode init` cannot make: pointing at a
+ * Downloads folder, or at the parent of the notes, is the likeliest first-run
+ * mistake and the counts are how it becomes visible. A **soft** signal — an
+ * empty folder is a fine place to start writing cards.
+ */
+export interface FolderReport {
+  path: string;
+  exists: boolean;
+  isDirectory: boolean;
+  markdownFiles: number;
+  isGitRepo: boolean;
+  symlinkedDirs: number;
+}
+
+/**
+ * What writing a config for this folder would produce, and what it replaces.
+ *
+ * `preserved` exists so the app can *say* that `device` and `editor` are kept
+ * across a replace. The preservation itself is already right in `initConfig`;
+ * what a GUI adds is telling the user, because silently keeping a field looks
+ * like the question was ignored.
+ */
+export interface ConfigProposal {
+  notesPath: string;
+  device: string;
+  dbPath: string;
+  replaces: AppConfig | null;
+  preserved: Array<"device" | "editor">;
+}
+
 export interface RunStarted {
   runId: string;
   /** True when an identical run was already in flight and this joined it. */
@@ -137,6 +170,10 @@ export const CH = {
   runStatus: "geode:run/status",
   noteOpen: "geode:note/open",
   noteChanged: "geode:note/changed",
+  setupPick: "geode:setup/pick",
+  setupInspect: "geode:setup/inspect",
+  setupPropose: "geode:setup/propose",
+  setupWrite: "geode:setup/write",
   // Events, main → renderer.
   runProgress: "geode:run/progress",
   runFinished: "geode:run/finished",
@@ -158,6 +195,19 @@ export interface GeodeApi {
    * has been typed, so asking sooner reports nothing (ADR 0012).
    */
   noteChanged(filePaths: readonly string[]): Promise<Result<string[]>>;
+  /**
+   * Open the OS folder chooser. Null when the user cancelled — which is an
+   * ordinary answer, not a failure, and must not look like one.
+   */
+  setupPick(): Promise<Result<string | null>>;
+  setupInspect(folder: string): Promise<Result<FolderReport>>;
+  setupPropose(folder: string): Promise<Result<ConfigProposal>>;
+  /**
+   * Write the config. `replace` must be passed explicitly to overwrite an
+   * existing one — the refusal is the same one `geode init` makes without
+   * `--force`, surfaced as a choice rather than an error.
+   */
+  setupWrite(folder: string, replace: boolean): Promise<Result<AppConfig>>;
   onRunProgress(fn: (p: RunProgress) => void): () => void;
   onRunFinished(fn: (f: RunFinished) => void): () => void;
 }

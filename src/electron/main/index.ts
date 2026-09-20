@@ -7,19 +7,30 @@
  * bench in `measure.bench.ts` is how you find out.
  */
 
-import { app, BrowserWindow, ipcMain, net, protocol } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, net, protocol } from "electron";
 import { mkdir, writeFile } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Core } from "../../core/index.js";
 import type { Store } from "../../store/index.js";
+import { configPath, initConfig } from "../../host/config.js";
 import type { FileConfig } from "../../host/config.js";
+import { inspectFolder, proposeConfig } from "../../host/setup.js";
 import { OpenedNotes, resolveEditor } from "../../host/editor.js";
 import { classify, isBusy } from "../../host/errors.js";
 import { openCore, readAppConfig } from "../../host/open.js";
 import { CH } from "../ipc.js";
-import type { AppConfig, NoteOpened, Rated, Result, Stats, SyncRequest } from "../ipc.js";
+import type {
+  AppConfig,
+  ConfigProposal,
+  FolderReport,
+  NoteOpened,
+  Rated,
+  Result,
+  Stats,
+  SyncRequest,
+} from "../ipc.js";
 import { openDetached } from "./open.js";
 import { Runner } from "./runs.js";
 
@@ -60,6 +71,24 @@ async function ensureCore(): Promise<Core> {
 }
 
 class NoConfig extends Error {}
+
+/**
+ * Drop everything derived from the config.
+ *
+ * Called after the config is rewritten, which is the whole reason it exists:
+ * `ensureCore` memoizes, so without this a repaired `notesPath` would be
+ * accepted, written, and then ignored for the rest of the session — the app
+ * would keep syncing the folder that moved. The Store is closed rather than
+ * abandoned, because the next one may well be a different file.
+ */
+function resetCore(): void {
+  store?.close();
+  store = null;
+  core = null;
+  runner = null;
+  config = null;
+  opened = null;
+}
 
 /**
  * Every handler goes through here, so no handler can throw across the wire —
@@ -178,6 +207,53 @@ function register(): void {
   ipcMain.handle(CH.noteChanged, (_e, filePaths: string[]) =>
     guard<string[]>(async () => (opened ? opened.changed(filePaths) : [])),
   );
+
+  /**
+   * The OS folder chooser. In **main** — not the renderer, which has no access
+   * to it, and not a worker, which has no window to attach it to.
+   *
+   * Null for a cancel. That is an ordinary answer and must not arrive as an
+   * error, or backing out of the picker would look like something broke.
+   */
+  ipcMain.handle(CH.setupPick, () =>
+    guard<string | null>(async () => {
+      // The one thing a headless harness genuinely cannot drive: a native
+      // modal has no DOM to click. Substituted rather than skipped, so
+      // everything downstream of the pick is still exercised for real.
+      if (SELFTEST) return SELFTEST_FOLDER;
+      const r = win
+        ? await dialog.showOpenDialog(win, { properties: ["openDirectory"] })
+        : await dialog.showOpenDialog({ properties: ["openDirectory"] });
+      return r.canceled ? null : (r.filePaths[0] ?? null);
+    }),
+  );
+
+  // Deliberately reachable with no config: this is what runs BEFORE there is
+  // one, so it must not go anywhere near `ensureCore`.
+  ipcMain.handle(CH.setupInspect, (_e, folder: string) =>
+    guard<FolderReport>(() => inspectFolder(folder)),
+  );
+
+  ipcMain.handle(CH.setupPropose, (_e, folder: string) =>
+    guard<ConfigProposal>(() => proposeConfig(configPath(), folder)),
+  );
+
+  /**
+   * Write it.
+   *
+   * `replace` maps to `init --force`, so refusing without it is the same
+   * refusal the CLI makes — and it crosses as `init-refused`, which the app
+   * turns into a choice rather than an error. `device` and `editor` survive
+   * the replace; `proposeConfig` is what lets the app say so first.
+   */
+  ipcMain.handle(CH.setupWrite, (_e, folder: string, replace: boolean) =>
+    guard<AppConfig>(async () => {
+      const written = await initConfig(configPath(), folder, { force: replace });
+      // Anything opened against the old config is now wrong.
+      resetCore();
+      return { notesPath: written.notesPath, device: written.device, dbPath: written.dbPath };
+    }),
+  );
 }
 
 /**
@@ -202,6 +278,18 @@ const SELFTEST = process.env["GEODE_SELFTEST"] === "1";
  * this same run records in the log.
  */
 const SELFTEST_EDITOR = "touch";
+
+/**
+ * What the folder picker answers under the self-test.
+ *
+ * `GEODE_SELFTEST_FOLDER=/path npx electron ...` with no config present drives
+ * the whole first-run sequence — including the real first sync, which stamps
+ * every card in that folder. Point it at a COPY; `demo/` exists for this.
+ *
+ * Null when unset, which is the cancel path, so a harness run without it
+ * exercises "the user backed out" rather than failing.
+ */
+const SELFTEST_FOLDER = process.env["GEODE_SELFTEST_FOLDER"] ?? null;
 
 /**
  * Where `SHOT` writes. Defaults next to the build so a stray run cannot

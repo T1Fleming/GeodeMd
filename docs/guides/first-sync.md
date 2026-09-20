@@ -6,6 +6,8 @@ If you are starting from an empty folder, none of this applies. Write a card, ru
 
 To rehearse it on something harmless, copy [`demo/`](../../demo/) and point GeodeMD at that — it is a real collection with 23 cards and the same stakes at a smaller scale.
 
+**If you are using the app rather than the CLI, it walks you through all of this on first launch** — it counts the Markdown files in the folder you pick, shows you the settings before writing them, asks you to acknowledge that your notes will be edited, and makes the real sync unreachable until you have run a preview. The rest of this guide is the same sequence at the command line, and is worth reading either way: the app can show you the numbers, but only you know whether they are the ones you expected.
+
 ## What the first sync does
 
 GeodeMD identifies a card by an ID it writes into the line, as an HTML comment:
@@ -19,6 +21,8 @@ Invisible in every Markdown renderer — GitHub, Obsidian, VS Code preview, pand
 On a collection with a few hundred cards spread over a hundred notes, that is a hundred modified files in one command.
 
 ## Look before it writes
+
+In the app this is the **Preview** button on the last step of first-run setup, and on the Sync screen afterwards. At the command line:
 
 ```sh
 geode sync --dry-run
@@ -87,6 +91,12 @@ Every changed line should differ only by a trailing `<!-- sr-... -->`. Nothing e
 Sync again after you edit notes — that is the contract. `geode review` deliberately does not walk your notes, so a review session stays fast no matter how large the collection gets, which means it shows you the text from your last sync.
 
 From here the first sync never repeats. Later syncs only read what changed, and a sync that finds nothing changed writes nothing at all.
+
+## If your notes move later
+
+Nothing breaks. The app notices on launch that the folder it was pointed at is gone — a moved directory, an external drive that is not plugged in — and offers to repoint it rather than treating you as a new user. Your device name and editor setting are kept, which matters more than it sounds: regenerating the device name would start a second review log and split this machine's history across two files.
+
+At the command line the equivalent is `geode init <new-path> --force`, which preserves the same two fields for the same reason.
 
 ## See also
 

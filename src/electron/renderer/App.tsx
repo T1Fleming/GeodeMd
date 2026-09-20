@@ -9,8 +9,9 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { DueCard } from "../../core/index.js";
-import type { GeodeApi } from "../ipc.js";
+import type { AppConfig, GeodeApi } from "../ipc.js";
 import { Review } from "./Review.js";
+import { Setup } from "./Setup.js";
 import { Stats } from "./Stats.js";
 import { Sync } from "./Sync.js";
 import type { Session } from "./model/session.js";
@@ -29,9 +30,67 @@ const TABS: ReadonlyArray<readonly [Tab, string]> = [
   ["stats", "Collection"],
 ];
 
+/**
+ * What the app is doing before it is doing anything.
+ *
+ * `setup` and `repair` are told apart on purpose. Both arrive as "no usable
+ * collection", and giving them the same screen would greet someone who has
+ * used the app for a year as though they had just installed it — when all
+ * that happened is an external drive is unplugged.
+ */
+type Boot =
+  | { at: "checking" }
+  | { at: "setup" }
+  | { at: "repair"; config: AppConfig }
+  | { at: "ready" }
+  | { at: "error"; message: string };
+
 export function App(): React.JSX.Element {
   const [tab, setTab] = useState<Tab>("review");
   const [note, setNote] = useState<string | null>(null);
+  const [boot, setBoot] = useState<Boot>({ at: "checking" });
+
+  const check = useCallback(async () => {
+    setBoot({ at: "checking" });
+    const c = await window.geode.configRead();
+    // `no-config` is an ordinary first run, not a failure. Deciding that by
+    // catching an error is how a disk problem eventually shows onboarding.
+    if (!c.ok) {
+      return setBoot(
+        c.kind === "no-config" ? { at: "setup" } : { at: "error", message: c.message },
+      );
+    }
+    if (c.value === null) return setBoot({ at: "setup" });
+
+    // A config whose notesPath has gone is routine on a desktop — the folder
+    // moved, or a drive is unmounted — and it is NOT a first run.
+    const folder = await window.geode.setupInspect(c.value.notesPath);
+    if (!folder.ok) return setBoot({ at: "error", message: folder.message });
+    if (!folder.value.exists || !folder.value.isDirectory) {
+      return setBoot({ at: "repair", config: c.value });
+    }
+    setBoot({ at: "ready" });
+  }, []);
+
+  useEffect(() => {
+    void check();
+  }, [check]);
+
+  if (boot.at === "checking") return <p className="muted">loading…</p>;
+  if (boot.at === "error") return <p className="error">{boot.message}</p>;
+  if (boot.at === "setup" || boot.at === "repair") {
+    return (
+      <div className="app">
+        <Setup
+          repairing={boot.at === "repair" ? boot.config : null}
+          onReady={() => {
+            setTab("review");
+            void check();
+          }}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="app">
