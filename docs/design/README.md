@@ -2,6 +2,8 @@
 
 How GeodeMD works **now**. These documents are living — when the code changes, they change with it.
 
+Written for people **working on** GeodeMD. Users want [`docs/guides/`](../guides/) and [`docs/reference/`](../reference/) instead ([ADR 0018](../decisions/0018-user-docs-live-in-guides-and-reference.md)).
+
 For *why* a decision went the way it did, and what it beat, see [`docs/decisions/`](../decisions/). The split is tense and mutability: an ADR is frozen at the moment of choosing, a design doc describes the present.
 
 | Document | Covers |

@@ -4,7 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-GeodeMD (`geode`) is a spaced repetition CLI where everything durable is plain text: cards live as one-line `::` entries inside the user's own Markdown notes, review history is an append-only JSONL log next to those notes, and the SQLite database is a fully rebuildable cache stored elsewhere. `README.md` covers what it is, why it's built this way, and quickstart usage (install, `geode init`, `geode sync --dry-run`, writing cards, `geode review`) — read it for user-facing behavior. `docs/design/` describes how each subsystem works now; read the relevant one before changing sync, the parser, or the store schema.
+GeodeMD (`geode`) is a spaced repetition tool where everything durable is plain text: cards live as one-line `::` entries inside the user's own Markdown notes, review history is an append-only JSONL log next to those notes, and the SQLite database is a fully rebuildable cache stored elsewhere. It has **two interfaces**: the `geode` CLI, and an Electron app under construction. They are peers — neither replaces the other ([ADR 0013](docs/decisions/0013-cli-and-electron-are-peers.md)).
+
+`README.md` covers what it is and quickstart usage; `docs/guides/` covers the tasks with real stakes. `docs/design/` describes how each subsystem works now — read the relevant one before changing sync, the parser, or the store schema.
 
 ## Documentation map
 
@@ -13,9 +15,13 @@ GeodeMD (`geode`) is a spaced repetition CLI where everything durable is plain t
 ```
 docs/decisions/   ADRs — immutable once written, numbered. Don't edit a past decision; add a new ADR that supersedes it.
 docs/design/      how the system works now — living, kept in sync with the code.
-docs/guides/      how to do a specific task — living.
-docs/reference/   config, API, schemas — often generated; check for a generator before hand-editing.
+docs/guides/      how to do a task — living.
+docs/reference/   what to look up: config keys, commands, exit codes.
 ```
+
+**Audience is the split, on top of stability** ([ADR 0018](docs/decisions/0018-user-docs-live-in-guides-and-reference.md)): `guides/` and `reference/` are written for people *using* GeodeMD; `design/` and `decisions/` for people *working on* it. Schemas are contributor material and live in `design/data-model.md`, not in `reference/`.
+
+`README.md` is the front door and stays one: install, quickstart, the command table. Anything longer than a screen becomes a guide and gets linked.
 
 Start at [`docs/design/README.md`](docs/design/README.md): it indexes the subsystem docs and maps the brief's section numbers onto them. `docs/design/phase-1-brief.md` is the original pre-code spec — **historical, do not update it**; when it disagrees with a design doc, the design doc is right.
 
@@ -67,16 +73,22 @@ src/files/      the only module that touches the filesystem, log included
 src/store/      the only module that touches SQLite
 src/scheduler/  FSRS, with its parameters pinned in source (not inherited from ts-fsrs defaults)
 src/core/       the Core class — sync, ingestLogs, getDueCards, countDue, reviewCard, stats, rebuild
-src/cli/        argv, config, review loop, and terminal presentation
+src/host/       this machine: XDG paths, env, hostname, config, error kinds, review vocabulary
+src/cli/        argv, review loop, ANSI              one of two interfaces
+src/electron/   window, IPC contract, renderer       the other
 src/index.ts    the public API: re-exports Core, Store, FsrsScheduler, and the parser functions
 ```
 
-`src/index.ts` is the surface a future Electron renderer imports — `core` is reached through it, and nothing it exports reaches into `cli`.
+**`cli` and `electron` are peers**: neither imports the other, and whatever they share lives in `host` ([ADR 0016](docs/decisions/0016-config-lives-in-host.md)). The line between `host` and `core` is ambient state — `host` may read `process.env`, `os.hostname()` and the config file; `core` may read none of it.
+
+Anything both interfaces would want belongs in `host` or `core`, **not** in whichever one asked for it first. That is not a style preference: if the app grew its own key handler, each interface would stay self-consistent while disagreeing about what `3` does, and nothing would fail ([ADR 0018 on docs](docs/decisions/0018-user-docs-live-in-guides-and-reference.md) is the same idea applied to writing).
 
 Hard rules enforced by `boundaries.test.ts` (know these before moving code between modules):
 
-- `core` never imports `cli`, and nothing below `cli` imports it either — dependencies point one way.
-- `core` never writes to the terminal (`console.*`), never calls `process.exit`/`process.stdout`/`process.stderr`, and never reads `process.env` — it takes everything as arguments so it stays reusable behind a future non-CLI interface (an Electron renderer, per `README.md`'s Status section).
+- `core` never imports an interface, and nothing below the interfaces imports one — dependencies point one way. `cli` and `electron` never import each other.
+- `core` never writes to the terminal (`console.*`), never calls `process.exit`/`process.stdout`/`process.stderr`, and never reads `process.env` — it takes everything as arguments, which is what lets one core serve both interfaces.
+- `host` may read ambient machine state — that is its whole job — but never writes to the terminal, because a GUI shares it.
+- `host` owns the review vocabulary (`RATING_KEYS`, `interpretKey`). Neither interface may define its own rating table.
 - `parser` opens no file, touches no database, and calls no clock (`new Date()`/`Date.now()`) — it is pure text-in, cards-out.
 - Only `store/` imports `better-sqlite3` or contains raw SQL.
 - The append-only review log lives under `files/` (with `fsyncSync`), not `store/` — `store/` never calls fsync or uses `O_APPEND`, keeping SQLite-specific code separate from durability-critical log I/O.
@@ -91,11 +103,11 @@ Other properties the test suite asserts rather than assumes (regressions here ar
 
 **Time is injected, never read.** Every `Core` method takes `now: Date` as an explicit parameter — `sync(now, opts)`, `getDueCards(now, limit)`, `reviewCard(id, rating, now)`, and the rest. This is the practical form of "no ambient state": `core` and `parser` never call `Date.now()` themselves, which is what makes scheduling deterministic and rebuild-from-log reproducible. A new method on `Core` that needs the time takes it as an argument.
 
-**Purity is split from I/O even inside `cli`.** `render.ts` builds strings and `index.ts` decides when to print them; `editor.ts` keeps `resolveEditor`/`editorCommand` pure and confines the `spawn` to one place. The payoff is that output and editor-command construction are tested without a pseudo-terminal. Follow the same split when adding to `cli`.
+**Purity is split from I/O even inside an interface.** `render.ts` builds strings and `index.ts` decides when to print them; `editor.ts` keeps `resolveEditor`/`editorCommand` pure and confines the `spawn` to one place. In `electron`, `main/runs.ts` holds single-flight and the progress throttle with no Electron imports at all, so it tests under plain vitest. The payoff is the same both times: the decisions are testable without a pseudo-terminal or a running app. Follow the split when adding to either.
 
 **Source comments cite the original brief by section.** Module headers say things like "section 6 rule 2" or "section 8 step 4", referring to `docs/design/phase-1-brief.md` — retired, historical, still the target of 83 such citations. `docs/design/README.md` maps each section onto the document that now owns it. When code looks odd, that citation is where the rationale lives. **New code should cite the design docs or an ADR, not a brief section.**
 
-**Exit codes are contract** (`cli/index.ts`): `0` success — *including* a run that skipped an unreadable file, since a skip is a reported outcome and making it non-zero would break every script the first time a note has bad permissions; `1` configuration or usage error; `2` unexpected internal error.
+**Exit codes are contract**, derived from `host/errors.ts`'s `ErrorKind` so the CLI exercises the same classifier the app does: `0` success — *including* a run that skipped an unreadable file, since a skip is a reported outcome and making it non-zero would break every script the first time a note has bad permissions; `1` configuration or usage error; `2` unexpected internal error.
 
 ## The parser
 

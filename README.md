@@ -46,7 +46,7 @@ That writes `~/.config/geodemd/config.json` — `notesPath`, `device`, `dbPath`,
 geode sync --dry-run
 ```
 
-This is the step worth not skipping. **The first real sync stamps every line in your notes that parses as a card**, which on an existing collection is a diff across the whole tree. `--dry-run` writes nothing — not a stamp, not a database row — and tells you exactly how many files and cards it would touch. Read the number and check it against what you expect. If your notes already use `::` somewhere unexpected, this is where you find out, cheaply.
+This is the step worth not skipping — [the guide walks through it](./docs/guides/first-sync.md). **The first real sync stamps every line in your notes that parses as a card**, which on an existing collection is a diff across the whole tree. `--dry-run` writes nothing — not a stamp, not a database row — and tells you exactly how many files and cards it would touch. Read the number and check it against what you expect. If your notes already use `::` somewhere unexpected, this is where you find out, cheaply.
 
 If your notes are in version control, commit them first.
 
@@ -119,6 +119,8 @@ Nothing else in your notes is touched. A file with CRLF line endings keeps them;
 The first two are durable and are what you back up. The database is **fully derivable**: delete it, run `geode rebuild`, and it comes back identical. There is no column in it that does not come from your notes or your logs, and the test suite asserts that by comparing every table after a rebuild.
 
 Practical consequence: delete a note and its cards leave the queue, but their history does not go anywhere. Restore the note a year later and the cards come back on their original schedule.
+
+Guides: [when something looks wrong](./docs/guides/recovery.md) · [moving your notes between machines](./docs/guides/moving-notes.md).
 
 ## Scale
 
