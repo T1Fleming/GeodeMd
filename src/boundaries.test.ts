@@ -155,6 +155,21 @@ describe("host, shared by both interfaces", () => {
     expect(host).toMatch(/os\.homedir|os\.hostname/);
   });
 
+  it("owns the review vocabulary, so the two interfaces cannot disagree", async () => {
+    // What a key MEANS and what a rating is CALLED are shared; drawing them is
+    // not. If either interface grew its own table, the two would drift and
+    // each would stay self-consistent — a usability bug no test would catch.
+    const host = await readAll("host");
+    expect(host).toMatch(/RATING_KEYS/);
+    expect(host).toMatch(/interpretKey/);
+
+    for (const dir of ["cli", "electron"]) {
+      expect(await readAll(dir), `${dir} defines its own rating table`).not.toMatch(
+        /\["1",\s*"again"\]/,
+      );
+    }
+  });
+
   it("core does not import host either — it takes its config as an argument", async () => {
     // Rule 3 the other way round. host reads ambient state; if core could
     // import it, core could reach that state through the back door.

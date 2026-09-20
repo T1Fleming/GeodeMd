@@ -22,7 +22,12 @@ import { Store } from "../store/index.js";
 import { configPath, initConfig, InitRefused } from "../host/config.js";
 import type { FileConfig } from "../host/config.js";
 import { isBusy } from "../host/errors.js";
+import { interpretKey } from "../host/present.js";
+import type { KeyAction } from "../host/present.js";
 import { openCore as openCoreWith, readAppConfig } from "../host/open.js";
+
+export { interpretKey };
+export type { KeyAction };
 import { openInEditor, resolveEditor } from "./editor.js";
 import {
   emptyCounts,
@@ -121,26 +126,6 @@ export function deferralNote(s: SyncSummary): string | null {
     `note: ${n} ${files} modified in the last couple of seconds and left alone, ` +
     `in case you have them open. Run \`geode sync\` again to pick them up.`
   );
-}
-
-export type KeyAction =
-  | { kind: "quit" }
-  | { kind: "rate"; rating: 1 | 2 | 3 | 4 }
-  | { kind: "open" }
-  | { kind: "ignore" };
-
-/** Ctrl-C as it arrives from a raw-mode keypress. */
-const ETX = String.fromCharCode(3);
-
-/**
- * What a keypress means at the rating prompt. Pure, so the loop's decisions are
- * testable without a pseudo-terminal — the loop itself is deliberately thin.
- */
-export function interpretKey(key: string): KeyAction {
-  if (key === "q" || key === "Q" || key === ETX || key === "escape") return { kind: "quit" };
-  if (key >= "1" && key <= "4") return { kind: "rate", rating: Number(key) as 1 | 2 | 3 | 4 };
-  if (key === "o" || key === "O") return { kind: "open" };
-  return { kind: "ignore" };
 }
 
 /**
