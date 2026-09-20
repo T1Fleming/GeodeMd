@@ -11,6 +11,8 @@
  * the module stays shareable.
  */
 
+import type { SyncPhase, SyncSummary } from "../core/index.js";
+
 /**
  * The four FSRS ratings, and what they are called. Spec section 9: the numbers
  * are not guessable, so the words travel with them everywhere they are shown.
@@ -81,3 +83,103 @@ export function ratingBreakdown(counts: RatingCounts): Array<{ label: string; co
     ([key, label]) => ({ label, count: counts[Number(key) as 1 | 2 | 3 | 4] }),
   );
 }
+
+/**
+ * One count from a `SyncSummary`, ready to be laid out.
+ *
+ * Data rather than a sentence, because the two interfaces lay the same counts
+ * out differently — the CLI joins them with commas, the app puts them in a
+ * grid — while *which* counts are worth showing is the same question in both.
+ */
+export interface SummaryField {
+  /** The `SyncSummary` key, so an interface can special-case one if it must. */
+  key: string;
+  label: string;
+  value: number;
+  /**
+   * A breakdown of the field before it: `unchanged` and `read` split `files`.
+   *
+   * Marked rather than inferred so neither interface has to hard-code the
+   * relationship. The CLI renders these in parentheses — `10 files (9
+   * unchanged, 1 read)` — and a grid can indent them or drop them.
+   */
+  detail?: boolean;
+}
+
+/**
+ * Which counts a sync summary should show, and in which order.
+ *
+ * The policy is: **the core counts always, the incidentals only when they are
+ * non-zero.** A run that pruned nothing should not say "0 pruned" — the list
+ * is long enough that a reader stops seeing it — but a run that skipped a file
+ * must say so, because the exit code deliberately does not.
+ *
+ * `filesStamped` leads the incidentals on purpose. On a dry run it is the
+ * number the user is actually deciding on: the first sync of an existing
+ * collection rewrites every file that holds a card, and `cardsNew` does not
+ * answer "how many of my notes does this edit" — one file can hold fifty.
+ */
+export function summaryFields(s: SyncSummary): SummaryField[] {
+  const fields: SummaryField[] = [
+    { key: "filesEnumerated", label: "files", value: s.filesEnumerated },
+    { key: "filesUnchanged", label: "unchanged", value: s.filesUnchanged, detail: true },
+    { key: "filesRead", label: "read", value: s.filesRead, detail: true },
+    { key: "cardsFound", label: "cards found", value: s.cardsFound },
+    { key: "cardsNew", label: "new", value: s.cardsNew },
+    { key: "cardsUpdated", label: "updated", value: s.cardsUpdated },
+  ];
+
+  const incidental: Array<[keyof SyncSummary, string]> = [
+    ["filesStamped", "files stamped"],
+    ["cardsPruned", "pruned"],
+    ["filesDeferred", "deferred"],
+    ["duplicatesReminted", "duplicate ids re-minted"],
+    ["symlinkedDirsSkipped", "symlinked dirs skipped"],
+    ["reviewsIngested", "reviews ingested"],
+    ["filesSkippedOnError", "files skipped on error"],
+    ["logLinesSkipped", "bad log lines skipped"],
+  ];
+
+  for (const [key, label] of incidental) {
+    const value = s[key] as number;
+    if (value) fields.push({ key, label, value });
+  }
+  return fields;
+}
+
+/**
+ * Why a freshly-edited file was left alone, or null when none was.
+ *
+ * Without this the summary reads "3 cards found, 0 new" and looks like a bug —
+ * which on a first run, where the notes were written moments ago, is exactly
+ * when it happens. A file modified in the last couple of seconds is assumed to
+ * be open in an editor and nothing is minted into it.
+ *
+ * The explanation is here; **what to do about it is not**, because that is the
+ * one part that genuinely differs — the CLI says to run `geode sync` again,
+ * and a window with a Sync button in it should not be telling anyone to open a
+ * terminal.
+ */
+export function deferralReason(s: SyncSummary): string | null {
+  if (s.filesDeferred === 0) return null;
+  const files = s.filesDeferred === 1 ? "file was" : "files were";
+  return (
+    `${s.filesDeferred} ${files} modified in the last couple of seconds ` +
+    `and left alone, in case you have them open.`
+  );
+}
+
+/**
+ * What each sync phase is called.
+ *
+ * Shared for the same reason the rating words are: the phase is the only thing
+ * that distinguishes a progress bar that is nearly finished from one that has
+ * been pinned at the end of the file loop for a minute while `ingestLogs`
+ * runs. Two interfaces inventing their own names would describe the same run
+ * differently.
+ */
+export const PHASE_LABEL: Readonly<Record<SyncPhase, string>> = {
+  scan: "reading notes",
+  prune: "checking for removed cards",
+  ingest: "reading review history",
+};

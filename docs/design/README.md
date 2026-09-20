@@ -8,11 +8,12 @@ For *why* a decision went the way it did, and what it beat, see [`docs/decisions
 
 | Document | Covers |
 |---|---|
-| [module-map.md](module-map.md) | The six modules, what each owns, and how the boundaries are enforced |
+| [module-map.md](module-map.md) | The eight modules, what each owns, and how the boundaries are enforced |
 | [parser.md](parser.md) | Card syntax, skipped contexts, stamps, line terminators, identity |
 | [data-model.md](data-model.md) | The review log, the five tables, connection settings, rebuild |
 | [sync.md](sync.md) | The seven sync steps, invariants, failure handling, `--dry-run` / `--full` |
 | [review-flow.md](review-flow.md) | Queue construction, recording a review, the loop, stats |
+| [app.md](app.md) | The Electron app: the IPC contract, long runs, what it shares with the CLI |
 | [testing.md](testing.md) | The five expensive places, the boundaries test, the scale harness |
 
 Configuration is documented in [`docs/reference/configuration.md`](../reference/configuration.md).

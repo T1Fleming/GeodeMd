@@ -22,7 +22,7 @@ import { configPath, initConfig, InitRefused } from "../host/config.js";
 import type { FileConfig } from "../host/config.js";
 import { OpenedNotes, resolveEditor } from "../host/editor.js";
 import { isBusy } from "../host/errors.js";
-import { interpretKey } from "../host/present.js";
+import { deferralReason, interpretKey, summaryFields } from "../host/present.js";
 import type { KeyAction } from "../host/present.js";
 import { openCore as openCoreWith, readAppConfig } from "../host/open.js";
 
@@ -88,44 +88,43 @@ export function parseArgs(argv: string[]): Args {
   return { command: positional[0], positional: positional.slice(1), flags, limit };
 }
 
+/**
+ * One line of counts.
+ *
+ * WHICH counts are worth showing is `summaryFields` in `host` — the app asks
+ * the same question and must get the same answer. What is left here is purely
+ * how a terminal says it: commas between fields, and the `detail` fields
+ * folded into parentheses after the one they break down, so the line reads
+ * `10 files (9 unchanged, 1 read)` rather than as three equal counts.
+ */
 export function formatSummary(s: SyncSummary): string {
-  const parts = [
-    `${s.filesEnumerated} files (${s.filesUnchanged} unchanged, ${s.filesRead} read)`,
-    `${s.cardsFound} cards found`,
-    `${s.cardsNew} new`,
-    `${s.cardsUpdated} updated`,
-  ];
-  // Ahead of the incidentals: on a dry run this is the number the user is
-  // actually deciding on, because the first sync of an existing collection
-  // rewrites every file that holds a card.
-  if (s.filesStamped) parts.push(`${s.filesStamped} files stamped`);
-  if (s.cardsPruned) parts.push(`${s.cardsPruned} pruned`);
-  if (s.filesDeferred) parts.push(`${s.filesDeferred} deferred`);
-  if (s.duplicatesReminted) parts.push(`${s.duplicatesReminted} duplicate ids re-minted`);
-  if (s.symlinkedDirsSkipped) parts.push(`${s.symlinkedDirsSkipped} symlinked dirs skipped`);
-  if (s.reviewsIngested) parts.push(`${s.reviewsIngested} reviews ingested`);
-  if (s.filesSkippedOnError) parts.push(`${s.filesSkippedOnError} files skipped on error`);
-  if (s.logLinesSkipped) parts.push(`${s.logLinesSkipped} bad log lines skipped`);
+  const parts: string[] = [];
+  for (const f of summaryFields(s)) {
+    const text = `${f.value} ${f.label}`;
+    if (f.detail && parts.length > 0) {
+      const at = parts.length - 1;
+      const prev = parts[at]!;
+      // Open a parenthetical on the first detail, extend it on the next.
+      parts[at] = prev.endsWith(")") ? `${prev.slice(0, -1)}, ${text})` : `${prev} (${text})`;
+    } else {
+      parts.push(text);
+    }
+  }
   return `${parts.join(", ")} — ${s.elapsedMs}ms`;
 }
 
 /**
  * Explain a deferral, because otherwise it looks like a failure.
  *
- * A file modified in the last couple of seconds is assumed to be open in an
- * editor, so nothing is minted in it (spec section 8 step 4). That is correct,
- * but on a first run — where the note was created moments ago — the summary
- * reads "3 cards found, 0 new" and the user has no idea why. The counts alone
- * do not carry the explanation, so the CLI adds it.
+ * The explanation is `deferralReason` in `host` — the app needs it more than
+ * the CLI does, since "3 cards found, 0 new" in a window reads as a bug with
+ * no output to scroll back through. What the CLI adds is the half that does
+ * not travel: telling someone to run `geode sync` again is right here and
+ * wrong in a window with a Sync button in it.
  */
 export function deferralNote(s: SyncSummary): string | null {
-  if (s.filesDeferred === 0) return null;
-  const n = s.filesDeferred;
-  const files = n === 1 ? "file was" : "files were";
-  return (
-    `note: ${n} ${files} modified in the last couple of seconds and left alone, ` +
-    `in case you have them open. Run \`geode sync\` again to pick them up.`
-  );
+  const reason = deferralReason(s);
+  return reason && `note: ${reason} Run \`geode sync\` again to pick them up.`;
 }
 
 /**

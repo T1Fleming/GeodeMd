@@ -23,7 +23,12 @@ export const EMIT_EVERY_MS = 100;
 export interface RunnerDeps {
   core: Core;
   emit: (p: RunProgress) => void;
-  finish: (runId: string, kind: "sync" | "rebuild", result: Result<SyncSummary>) => void;
+  /**
+   * One object rather than three positional arguments: `RunFinished` is what
+   * crosses the wire, and a caller that rebuilds it field by field is a caller
+   * that can drop one. Adding `dryRun` did exactly that to the old signature.
+   */
+  finish: (finished: RunFinished) => void;
   now?: () => Date;
   /** Injected so the throttle can be tested without waiting in real time. */
   schedule?: (fn: () => void, ms: number) => { cancel: () => void };
@@ -32,6 +37,7 @@ export interface RunnerDeps {
 interface InFlight {
   runId: string;
   kind: "sync" | "rebuild";
+  dryRun: boolean;
   latest: RunProgress;
 }
 
@@ -84,8 +90,15 @@ export class Runner {
     // A new run supersedes the previous result rather than expiring it.
     this.last = null;
     const runId = `run-${++this.seq}`;
-    const latest: RunProgress = { runId, kind, phase: "scan", done: 0, total: 0 };
-    this.inFlight = { runId, kind, latest };
+    const latest: RunProgress = {
+      runId,
+      kind,
+      phase: "scan",
+      done: 0,
+      total: 0,
+      dryRun: req.dryRun,
+    };
+    this.inFlight = { runId, kind, dryRun: req.dryRun, latest };
 
     void this.run(runId, kind, req);
     return { ok: true, value: { runId, joined: false } };
@@ -142,8 +155,8 @@ export class Runner {
     this.inFlight = null;
     // Recorded before the event fires, so a listener that calls status() from
     // inside the handler sees the run it was just told about.
-    this.last = { runId, kind, result };
-    this.deps.finish(runId, kind, result);
+    this.last = { runId, kind, dryRun: req.dryRun, result };
+    this.deps.finish(this.last);
   }
 }
 

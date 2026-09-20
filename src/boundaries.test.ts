@@ -195,6 +195,26 @@ describe("host, shared by both interfaces", () => {
     }
   });
 
+  it("owns what a sync summary says, so the two cannot report differently", async () => {
+    // WHICH counts are worth showing is one question with one answer; joining
+    // them with commas or laying them out as a grid is not. The markers are
+    // two labels that appear nowhere else: a phase name and an incidental
+    // count. Either one turning up in an interface means the list was copied.
+    const host = await readAll("host");
+    expect(host).toMatch(/summaryFields/);
+    expect(host).toMatch(/reading review history/);
+    expect(host).toMatch(/duplicate ids re-minted/);
+
+    for (const dir of ["cli", "electron"]) {
+      expect(await readAll(dir), `${dir} restates the summary list`).not.toMatch(
+        /duplicate ids re-minted/,
+      );
+      expect(await readAll(dir), `${dir} names the phases itself`).not.toMatch(
+        /reading review history/,
+      );
+    }
+  });
+
   it("leaves the spawn to each interface, because the two are not the same", async () => {
     // The pure half is shared; the spawn is NOT, and this is the one place the
     // distinction is visible. `stdio: "inherit"` hands over the TTY and is

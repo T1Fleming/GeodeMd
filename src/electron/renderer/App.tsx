@@ -1,19 +1,69 @@
 /**
- * Loads a queue and hands it to the review screen. Everything it knows about
- * the backend goes through `window.geode`, which is the preload's bridge — the
- * renderer imports no Node, no Electron and no `core`.
+ * The shell: which screen is showing, and the one piece of state that outlives
+ * a screen — the quiet note at the bottom.
+ *
+ * Everything it knows about the backend goes through `window.geode`, which is
+ * the preload's bridge: the renderer imports no Node, no Electron and no
+ * `core`.
  */
 
 import { useCallback, useEffect, useState } from "react";
 import type { DueCard } from "../../core/index.js";
 import type { GeodeApi } from "../ipc.js";
 import { Review } from "./Review.js";
+import { Stats } from "./Stats.js";
+import { Sync } from "./Sync.js";
 import type { Session } from "./model/session.js";
 
 declare global {
   interface Window {
     geode: GeodeApi;
   }
+}
+
+type Tab = "review" | "sync" | "stats";
+
+const TABS: ReadonlyArray<readonly [Tab, string]> = [
+  ["review", "Review"],
+  ["sync", "Sync"],
+  ["stats", "Collection"],
+];
+
+export function App(): React.JSX.Element {
+  const [tab, setTab] = useState<Tab>("review");
+  const [note, setNote] = useState<string | null>(null);
+
+  return (
+    <div className="app">
+      <nav className="tabs">
+        {TABS.map(([id, label]) => (
+          <button
+            key={id}
+            className={id === tab ? "tab on" : "tab"}
+            onClick={() => setTab(id)}
+          >
+            {label}
+          </button>
+        ))}
+      </nav>
+
+      {/* Each screen is mounted only while it is showing, which is what makes
+          the review screen's document-level key handler safe: it cannot still
+          be listening while you are on another tab. It also means leaving
+          review and coming back draws a fresh queue — no position is kept, and
+          none needs to be, because every rating was recorded when it was
+          given. */}
+      {tab === "review" && <ReviewScreen onNote={setNote} />}
+      {tab === "sync" && <Sync />}
+      {tab === "stats" && <Stats />}
+
+      {note && (
+        <div className="toast" onClick={() => setNote(null)}>
+          {note}
+        </div>
+      )}
+    </div>
+  );
 }
 
 type Screen =
@@ -24,9 +74,8 @@ type Screen =
 
 const LIMIT = 50;
 
-export function App(): React.JSX.Element {
+function ReviewScreen({ onNote }: { onNote: (m: string) => void }): React.JSX.Element {
   const [screen, setScreen] = useState<Screen>({ at: "loading" });
-  const [note, setNote] = useState<string | null>(null);
   /** Notes edited during the session. Null until the session ends. */
   const [stale, setStale] = useState<string[] | null>(null);
 
@@ -48,25 +97,31 @@ export function App(): React.JSX.Element {
     void load();
   }, [load]);
 
-  const onRate = useCallback(async (cardId: string, rating: 1 | 2 | 3 | 4) => {
-    const r = await window.geode.cardsReview(cardId, rating);
-    if (r.ok && r.value.applied === "log-only") {
-      // Not a failure: the rating is already fsynced to the log and the next
-      // ingest reconciles the row. A dialog here would be a lie.
-      setNote("saved — the database was busy and will catch up");
-    } else if (!r.ok) {
-      setNote(r.message);
-    }
-  }, []);
+  const onRate = useCallback(
+    async (cardId: string, rating: 1 | 2 | 3 | 4) => {
+      const r = await window.geode.cardsReview(cardId, rating);
+      if (r.ok && r.value.applied === "log-only") {
+        // Not a failure: the rating is already fsynced to the log and the next
+        // ingest reconciles the row. A dialog here would be a lie.
+        onNote("saved — the database was busy and will catch up");
+      } else if (!r.ok) {
+        onNote(r.message);
+      }
+    },
+    [onNote],
+  );
 
-  const onOpen = useCallback(async (card: DueCard) => {
-    // Main does the spawn — detached, so the app is not held open by an editor
-    // the user leaves running. Nothing here waits for the note to be closed.
-    const r = await window.geode.noteOpen(card.filePath, card.lineNo);
-    // A failure is a dim note, not a dialog: not being able to open a note is
-    // no reason to lose the session.
-    if (!r.ok) setNote(r.message);
-  }, []);
+  const onOpen = useCallback(
+    async (card: DueCard) => {
+      // Main does the spawn — detached, so the app is not held open by an
+      // editor the user leaves running. Nothing here waits for it to close.
+      const r = await window.geode.noteOpen(card.filePath, card.lineNo);
+      // A failure is a dim note, not a dialog: not being able to open a note
+      // is no reason to lose the session.
+      if (!r.ok) onNote(r.message);
+    },
+    [onNote],
+  );
 
   /**
    * At the end of the session, ask which of the opened notes actually changed.
@@ -85,33 +140,27 @@ export function App(): React.JSX.Element {
     });
   }, []);
 
+  if (screen.at === "loading") return <p className="muted">loading…</p>;
+  if (screen.at === "error") return <p className="error">{screen.message}</p>;
+  if (screen.at === "empty") {
+    return (
+      <main className="review done">
+        <h2>Nothing due</h2>
+        <p className="muted">
+          {screen.total} cards in the collection. Sync after writing more.
+        </p>
+      </main>
+    );
+  }
+
   return (
-    <div className="app">
-      {screen.at === "loading" && <p className="muted">loading…</p>}
-      {screen.at === "error" && <p className="error">{screen.message}</p>}
-      {screen.at === "empty" && (
-        <main className="review done">
-          <h2>Nothing due</h2>
-          <p className="muted">
-            {screen.total} cards in the collection. Run <code>geode sync</code> after writing more.
-          </p>
-        </main>
-      )}
-      {screen.at === "review" && (
-        <Review
-          queue={screen.queue}
-          backlog={screen.backlog}
-          stale={stale}
-          onRate={onRate}
-          onOpen={onOpen}
-          onDone={onDone}
-        />
-      )}
-      {note && (
-        <div className="toast" onClick={() => setNote(null)}>
-          {note}
-        </div>
-      )}
-    </div>
+    <Review
+      queue={screen.queue}
+      backlog={screen.backlog}
+      stale={stale}
+      onRate={onRate}
+      onOpen={onOpen}
+      onDone={onDone}
+    />
   );
 }
