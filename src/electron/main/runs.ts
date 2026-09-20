@@ -8,7 +8,14 @@
 
 import type { Core, SyncSummary } from "../../core/index.js";
 import { classify } from "../../host/errors.js";
-import type { Result, RunProgress, RunStarted, SyncRequest } from "../ipc.js";
+import type {
+  Result,
+  RunFinished,
+  RunProgress,
+  RunStarted,
+  RunStatus,
+  SyncRequest,
+} from "../ipc.js";
 
 /** How often progress is emitted, regardless of how often it is reported. */
 export const EMIT_EVERY_MS = 100;
@@ -30,12 +37,21 @@ interface InFlight {
 
 export class Runner {
   private inFlight: InFlight | null = null;
+  /** The most recent finished run, so a late subscriber can still learn it. */
+  private last: RunFinished | null = null;
   private seq = 0;
 
   constructor(private readonly deps: RunnerDeps) {}
 
-  status(): RunProgress | null {
-    return this.inFlight?.latest ?? null;
+  /**
+   * Running, or the last result, or nothing has ever run. Three states rather
+   * than a nullable progress object, because "no run in flight" and "no run
+   * ever" are different things to a UI deciding what to render.
+   */
+  status(): RunStatus {
+    if (this.inFlight) return { state: "running", progress: { ...this.inFlight.latest } };
+    if (this.last) return { state: "idle", last: this.last };
+    return { state: "never" };
   }
 
   /**
@@ -65,6 +81,8 @@ export class Runner {
       };
     }
 
+    // A new run supersedes the previous result rather than expiring it.
+    this.last = null;
     const runId = `run-${++this.seq}`;
     const latest: RunProgress = { runId, kind, phase: "scan", done: 0, total: 0 };
     this.inFlight = { runId, kind, latest };
@@ -122,6 +140,9 @@ export class Runner {
     if (f) this.deps.emit({ ...f.latest, done: f.latest.total, phase: "ingest" });
 
     this.inFlight = null;
+    // Recorded before the event fires, so a listener that calls status() from
+    // inside the handler sees the run it was just told about.
+    this.last = { runId, kind, result };
     this.deps.finish(runId, kind, result);
   }
 }

@@ -125,7 +125,7 @@ describe("single-flight", () => {
     h.runner.start("sync", { full: false, dryRun: false });
     await h.done();
 
-    expect(h.runner.status()).toBeNull();
+    expect(h.runner.status().state).toBe("idle");
     const again = h.runner.start("sync", { full: false, dryRun: false });
     expect(again.ok && again.value.joined).toBe(false);
     await new Promise((r) => setTimeout(r, 50));
@@ -225,5 +225,70 @@ describe("the wire types survive structuredClone", () => {
     // Config.newId is a function and the type looks like plain data.
     const config = { notesPath: notes, device: "d", dbPath: ":memory:", newId: () => "x" };
     expect(() => structuredClone(config)).toThrow();
+  });
+});
+
+describe("status survives a missed event", () => {
+  it("distinguishes never-run from finished", async () => {
+    // Two different things to a UI deciding what to render, and a nullable
+    // progress object cannot tell them apart.
+    await write("a.md", "Q :: A\n");
+    const h = makeRunner();
+    expect(h.runner.status()).toEqual({ state: "never" });
+
+    h.runner.start("sync", { full: false, dryRun: false });
+    await h.done();
+    expect(h.runner.status().state).toBe("idle");
+  });
+
+  it("keeps the last result, so a late subscriber can still learn it", async () => {
+    // The gap this closes: a five-file sync finishes in milliseconds, so a
+    // component that mounts and then starts a run can miss its own completion.
+    await write("a.md", "Q :: A\n");
+    const h = makeRunner();
+    const started = h.runner.start("sync", { full: false, dryRun: false });
+    await h.done();
+
+    const s = h.runner.status();
+    expect(s.state).toBe("idle");
+    if (s.state !== "idle") return;
+    expect(started.ok && s.last.runId).toBe(started.ok && started.value.runId);
+    expect(s.last.result.ok).toBe(true);
+  });
+
+  it("reports running while a run is in flight", async () => {
+    await write("a.md", "Q :: A\n");
+    const h = makeRunner();
+    h.runner.start("sync", { full: false, dryRun: false });
+    expect(h.runner.status().state).toBe("running");
+    await h.done();
+  });
+
+  it("a new run supersedes the previous result rather than aging it out", async () => {
+    // "The most recent run" is a fact about the process. An expiry would mean
+    // a UI that renders differently depending on how long the user looked away.
+    await write("a.md", "Q :: A\n");
+    const h = makeRunner();
+    h.runner.start("sync", { full: false, dryRun: false });
+    await h.done();
+    const first = h.runner.status();
+
+    const second = h.runner.start("sync", { full: false, dryRun: false });
+    expect(h.runner.status().state).toBe("running");
+    await new Promise((r) => setTimeout(r, 60));
+
+    const s = h.runner.status();
+    if (s.state !== "idle" || first.state !== "idle") return;
+    expect(s.last.runId).not.toBe(first.last.runId);
+    expect(second.ok && s.last.runId).toBe(second.ok && second.value.runId);
+  });
+
+  it("status is structured-cloneable, like every other payload", async () => {
+    await write("a.md", "Q :: A\n");
+    const h = makeRunner();
+    h.runner.start("sync", { full: false, dryRun: false });
+    await h.done();
+    const s = h.runner.status();
+    expect(structuredClone(s)).toEqual(s);
   });
 });

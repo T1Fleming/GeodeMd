@@ -132,7 +132,9 @@
       // forever — which is exactly how this harness first failed. It is also
       // a real gap worth naming: there is currently no way to learn about a
       // run that finished before you were listening.
-      const finished = new Promise((resolve) => geode.onRunFinished(resolve));
+      // Deliberately NOT subscribed first any more: run/status keeps the last
+      // result, so a late listener can reconcile. That is the whole point of
+      // the change, and this is what proves it.
 
       // Single-flight: the second must JOIN, not fail.
       const [a, b] = await Promise.all([
@@ -149,7 +151,19 @@
       const rb = await geode.runStart("rebuild", { full: false, dryRun: false });
       check("rebuild refused while a sync runs", !rb.ok, rb.ok ? "was allowed" : rb.message);
 
-      await finished;
+      // Poll status rather than racing the event — a five-file sync may well
+      // have finished before this line runs, which is exactly the case that
+      // used to be unlearnable.
+      let st2 = await geode.runStatus();
+      for (let i = 0; i < 100 && st2.ok && st2.value.state === "running"; i++) {
+        await new Promise((r) => setTimeout(r, 50));
+        st2 = await geode.runStatus();
+      }
+      check(
+        "a finished run is learnable without having subscribed",
+        st2.ok && st2.value.state === "idle" && st2.value.last.result.ok,
+        st2.ok ? st2.value.state : st2.kind,
+      );
       check("run finished and progress arrived", emits > 0, `${emits} emits`);
       check("progress ended at 100%", bar.value === bar.max, `${bar.value}/${bar.max}`);
 

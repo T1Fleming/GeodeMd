@@ -117,7 +117,9 @@ function register(): void {
     return r.ok ? r.value : r;
   });
 
-  ipcMain.handle(CH.runStatus, () => guard(() => runner?.status() ?? null));
+  ipcMain.handle(CH.runStatus, () =>
+    guard(() => runner?.status() ?? ({ state: "never" } as const)),
+  );
 }
 
 /**

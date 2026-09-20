@@ -83,6 +83,25 @@ export interface RunFinished {
 }
 
 /**
+ * What `run/status` answers.
+ *
+ * `last` exists because an event is only useful to whoever was already
+ * listening. A five-file sync finishes in milliseconds, so a component that
+ * mounts and then starts a run can miss its own completion — and a window
+ * reloaded mid-sync would never learn the outcome at all. Keeping the most
+ * recent result queryable is what lets a UI reconcile on mount rather than
+ * having to be subscribed before anything happens.
+ *
+ * `last` is replaced when the next run starts, not aged out: "the most recent
+ * run" is a fact about the process, and inventing a expiry would mean a UI
+ * that renders differently depending on how long the user looked away.
+ */
+export type RunStatus =
+  | { state: "running"; progress: RunProgress }
+  | { state: "idle"; last: RunFinished }
+  | { state: "never" };
+
+/**
  * Channel names live here and nowhere else. A literal typed a second time in
  * main and in the preload is a bug that type-checks.
  */
@@ -105,7 +124,7 @@ export interface GeodeApi {
   cardsDue(limit: number): Promise<Result<DueCard[]>>;
   cardsReview(cardId: string, rating: 1 | 2 | 3 | 4): Promise<Result<Rated>>;
   runStart(kind: "sync" | "rebuild", req: SyncRequest): Promise<Result<RunStarted>>;
-  runStatus(): Promise<Result<RunProgress | null>>;
+  runStatus(): Promise<Result<RunStatus>>;
   onRunProgress(fn: (p: RunProgress) => void): () => void;
   onRunFinished(fn: (f: RunFinished) => void): () => void;
 }
