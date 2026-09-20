@@ -380,7 +380,85 @@ describe("incremental sync", () => {
   });
 });
 
+describe("progress reporting", () => {
+  it("reports every enumerated file, including the ones the cache skips", async () => {
+    // Per CANDIDATE, not per file read — a bar has to advance on a no-change
+    // sync too, and it is a hot path precisely because it fires for cached
+    // files.
+    for (let i = 0; i < 5; i++) await write(`n${i}.md`, "Q :: A\n");
+    await core.sync(T0);
+
+    const seen: Array<[number, number, string]> = [];
+    await core.sync(new Date(), { onProgress: (d, t, p) => seen.push([d, t, p]) });
+
+    const scan = seen.filter(([, , p]) => p === "scan");
+    expect(scan).toHaveLength(5);
+    expect(scan.map(([d]) => d)).toEqual([1, 2, 3, 4, 5]);
+    expect(scan.every(([, t]) => t === 5)).toBe(true);
+  });
+
+  it("moves through the phases in order", async () => {
+    // Without this a bar sits pinned at the end of the file loop through prune
+    // and ingest, which on a first ingest of a large log is the longest part of
+    // the run.
+    await write("a.md", "Q :: A\n");
+    const phases: string[] = [];
+    await core.sync(T0, { onProgress: (_d, _t, p) => phases.push(p) });
+
+    expect(phases[0]).toBe("scan");
+    expect(phases.lastIndexOf("scan")).toBeLessThan(phases.indexOf("prune"));
+    expect(phases.indexOf("prune")).toBeLessThan(phases.indexOf("ingest"));
+  });
+
+  it("is optional — a caller that passes nothing is unaffected", async () => {
+    await write("a.md", "Q :: A\n");
+    await expect(core.sync(T0)).resolves.toBeTruthy();
+  });
+});
+
+describe("filesStamped", () => {
+  it("counts files edited, not cards — one file with many new cards is one", async () => {
+    await write("many.md", "A :: 1\nB :: 2\nC :: 3\n");
+    await write("one.md", "D :: 4\n");
+    const s = await core.sync(T0);
+
+    expect(s.cardsNew).toBe(4);
+    expect(s.filesStamped).toBe(2);
+  });
+
+  it("is zero on a second sync, when nothing needs a stamp", async () => {
+    await write("a.md", "Q :: A\n");
+    await core.sync(T0);
+    expect((await core.sync(new Date())).filesStamped).toBe(0);
+  });
+
+  it("does not count a file whose cards were all deferred", async () => {
+    // A deferred file mints nothing, so nothing is stamped in it. Reporting it
+    // would tell the user a note was edited when it was not.
+    //
+    // Written directly rather than through `write`, which backdates mtime to
+    // keep files out of the deferral window on purpose.
+    await fs.writeFile(path.join(notes, "fresh.md"), "Q :: A\n", "utf8"); // mtime = now
+    const s = await core.sync(new Date());
+    expect(s.filesDeferred).toBe(1);
+    expect(s.filesStamped).toBe(0);
+  });
+});
+
 describe("--dry-run", () => {
+  it("reports how many files it WOULD edit, having edited none", async () => {
+    // The point of the flag: the first sync of an existing collection rewrites
+    // every file holding a card, and this is the number that says how many.
+    await write("a.md", "Q :: A\n");
+    await write("b.md", "R :: B\n");
+    const before = store.totalChanges();
+
+    const s = await core.sync(T0, { dryRun: true });
+    expect(s.filesStamped).toBe(2);
+    expect(await read("a.md")).not.toContain("<!-- sr-");
+    expect(store.totalChanges()).toBe(before);
+  });
+
   it("writes neither a stamp nor a row, and still reports what would happen", async () => {
     await write("a.md", "Q :: A\n");
     const before = store.totalChanges();

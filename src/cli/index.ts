@@ -89,6 +89,10 @@ export function formatSummary(s: SyncSummary): string {
     `${s.cardsNew} new`,
     `${s.cardsUpdated} updated`,
   ];
+  // Ahead of the incidentals: on a dry run this is the number the user is
+  // actually deciding on, because the first sync of an existing collection
+  // rewrites every file that holds a card.
+  if (s.filesStamped) parts.push(`${s.filesStamped} files stamped`);
   if (s.cardsPruned) parts.push(`${s.cardsPruned} pruned`);
   if (s.filesDeferred) parts.push(`${s.filesDeferred} deferred`);
   if (s.duplicatesReminted) parts.push(`${s.duplicatesReminted} duplicate ids re-minted`);

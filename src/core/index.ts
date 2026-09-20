@@ -25,10 +25,27 @@ export interface Config {
   newId: () => string;
 }
 
+/**
+ * Which part of a sync is running. Reported so a caller drawing a progress bar
+ * can say what is happening rather than sitting pinned at 100%: the file loop
+ * is only steps 1-5, and on a first ingest of a large log step 7 is the
+ * longest part of the whole run.
+ */
+export type SyncPhase = "scan" | "prune" | "ingest";
+
 export interface SyncOptions {
   full?: boolean;
   dryRun?: boolean;
-  onProgress?: (done: number, total: number) => void;
+  /**
+   * Called once per enumerated file during "scan" — INCLUDING files the mtime
+   * cache skips, so at the top of the scale range this is a million calls. A
+   * consumer must treat it as a hot path: record and let a timer render, never
+   * render here.
+   *
+   * `phase` changes then stays put: one call as each later phase begins, with
+   * `done === total`, because neither prune nor ingest knows its size up front.
+   */
+  onProgress?: (done: number, total: number, phase: SyncPhase) => void;
 }
 
 export interface SyncSummary {
@@ -36,6 +53,15 @@ export interface SyncSummary {
   filesUnchanged: number;
   filesRead: number;
   filesDeferred: number;
+  /**
+   * Files this run wrote a stamp into — or WOULD have, under `dryRun`.
+   *
+   * The count that answers "how many of my notes does this edit", which
+   * `cardsNew` does not: one file can hold fifty new cards. It is the number a
+   * first run actually needs, because the first sync of an existing collection
+   * rewrites every file containing a card.
+   */
+  filesStamped: number;
   cardsFound: number;
   cardsNew: number;
   cardsUpdated: number;
@@ -70,6 +96,7 @@ function emptySummary(): SyncSummary {
     filesUnchanged: 0,
     filesRead: 0,
     filesDeferred: 0,
+    filesStamped: 0,
     cardsFound: 0,
     cardsNew: 0,
     cardsUpdated: 0,
@@ -136,7 +163,7 @@ export class Core {
     let done = 0;
     for (const cand of candidates) {
       done++;
-      opts.onProgress?.(done, candidates.length);
+      opts.onProgress?.(done, candidates.length, "scan");
 
       // Step 2: classify. One indexed read, no write.
       const row = this.store.getFile(cand.relPath);
@@ -198,6 +225,7 @@ export class Core {
     }
 
     // Step 6: prune — and usually decide not to.
+    opts.onProgress?.(candidates.length, candidates.length, "prune");
     if (hits < known) {
       summary.reconciled = true;
       if (!dryRun) {
@@ -215,7 +243,10 @@ export class Core {
       }
     }
 
-    // Step 7: ingest logs.
+    // Step 7: ingest logs. Reported as its own phase: on a first ingest of a
+    // large log this is the longest part of the run, and a bar that stopped at
+    // the end of the file loop would sit at 100% through all of it.
+    opts.onProgress?.(candidates.length, candidates.length, "ingest");
     if (!dryRun) {
       const ingest = await this.ingestLogs(now);
       summary.logShardsSkipped = ingest.shardsSkipped;
@@ -320,13 +351,18 @@ export class Core {
     }
 
     if (dryRun) {
-      // Writes nothing — not a stamp, not a row — but reports what would happen.
+      // Writes nothing — not a stamp, not a row — but reports what would happen,
+      // and "how many files would you edit" is the question a first run asks.
+      summary.filesStamped++;
       for (const { card, id } of toStamp) confirmed.push({ ...card, id });
       return { confirmed, stat, pending };
     }
 
     const after = await files.writeIfUnchanged(this.config.notesPath, relPath, out.join(""), stat);
+    // Counted only after the write actually landed. The re-stat guard can fire,
+    // and a file this run did not touch must not be reported as stamped.
     if (!after) return null;
+    summary.filesStamped++;
 
     for (const { card, id } of toStamp) confirmed.push({ ...card, id });
     return { confirmed, stat: after, pending };
