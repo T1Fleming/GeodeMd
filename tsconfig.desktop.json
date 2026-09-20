@@ -2,7 +2,13 @@
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "outDir": "desktop/dist",
-    "declaration": false
+    "declaration": false,
+    // Electron's types come from desktop/node_modules, so this build — and
+    // only this build — requires `npm install --prefix desktop` first.
+    "baseUrl": ".",
+    "paths": {
+      "electron": ["desktop/node_modules/electron/electron.d.ts"]
+    }
   },
   "include": ["src/**/*.ts"],
   "exclude": ["src/**/*.test.ts", "src/cli/**"]
