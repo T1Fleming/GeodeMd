@@ -13,5 +13,11 @@
   // .cts too: the preload must be CommonJS, because an ESM preload
   // requires sandbox:false and the sandbox is worth more than consistency.
   "include": ["src/**/*.ts", "src/**/*.cts"],
-  "exclude": ["src/**/*.test.ts", "src/cli/**"]
+  "exclude": [
+    "src/**/*.test.ts",
+    "src/cli/**",
+    // Vite builds the renderer, and it is the only part of this tree that
+    // needs DOM types. src/electron/renderer/tsconfig.json checks it.
+    "src/electron/renderer/**"
+  ]
 }

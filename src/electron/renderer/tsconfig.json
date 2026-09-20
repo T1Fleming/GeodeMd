@@ -1,0 +1,28 @@
+{
+  // The renderer is built by Vite, not by the root tsc — this file only
+  // type-checks it. Without the exclusion in the root tsconfig, `tsc` would
+  // emit stray .js next to every .tsx with the wrong module resolution.
+  "extends": "../../../tsconfig.json",
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "noEmit": true,
+    "lib": ["ES2023", "DOM", "DOM.Iterable"],
+    // React lives in desktop/node_modules for the same reason Electron does:
+    // one dependency tree per runtime. These make its TYPES resolvable without
+    // a second copy at the repo root. See desktop/README.md.
+    "baseUrl": "../../..",
+    "paths": {
+      "react": ["desktop/node_modules/@types/react"],
+      "react/*": ["desktop/node_modules/@types/react/*"],
+      "react-dom": ["desktop/node_modules/@types/react-dom"],
+      "react-dom/*": ["desktop/node_modules/@types/react-dom/*"]
+    },
+    "types": []
+  },
+  "include": ["**/*.ts", "**/*.tsx"],
+  // The root config excludes this whole directory; inheriting that exclusion
+  // here would leave the config with no inputs at all.
+  "exclude": ["**/*.test.ts", "**/*.test.tsx"]
+}
