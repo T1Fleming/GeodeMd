@@ -85,6 +85,19 @@ Opening a note is the same split drawn across the two interfaces instead of insi
 
 Sharing the table is what keeps `o` meaning the same thing in both; splitting the spawn is what keeps the app from blocking for as long as a note stays open. `boundaries.test.ts` asserts both halves — that neither interface carries an editor table, and that each one spawns its own way.
 
+The same split runs through everything `host` holds. Each row below is one question with one answer, and each was in an interface before a second one needed it:
+
+| In `host` | Left to each interface |
+|---|---|
+| `RATING_KEYS`, `interpretKey` — what `3` does, whether `escape` quits | drawing a legend in ANSI or in CSS |
+| `resolveEditor`, `editorCommand` — which program `o` opens | the `spawn`, which is a TTY contract in one and not in the other |
+| `OpenedNotes` — the mtime-at-open record | the sentence that reports it |
+| `summaryFields` — which counts a sync reports, in order | `", "` versus a grid |
+| `deferralReason` — why a file was left alone | what to do about it (`geode sync` versus a button) |
+| `PHASE_LABEL` — what `scan`/`prune`/`ingest` are called | where the bar goes |
+
+The failure mode these prevent is not a crash. It is two interfaces that each stay perfectly self-consistent while disagreeing with each other, which no test catches and no user reports as a bug.
+
 ## Three types cross the boundaries
 
 ```ts

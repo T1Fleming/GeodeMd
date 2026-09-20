@@ -1,11 +1,15 @@
 import { describe, expect, it } from "vitest";
 import {
   ACTION_KEYS,
+  deferralReason,
   emptyCounts,
   interpretKey,
+  PHASE_LABEL,
   RATING_KEYS,
   ratingBreakdown,
+  summaryFields,
 } from "./present.js";
+import type { SyncSummary } from "../core/index.js";
 
 describe("interpretKey", () => {
   it("maps 1-4 to ratings", () => {
@@ -67,5 +71,110 @@ describe("ratingBreakdown", () => {
 
   it("is empty for a session with no answers in it", () => {
     expect(ratingBreakdown(emptyCounts())).toEqual([]);
+  });
+});
+
+const summary = (over: Partial<SyncSummary> = {}): SyncSummary => ({
+  filesEnumerated: 10,
+  filesUnchanged: 9,
+  filesRead: 1,
+  filesDeferred: 0,
+  filesStamped: 0,
+  cardsFound: 3,
+  cardsNew: 1,
+  cardsUpdated: 0,
+  cardsPruned: 0,
+  reconciled: false,
+  duplicatesReminted: 0,
+  symlinkedDirsSkipped: 0,
+  logShardsSkipped: 0,
+  logBytesRead: 0,
+  reviewsIngested: 0,
+  filesSkippedOnError: 0,
+  logLinesSkipped: 0,
+  elapsedMs: 4,
+  ...over,
+});
+
+const keys = (s: SyncSummary): string[] => summaryFields(s).map((f) => f.key);
+
+describe("summaryFields", () => {
+  it("always reports the core counts, even at zero", () => {
+    // `0 updated` earns its place: it is how you tell a run that found nothing
+    // to do from one that did not look.
+    expect(keys(summary())).toEqual([
+      "filesEnumerated",
+      "filesUnchanged",
+      "filesRead",
+      "cardsFound",
+      "cardsNew",
+      "cardsUpdated",
+    ]);
+  });
+
+  it("stays quiet about incidentals at zero", () => {
+    expect(keys(summary())).not.toContain("cardsPruned");
+    expect(keys(summary())).not.toContain("filesDeferred");
+  });
+
+  it("surfaces a skipped file, which the exit code deliberately does not", () => {
+    // A skip exits 0 on purpose, so the summary is the ONLY place it appears.
+    const fields = summaryFields(summary({ filesSkippedOnError: 2 }));
+    expect(fields).toContainEqual({
+      key: "filesSkippedOnError",
+      label: "files skipped on error",
+      value: 2,
+    });
+  });
+
+  it("puts filesStamped ahead of the other incidentals", () => {
+    // On a dry run it is the number being decided on — how many of the user's
+    // notes this edits — and `cardsNew` does not answer that.
+    const ks = keys(summary({ filesStamped: 3, cardsPruned: 1, reviewsIngested: 5 }));
+    expect(ks.indexOf("filesStamped")).toBeLessThan(ks.indexOf("cardsPruned"));
+    expect(ks.indexOf("filesStamped")).toBeLessThan(ks.indexOf("reviewsIngested"));
+  });
+
+  it("marks unchanged and read as a breakdown of files, and nothing else", () => {
+    // The mark is what lets the CLI write `10 files (9 unchanged, 1 read)`
+    // without hard-coding the relationship in two places.
+    const detail = summaryFields(summary({ cardsPruned: 2 })).filter((f) => f.detail);
+    expect(detail.map((f) => f.key)).toEqual(["filesUnchanged", "filesRead"]);
+  });
+
+  it("keeps a detail next to the field it breaks down", () => {
+    const ks = keys(summary());
+    expect(ks[ks.indexOf("filesUnchanged") - 1]).toBe("filesEnumerated");
+  });
+});
+
+describe("deferralReason", () => {
+  it("says nothing when nothing was deferred", () => {
+    expect(deferralReason(summary())).toBeNull();
+  });
+
+  it("explains why, because the counts alone read as a bug", () => {
+    const note = deferralReason(summary({ filesDeferred: 1, cardsNew: 0 }))!;
+    expect(note).toContain("1 file was");
+    expect(note).toContain("in case you have them open");
+  });
+
+  it("agrees with itself about plurals", () => {
+    expect(deferralReason(summary({ filesDeferred: 2 }))!).toContain("2 files were");
+  });
+
+  it("leaves what to do about it to the interface", () => {
+    // The CLI appends "run `geode sync` again"; a window with a Sync button
+    // must not say that, which is the whole reason this stops short.
+    expect(deferralReason(summary({ filesDeferred: 1 }))!).not.toContain("geode");
+  });
+});
+
+describe("PHASE_LABEL", () => {
+  it("names every phase core can report", () => {
+    // A missing one renders as `undefined` in a progress bar, which is how a
+    // new phase would announce itself.
+    expect(Object.keys(PHASE_LABEL).sort()).toEqual(["ingest", "prune", "scan"]);
+    for (const label of Object.values(PHASE_LABEL)) expect(label).not.toBe("");
   });
 });

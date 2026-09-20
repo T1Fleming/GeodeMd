@@ -38,6 +38,28 @@ body {
 
 .app { min-height: 100vh; display: flex; flex-direction: column; }
 
+/* --- moving between screens ------------------------------------------- */
+
+/* A strip rather than a sidebar: reviewing is the job, and the other two
+   screens are things you visit and leave. */
+.tabs {
+  display: flex;
+  gap: 0.25rem;
+  padding: 0.5rem 2rem 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.tab {
+  border: none;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  color: var(--muted);
+  padding: 0.5rem 0.75rem;
+}
+
+.tab:hover { border-color: transparent; color: var(--ink); }
+.tab.on { color: var(--ink); border-bottom-color: var(--accent); }
+
 .review {
   flex: 1;
   display: grid;
@@ -166,3 +188,97 @@ code { font-family: ui-monospace, monospace; font-size: 0.9em; }
   opacity: 0.9;
   cursor: pointer;
 }
+
+/* --- sync and collection ---------------------------------------------- */
+
+/* Same column as the review screen, so moving between tabs does not shift
+   the text sideways. */
+.screen {
+  flex: 1;
+  max-width: 44rem;
+  width: 100%;
+  margin: 0 auto;
+  padding: 2rem;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.screen h2 { margin: 0; font-size: 1.375rem; font-weight: 600; }
+.lead { margin: 0; max-width: 34rem; }
+.small { font-size: 0.8125rem; }
+
+.controls { display: flex; align-items: center; gap: 0.5rem; }
+.check { display: flex; align-items: center; gap: 0.4rem; color: var(--muted); font-size: 0.875rem; }
+
+button.primary { border-color: var(--accent); color: var(--accent); }
+button:disabled { opacity: 0.45; cursor: default; }
+button:disabled:hover { border-color: var(--line); }
+button.quiet { border-color: transparent; color: var(--muted); padding-left: 0; }
+button.quiet:hover { color: var(--ink); border-color: transparent; }
+
+/* --- the bar ----------------------------------------------------------- */
+
+.progress { width: 100%; display: flex; flex-direction: column; gap: 0.5rem; }
+.progress p { margin: 0; font-size: 0.875rem; }
+
+.bar {
+  width: 100%;
+  height: 6px;
+  background: var(--line);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+/* Width is the only thing that animates. A bar that also fades or pulses
+   reads as activity even when the number behind it has stopped moving. */
+.fill { height: 100%; background: var(--accent); transition: width 120ms linear; }
+
+/* --- what a run did ---------------------------------------------------- */
+
+.summary { width: 100%; display: flex; flex-direction: column; gap: 0.75rem; }
+
+.fields {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.5rem;
+  align-items: baseline;
+}
+
+.field { display: flex; align-items: baseline; gap: 0.35rem; }
+.field dt { margin: 0; font-size: 1.125rem; font-variant-numeric: tabular-nums; }
+.field dd { margin: 0; color: var(--muted); font-size: 0.875rem; }
+
+/* A breakdown of the field before it, so it must not read as a peer of one. */
+.field.detail dt { font-size: 0.9375rem; color: var(--muted); }
+.field.detail dd { font-size: 0.8125rem; }
+
+.dry { margin: 0; color: var(--accent); font-size: 0.9375rem; }
+.deferred { margin: 0; color: var(--muted); font-size: 0.875rem; max-width: 34rem; }
+.refused { margin: 0; color: var(--muted); font-size: 0.875rem; }
+.error.inline { padding: 0; font-family: inherit; font-size: 0.9375rem; }
+
+/* --- rebuild ----------------------------------------------------------- */
+
+/* Pushed to the bottom and given a rule above it: it is not one of the
+   buttons you reach for, and it should not sit in the same row as one. */
+.rebuild { margin-top: auto; padding-top: 1rem; border-top: 1px solid var(--line); width: 100%; }
+.confirm { display: flex; flex-direction: column; gap: 0.75rem; }
+.confirm p { margin: 0; max-width: 34rem; font-size: 0.9375rem; color: var(--muted); }
+
+/* --- the collection ---------------------------------------------------- */
+
+/* Bottom-aligned, so the labels sit on one line even though `due now` is set
+   larger than `cards in total`. Aligned at the top instead, the emphasis
+   makes the row look ragged rather than ranked. */
+.tiles { display: flex; flex-wrap: wrap; gap: 2rem; align-items: end; }
+.tile { display: flex; flex-direction: column; gap: 0.15rem; }
+.tile .value { font-size: 1.75rem; font-variant-numeric: tabular-nums; color: var(--muted); }
+.tile .label { font-size: 0.8125rem; color: var(--muted); }
+
+/* `due now` is the actionable number; `before midnight` is a forecast. The
+   emphasis is the difference between them. */
+.tile.strong .value { color: var(--ink); font-size: 2.25rem; }
+.tile.strong .label { color: var(--ink); }

@@ -10,7 +10,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { Core } from "../../core/index.js";
 import { Store } from "../../store/index.js";
-import type { Result, RunProgress, SyncSummary } from "../ipc.js";
+import type { Result, RunFinished, RunProgress, SyncSummary } from "../ipc.js";
 import { Runner } from "./runs.js";
 
 let notes: string;
@@ -51,20 +51,20 @@ async function write(rel: string, content: string): Promise<void> {
 function makeRunner(): {
   runner: Runner;
   progress: RunProgress[];
-  finished: Array<{ kind: string; result: Result<SyncSummary> }>;
+  finished: RunFinished[];
   tick: () => void;
   done: () => Promise<void>;
 } {
   const progress: RunProgress[] = [];
-  const finished: Array<{ kind: string; result: Result<SyncSummary> }> = [];
+  const finished: RunFinished[] = [];
   let scheduled: (() => void) | null = null;
   let resolveDone: (() => void) | null = null;
 
   const runner = new Runner({
     core,
     emit: (p) => progress.push(p),
-    finish: (_id, kind, result) => {
-      finished.push({ kind, result });
+    finish: (f) => {
+      finished.push(f);
       resolveDone?.();
     },
     now: () => T0,

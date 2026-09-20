@@ -23,6 +23,8 @@ docs/reference/   what to look up: config keys, commands, exit codes.
 
 `README.md` is the front door and stays one: install, quickstart, the command table. Anything longer than a screen becomes a guide and gets linked.
 
+`docs/design/app.md` is the one to read before changing anything under `src/electron/` — the IPC contract's two rules, the single-flight and reconciliation rules for long runs, and why there is no cancel button.
+
 Start at [`docs/design/README.md`](docs/design/README.md): it indexes the subsystem docs and maps the brief's section numbers onto them. `docs/design/phase-1-brief.md` is the original pre-code spec — **historical, do not update it**; when it disagrees with a design doc, the design doc is right.
 
 ## Commands
@@ -73,7 +75,8 @@ src/files/      the only module that touches the filesystem, log included
 src/store/      the only module that touches SQLite
 src/scheduler/  FSRS, with its parameters pinned in source (not inherited from ts-fsrs defaults)
 src/core/       the Core class — sync, ingestLogs, getDueCards, countDue, reviewCard, stats, rebuild
-src/host/       this machine: XDG paths, env, hostname, config, error kinds, review vocabulary, editor resolution
+src/host/       this machine: XDG paths, env, hostname, config, error kinds,
+                shared vocabulary: ratings, editor resolution, summary fields, phases
 src/cli/        argv, review loop, ANSI              one of two interfaces
 src/electron/   window, IPC contract, renderer       the other
 src/index.ts    the public API: re-exports Core, Store, FsrsScheduler, and the parser functions
@@ -89,6 +92,7 @@ Hard rules enforced by `boundaries.test.ts` (know these before moving code betwe
 - `core` never writes to the terminal (`console.*`), never calls `process.exit`/`process.stdout`/`process.stderr`, and never reads `process.env` — it takes everything as arguments, which is what lets one core serve both interfaces.
 - `host` may read ambient machine state — that is its whole job — but never writes to the terminal, because a GUI shares it.
 - `host` owns the review vocabulary (`RATING_KEYS`, `interpretKey`). Neither interface may define its own rating table.
+- `host` owns what a sync summary *says* — `summaryFields` (which counts, in what order), `deferralReason`, and `PHASE_LABEL`. Neither interface may restate the list; the test greps for `duplicate ids re-minted` and `reading review history` outside `host`. What is left to each is layout: the CLI joins with commas and folds `detail` fields into parentheses, the app lays them out as a grid.
 - `host` also owns *which program opens a note* (`resolveEditor`, `editorCommand`, the `+142`/`--goto`/`:142` tables). Neither interface may define its own editor table — the test greps for `--goto` outside `host`. The `spawn` is the opposite case and stays split: `cli/` uses `stdio: "inherit"` and awaits the child because a terminal editor holds the TTY, `electron/` uses `detached: true` and returns at once because a GUI has no TTY and must not block for as long as a note stays open. `host` spawns nothing, which is what keeps it usable from both.
 - `parser` opens no file, touches no database, and calls no clock (`new Date()`/`Date.now()`) — it is pure text-in, cards-out.
 - Only `store/` imports `better-sqlite3` or contains raw SQL.

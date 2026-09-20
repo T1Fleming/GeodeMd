@@ -86,11 +86,22 @@ export interface RunProgress {
   phase: SyncPhase;
   done: number;
   total: number;
+  /**
+   * Carried on the event rather than remembered by whoever started the run.
+   *
+   * A window that reloads mid-sync, or a second window that joined one, learns
+   * about the run entirely from `run/status` and these events. Without this it
+   * would have to guess, and the guess it would make — "a run I did not start
+   * is a real one" — is the one that tells the user their notes were rewritten
+   * when they were not.
+   */
+  dryRun: boolean;
 }
 
 export interface RunFinished {
   runId: string;
   kind: "sync" | "rebuild";
+  dryRun: boolean;
   result: Result<SyncSummary>;
 }
 

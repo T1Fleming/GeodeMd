@@ -54,7 +54,7 @@ async function ensureCore(): Promise<Core> {
   runner = new Runner({
     core: it.core,
     emit: (p) => win?.webContents.send(CH.runProgress, p),
-    finish: (runId, kind, result) => win?.webContents.send(CH.runFinished, { runId, kind, result }),
+    finish: (f) => win?.webContents.send(CH.runFinished, f),
   });
   return core;
 }

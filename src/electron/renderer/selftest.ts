@@ -33,6 +33,24 @@ async function key(k: string): Promise<void> {
 
 const text = (sel: string): string => document.querySelector(sel)?.textContent?.trim() ?? "";
 const exists = (sel: string): boolean => document.querySelector(sel) !== null;
+const all = (sel: string): string[] =>
+  Array.from(document.querySelectorAll(sel)).map((e) => e.textContent?.trim() ?? "");
+
+/** A real click on the element whose text matches — the way a person does it. */
+async function click(sel: string, label: string): Promise<void> {
+  const el = Array.from(document.querySelectorAll(sel)).find((e) =>
+    (e.textContent ?? "").toLowerCase().includes(label.toLowerCase()),
+  );
+  if (!el) throw new Error(`no ${sel} matching "${label}"`);
+  (el as HTMLElement).click();
+  await settle();
+}
+
+/** Wait for something to appear rather than for a timer. */
+async function until(sel: string, tries = 60): Promise<boolean> {
+  for (let i = 0; i < tries && !exists(sel); i++) await settle(50);
+  return exists(sel);
+}
 
 export async function runSelfTest(): Promise<void> {
   try {
@@ -114,6 +132,9 @@ export async function runSelfTest(): Promise<void> {
     );
     await shot("review-03-done");
 
+    await runSyncChecks();
+    await runStatsChecks();
+
     const failed = results.some((r) => r.includes("FAIL"));
     console.log(["SELFTEST", ...results].join("\n"));
     console.log(`SELFTEST done — ${failed ? "FAIL" : "all ok"}`);
@@ -123,4 +144,83 @@ export async function runSelfTest(): Promise<void> {
     console.log(["SELFTEST", ...results].join("\n"));
     console.log(`SELFTEST done — FAIL: ${err instanceof Error ? err.message : String(err)}`);
   }
+}
+
+/**
+ * The sync screen.
+ *
+ * A five-file collection syncs in milliseconds, so the bar itself is gone
+ * before a screenshot could catch it — which is exactly why the interesting
+ * check here is not the bar but the RECONCILIATION: leaving the screen and
+ * coming back has to find the finished run through `run/status`, because the
+ * event that announced it is long gone.
+ */
+async function runSyncChecks(): Promise<void> {
+  await click(".tabs .tab", "Sync");
+  check("the sync screen opens", exists(".screen") && exists(".rebuild"), text(".screen h2"));
+
+  // Preview first — the button says Preview rather than "dry run" because the
+  // number that matters is how many of the user's notes this would edit.
+  await click(".controls button", "Preview");
+  check("a preview reports back", await until(".summary"), "");
+  check("and says plainly that nothing was written", exists(".dry"), text(".dry"));
+  check("the counts are shown", all(".field dd").length >= 6, all(".field dd").join(" / "));
+  await shot("sync-01-preview");
+
+  await click(".controls button", "Sync");
+  check("a real sync reports back", await until(".summary"), "");
+  for (let i = 0; i < 40 && exists(".dry"); i++) await settle(50);
+  check("and is not labelled a preview", !exists(".dry"), text(".summary"));
+  await shot("sync-02-done");
+
+  // Leave and come back. The finish event fired while this screen was mounted
+  // the FIRST time; finding the result again can only happen by asking.
+  await click(".tabs .tab", "Collection");
+  await click(".tabs .tab", "Sync");
+  check(
+    "a remounted screen recovers the result it did not witness",
+    await until(".summary"),
+    text(".summary .field dd"),
+  );
+
+  // Rebuild is deliberately two clicks and a sentence. The confirmation is
+  // asserted; the rebuild itself is NOT run, because on a real collection it
+  // is minutes and a harness that takes minutes stops being run.
+  await click(".rebuild button", "Rebuild");
+  check("rebuild asks first", exists(".confirm"), text(".confirm p"));
+  check(
+    "and says what it costs and what it does not",
+    text(".confirm p").includes("Nothing durable is lost") &&
+      text(".confirm p").includes("minutes"),
+    text(".confirm p"),
+  );
+  await shot("sync-03-rebuild-confirm");
+  await click(".confirm button", "Cancel");
+  check("and can be backed out of", !exists(".confirm"));
+
+  // There is no cancel button on a running job, deliberately: core takes no
+  // AbortSignal, so a cancel would either lie or corrupt.
+  check("no cancel button is offered for a run", !all("button").some((b) => b === "Cancel"));
+}
+
+/** The collection screen. Four numbers, two of which are deliberately quieter. */
+async function runStatsChecks(): Promise<void> {
+  await click(".tabs .tab", "Collection");
+  check("the collection screen opens", await until(".tiles"), text(".screen h2"));
+
+  const labels = all(".tile .label");
+  check("all four counts are shown", labels.length === 4, labels.join(" / "));
+  // `due` is an instant, so "due today" is ambiguous — due now is the
+  // actionable number and the forecast is a separate line.
+  check(
+    "due now and the midnight forecast are separate",
+    labels.includes("due now") && labels.includes("due before midnight"),
+    labels.join(" / "),
+  );
+  check(
+    "the numbers are numbers",
+    all(".tile .value").every((v) => /^\d+$/.test(v)),
+    all(".tile .value").join(" / "),
+  );
+  await shot("stats-01");
 }
