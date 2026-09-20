@@ -36,6 +36,18 @@ All of it stays small enough to run in the default suite, because a suite people
 
 ## What is deliberately not automated
 
-Two measurements decide open questions rather than guard invariants, and both must record **cold and warm separately** rather than pretending there is one number: a million-file enumeration (which decides whether [sync](sync.md) step 1 stays a walk), and a million-review rebuild (which decides whether the bulk-load escape hatch is needed).
+Two measurements decide open questions rather than guard invariants, and both must record **cold and warm separately** rather than pretending there is one number: a large-tree enumeration (which decides whether [sync](sync.md) step 1 stays a walk), and a million-review rebuild (which decides whether the bulk-load escape hatch is needed).
 
 Dropping the filesystem cache needs `sudo purge` on macOS, so these are commands a human runs, not something CI can fake.
+
+The enumeration one is now written — `src/files/enumerate.bench.test.ts`, gated so the default suite never runs it:
+
+```sh
+GEODE_BENCH=1 npx vitest run src/files/enumerate.bench.test.ts
+GEODE_BENCH=1 GEODE_BENCH_FILES=80000 npx vitest run src/files/enumerate.bench.test.ts
+GEODE_BENCH=1 GEODE_BENCH_TREE=/path/to/a/real/vault npx vitest run src/files/enumerate.bench.test.ts
+```
+
+It runs every strategy in **one process against one tree**, because the figures that turned out to be wrong came from a different machine on a different day. It uses two tree shapes — 100 files per directory and 4 — because the narrow one is what a vault of topic folders looks like and is where per-directory concurrency collapses; reporting only the wide shape would be the flattering version of the benchmark. Median of five runs after a discarded warm-up, since one page-cache miss skews a mean.
+
+**The file-descriptor question is deliberately not a test.** A bounded pool cannot exhaust descriptors by construction, a suite that must stay around a second cannot prove it honestly, and mocking `fs` would contradict a repo that has no mocks anywhere. Run the suite under `ulimit -n 128` by hand instead — that is the available evidence, and it passes.
