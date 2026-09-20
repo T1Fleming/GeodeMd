@@ -18,6 +18,7 @@ import {
   initConfig,
   InitRefused,
   newId,
+  ensureConfig,
   readConfig,
 } from "./config.js";
 import { ID_PATTERN } from "../parser/index.js";
@@ -159,6 +160,75 @@ describe("init", () => {
     const bad = path.join(dir, "bad.json");
     await fs.writeFile(bad, "{ not json", "utf8");
     expect(await readConfig(bad)).toBeNull();
+  });
+});
+
+describe("ensureConfig", () => {
+  /** A config written by hand, or by an older version, with no device. */
+  async function withoutDevice(): Promise<string> {
+    const file = path.join(dir, "config.json");
+    await fs.writeFile(file, JSON.stringify({ notesPath: dir }), "utf8");
+    return file;
+  }
+
+  it("readConfig alone hands out a different device every time", async () => {
+    // The bug ensureConfig exists to fix, pinned so it cannot come back
+    // disguised as a refactor.
+    const file = await withoutDevice();
+    const a = await readConfig(file);
+    const b = await readConfig(file);
+    expect(a!.device).not.toBe(b!.device);
+  });
+
+  it("mints a device once and persists it", async () => {
+    const file = await withoutDevice();
+    const first = await ensureConfig(file);
+    const second = await ensureConfig(file);
+    expect(second!.device).toBe(first!.device);
+
+    // On disk, not just in the return value — the next process must agree.
+    const onDisk = JSON.parse(await fs.readFile(file, "utf8")) as { device?: string };
+    expect(onDisk.device).toBe(first!.device);
+  });
+
+  it("leaves an existing device alone and writes nothing", async () => {
+    const file = path.join(dir, "config.json");
+    await fs.writeFile(file, JSON.stringify({ notesPath: dir, device: "fixed-abcd" }), "utf8");
+    const before = await fs.stat(file);
+    expect((await ensureConfig(file))!.device).toBe("fixed-abcd");
+    expect((await fs.stat(file)).mtimeMs).toBe(before.mtimeMs);
+  });
+
+  it("leaves exactly one device behind when two heals race, and settles after", async () => {
+    // Both mint a name and both write. The guarantee is about the FILE: it ends
+    // up with one device and every later read agrees. A loser may still use the
+    // name it minted for its own session — see ensureConfig's comment for why
+    // closing that is not worth an election.
+    const file = await withoutDevice();
+    const [a, b] = await Promise.all([ensureConfig(file), ensureConfig(file)]);
+    expect(a!.device).toBeTruthy();
+    expect(b!.device).toBeTruthy();
+
+    const onDisk = JSON.parse(await fs.readFile(file, "utf8")) as { device?: string };
+    expect(onDisk.device).toBeTruthy();
+    // One of them won, and no third name was invented.
+    expect([a!.device, b!.device]).toContain(onDisk.device);
+
+    // Settled: every subsequent reader agrees, which is what the log layout
+    // actually needs.
+    expect((await ensureConfig(file))!.device).toBe(onDisk.device);
+    expect((await ensureConfig(file))!.device).toBe(onDisk.device);
+  });
+
+  it("does not leave temp files behind", async () => {
+    const file = await withoutDevice();
+    await Promise.all([ensureConfig(file), ensureConfig(file)]);
+    const strays = (await fs.readdir(dir)).filter((n) => n.endsWith(".tmp"));
+    expect(strays).toEqual([]);
+  });
+
+  it("is null for a missing config, like readConfig", async () => {
+    expect(await ensureConfig(path.join(dir, "nope.json"))).toBeNull();
   });
 });
 

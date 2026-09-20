@@ -24,7 +24,7 @@ import {
   initConfig,
   InitRefused,
   newId,
-  readConfig,
+  ensureConfig,
 } from "./config.js";
 import type { FileConfig } from "./config.js";
 import { openInEditor, resolveEditor } from "./editor.js";
@@ -145,7 +145,10 @@ export function interpretKey(key: string): KeyAction {
 
 async function openCore(): Promise<{ core: Core; store: Store; config: FileConfig }> {
   const file = configPath();
-  const config = await readConfig(file);
+  // `ensureConfig`, not `readConfig`: everything reached through here can write
+  // a review log, and a config with no `device` would otherwise hand out a
+  // fresh name on every read.
+  const config = await ensureConfig(file);
   if (!config) {
     throw new ConfigError(`no config at ${file} — run \`geode init <path>\` first`);
   }

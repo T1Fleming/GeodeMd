@@ -60,28 +60,94 @@ export function defaultDevice(hostname = os.hostname()): string {
   return `${slug}-${nanoid4()}`;
 }
 
-export async function readConfig(file: string): Promise<FileConfig | null> {
+/** The file as written, before defaults. Null when absent or unusable. */
+async function readRaw(file: string): Promise<Partial<FileConfig> | null> {
   try {
     const raw = await fs.readFile(file, "utf8");
     const parsed = JSON.parse(raw) as Partial<FileConfig>;
     if (typeof parsed.notesPath !== "string") return null;
-    const config: FileConfig = {
-      notesPath: parsed.notesPath,
-      device: typeof parsed.device === "string" ? parsed.device : defaultDevice(),
-      dbPath: typeof parsed.dbPath === "string" ? parsed.dbPath : defaultDbPath(),
-    };
-    if (typeof parsed.editor === "string" && parsed.editor.trim() !== "") {
-      config.editor = parsed.editor;
-    }
-    return config;
+    return parsed;
   } catch {
     return null;
   }
 }
 
+function fill(parsed: Partial<FileConfig> & { notesPath: string }): FileConfig {
+  const config: FileConfig = {
+    notesPath: parsed.notesPath,
+    device: typeof parsed.device === "string" ? parsed.device : defaultDevice(),
+    dbPath: typeof parsed.dbPath === "string" ? parsed.dbPath : defaultDbPath(),
+  };
+  if (typeof parsed.editor === "string" && parsed.editor.trim() !== "") {
+    config.editor = parsed.editor;
+  }
+  return config;
+}
+
+/**
+ * A pure read. Defaults are filled but NOT persisted, so a file with no
+ * `device` yields a different name on every call. Callers about to write a
+ * review log want `ensureConfig` instead.
+ */
+export async function readConfig(file: string): Promise<FileConfig | null> {
+  const raw = await readRaw(file);
+  return raw ? fill(raw as Partial<FileConfig> & { notesPath: string }) : null;
+}
+
+/**
+ * Read, and persist anything that had to be defaulted.
+ *
+ * `device` is why this exists. It defaults to a slug plus a RANDOM suffix, so a
+ * config without one hands out a different name on every read — and section
+ * 5a's log layout rests on one writer per file. With a single interface that
+ * was invisible, because `init` always writes a device. With two it is
+ * reachable: the CLI and the app read the same file, mint different names, and
+ * append to two shards. Nothing is lost, since ingest reads every `.jsonl`, but
+ * the invariant the layout leans on is quietly gone.
+ *
+ * Two writers healing at the same instant each mint a name and race. The write
+ * is atomic and the result is re-read, so the FILE always ends up with exactly
+ * one device and every later read agrees. The one thing not guaranteed is that
+ * a loser notices within its own session: it may use the name it minted until
+ * it next reads the file.
+ *
+ * That residue is deliberate. Closing it needs an election — a lock file — and
+ * the cost is wrong for the exposure: it requires two interfaces to heal the
+ * same device-less config within milliseconds of each other, exactly once in
+ * that config's life, and the consequence is one session's reviews landing in a
+ * shard named by the losing device. Ingest reads every `.jsonl`, so nothing is
+ * lost and the next run converges. Weigh that against the bug being fixed here,
+ * which was every read minting a new name, forever.
+ */
+export async function ensureConfig(file: string): Promise<FileConfig | null> {
+  const raw = await readRaw(file);
+  if (!raw) return null;
+  const parsed = raw as Partial<FileConfig> & { notesPath: string };
+  if (typeof parsed.device === "string") return fill(parsed);
+
+  const healed = fill(parsed);
+  await writeConfig(file, healed);
+  const after = await readRaw(file);
+  return after ? fill(after as Partial<FileConfig> & { notesPath: string }) : healed;
+}
+
+/** Unique per call, not merely per process — see `writeConfig`. */
+let tmpSeq = 0;
+
+/**
+ * Temp file plus rename, so a config is never observed half-written and two
+ * writers healing a missing `device` produce one winner rather than an
+ * interleaved file.
+ *
+ * The temp name needs the counter as well as the pid. Two concurrent calls
+ * inside ONE process would otherwise pick the same path, and the second rename
+ * fails with ENOENT because the first already moved it away.
+ */
 export async function writeConfig(file: string, config: FileConfig): Promise<void> {
   await fs.mkdir(path.dirname(file), { recursive: true });
-  await fs.writeFile(file, `${JSON.stringify(config, null, 2)}\n`, "utf8");
+  const tmp = `${file}.${process.pid}-${tmpSeq++}.tmp`;
+  await fs.writeFile(tmp, `${JSON.stringify(config, null, 2)}\n`, "utf8");
+  await fs.rename(tmp, file);
 }
 
 export class InitRefused extends Error {}
