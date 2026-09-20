@@ -54,6 +54,15 @@ export interface SyncSummary {
   filesRead: number;
   filesDeferred: number;
   /**
+   * Files that look like a file syncer's conflict copy, and were left alone.
+   *
+   * Reported rather than silently skipped, because the situation needs a name:
+   * a user who sees this line knows exactly what happened, and a user whose
+   * folder was quietly half-read does not. Counting what was skipped is what
+   * `filesSkippedOnError` and `symlinkedDirsSkipped` already do.
+   */
+  filesSyncConflict: number;
+  /**
    * Files this run wrote a stamp into — or WOULD have, under `dryRun`.
    *
    * The count that answers "how many of my notes does this edit", which
@@ -96,6 +105,7 @@ function emptySummary(): SyncSummary {
     filesUnchanged: 0,
     filesRead: 0,
     filesDeferred: 0,
+    filesSyncConflict: 0,
     filesStamped: 0,
     cardsFound: 0,
     cardsNew: 0,
@@ -170,10 +180,25 @@ export class Core {
       if (row) {
         hits++;
         if (row.rowid <= maxRowidBefore) seen[row.rowid >> 3]! |= 1 << (row.rowid & 7);
-        if (!opts.full && row.mtime_ms === cand.mtimeMs && row.size === cand.size) {
-          summary.filesUnchanged++;
-          continue;
-        }
+      }
+
+      // Step 2a: a syncer's conflict copy. Counted BEFORE the unchanged check,
+      // so the line appears on every sync rather than only the first — the
+      // situation persists until the user deals with the file, and a warning
+      // that shows once is a warning that gets missed.
+      //
+      // After the `seen` bookkeeping, not before: marking it keeps step 6 from
+      // treating the cards of an already-synced conflict copy as vanished.
+      // This change stops NEW duplicates; it deliberately does not delete
+      // anything a previous sync already created.
+      if (files.isSyncConflict(cand.relPath)) {
+        summary.filesSyncConflict++;
+        continue;
+      }
+
+      if (row && !opts.full && row.mtime_ms === cand.mtimeMs && row.size === cand.size) {
+        summary.filesUnchanged++;
+        continue;
       }
 
       // Step 3: read and parse.

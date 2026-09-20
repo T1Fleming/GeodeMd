@@ -34,15 +34,23 @@ This is the case to be careful about, because it half works.
 
 That much is deliberate — the layout was designed so a second machine is additive rather than a migration.
 
-**What does not.** Your *notes* have no such protection. If a file syncer produces a conflict copy — `note.sync-conflict-20260101.md`, `note (conflicted copy).md` — GeodeMD reads it as a new file and **mints a fresh card for every stamped line in it**, then writes those stamps into the copy. You get duplicate cards with separate histories.
+**What does not, automatically.** Your *notes* have no dedupe key. A conflict copy is a byte copy, so every card in it already carries an ID — and a fresh ID minted into the copy would give you a duplicate of every card in that note, with its own empty history.
 
-Nothing filters those out, because which pattern to filter depends on which tool you use, and GeodeMD does not know.
+**GeodeMD now leaves recognised conflict copies alone and tells you it did** ([ADR 0019](../decisions/0019-report-sync-conflict-copies.md)). A sync that finds one says so:
 
-**So, if you sync your notes folder between machines:**
+```
+412 files (410 unchanged, 2 read), 8 cards found, 0 new, 0 updated, 1 sync conflicts left alone — 31ms
+```
+
+It recognises Syncthing's `note.sync-conflict-20260101-120000-ABCDEFG.md` and the `(conflicted copy …)` form Dropbox and Nextcloud use. It deliberately does **not** recognise `note 2.md` or `note (1).md` — iCloud and Google Drive really do name conflicts that way, and so do a great many people naming files on purpose. Silently ignoring a note you meant to keep is a worse failure than a duplicate card, which is at least visible.
+
+So the copy is still there, still holding your other version, and still yours to resolve. Nothing about it has been changed.
+
+**If you sync your notes folder between machines:**
 
 - Sync when GeodeMD is not running on either side.
-- Resolve conflict copies **before** running `geode sync`, not after.
-- If a conflict copy does get synced, delete it and run `geode sync` again — the duplicate cards disappear with the file. Their history stays in the log, harmlessly, referring to IDs nothing points at any more.
+- When a sync reports conflicts left alone, deal with them: merge whichever changes you want into the real note and delete the copy.
+- **If duplicates predate this** — a conflict copy that was synced before GeodeMD started skipping them — delete the copy and run `geode sync` again. The duplicate cards disappear with the file. Their history stays in the log, harmlessly, referring to IDs nothing points at any more. GeodeMD will not clean these up for you: telling which of two cards holding the same question is the real one is not a judgement it can make.
 
 ## What about reviewing on both machines?
 

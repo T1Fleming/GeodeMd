@@ -133,6 +133,7 @@ export function summaryFields(s: SyncSummary): SummaryField[] {
     ["filesStamped", "files stamped"],
     ["cardsPruned", "pruned"],
     ["filesDeferred", "deferred"],
+    ["filesSyncConflict", "sync conflicts left alone"],
     ["duplicatesReminted", "duplicate ids re-minted"],
     ["symlinkedDirsSkipped", "symlinked dirs skipped"],
     ["reviewsIngested", "reviews ingested"],

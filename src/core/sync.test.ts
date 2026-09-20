@@ -521,3 +521,111 @@ describe("prune", () => {
     expect(store.countNew()).toBe(0);
   });
 });
+
+/**
+ * A file syncer's conflict copy (ADR 0019).
+ *
+ * Reachable by anyone whose notes directory is synced by Dropbox, Syncthing,
+ * iCloud or similar. The copy is byte-identical, so every card in it already
+ * carries a stamp; without the skip, section 4's copy-versus-move check finds
+ * those ids still present in the original, classifies each as a copy, and
+ * mints a fresh id into the conflict file — duplicating every card in the
+ * note, each with its own empty history.
+ */
+describe("sync conflict copies", () => {
+  const CONFLICT = "a.sync-conflict-20260101-120000-ABCDEFG.md";
+
+  it("does not mint a second id for every card in the copy", async () => {
+    await write("a.md", "Q1 :: A1\nQ2 :: A2\n");
+    await core.sync(T0);
+    const stamped = await read("a.md");
+    expect(store.countCards()).toBe(2);
+
+    // What a syncer does: the same bytes, under a second name.
+    await write(CONFLICT, stamped);
+    const s = await core.sync(T0);
+
+    expect(s.filesSyncConflict).toBe(1);
+    expect(store.countCards()).toBe(2);
+    expect(s.cardsNew).toBe(0);
+    expect(s.duplicatesReminted).toBe(0);
+  });
+
+  it("leaves the copy's bytes untouched", async () => {
+    await write("a.md", "Q :: A\n");
+    await core.sync(T0);
+    const stamped = await read("a.md");
+
+    await write(CONFLICT, stamped);
+    await core.sync(T0);
+    // Not stamped, not rewritten — the user's file is exactly as the syncer
+    // left it, which is what makes deleting it a safe thing to advise.
+    expect(await read(CONFLICT)).toBe(stamped);
+  });
+
+  it("does not disturb the original or its history", async () => {
+    await write("a.md", "Q :: A\n");
+    await core.sync(T0);
+    const id = core.getDueCards(T0, 1)[0]!.id;
+    await core.reviewCard(id, 3, T0);
+
+    await write(CONFLICT, await read("a.md"));
+    await core.sync(T0);
+
+    expect(store.getCard(id)!.file_path).toBe("a.md");
+    expect(store.getState(id)!.reps).toBe(1);
+  });
+
+  it("reports the count on every sync, not only the first", async () => {
+    // The file is still there until the user deals with it, and a warning
+    // shown once is a warning that gets missed.
+    await write("a.md", "Q :: A\n");
+    await core.sync(T0);
+    await write(CONFLICT, await read("a.md"));
+
+    expect((await core.sync(T0)).filesSyncConflict).toBe(1);
+    expect((await core.sync(T0)).filesSyncConflict).toBe(1);
+  });
+
+  it("counts it as a conflict rather than as unchanged", async () => {
+    // It would otherwise be swallowed by the mtime cache on the second run,
+    // and the line the user needs would disappear.
+    await write("a.md", "Q :: A\n");
+    await core.sync(T0);
+    await write(CONFLICT, await read("a.md"));
+    await core.sync(T0);
+
+    const s = await core.sync(T0);
+    expect(s.filesSyncConflict).toBe(1);
+    expect(s.filesUnchanged).toBe(1); // the original, not the copy
+  });
+
+  it("still enumerates it, so nothing is pruned by its absence", async () => {
+    await write("a.md", "Q :: A\n");
+    await write(CONFLICT, "Q :: A\n");
+    const s = await core.sync(T0);
+
+    expect(s.filesEnumerated).toBe(2);
+    expect(s.cardsPruned).toBe(0);
+    expect(store.countCards()).toBe(1);
+  });
+
+  it("does not read it, so its cards are not counted as found", async () => {
+    await write("a.md", "Q :: A\n");
+    await write(CONFLICT, "Q :: A\nExtra :: card\n");
+    const s = await core.sync(T0);
+
+    expect(s.cardsFound).toBe(1);
+    expect(s.filesRead).toBe(1);
+  });
+
+  it("leaves an ordinary file that merely looks similar alone", async () => {
+    // The guard against over-matching: these are real names people use.
+    await write("a 2.md", "Q :: A\n");
+    await write("b (1).md", "Q2 :: A2\n");
+    const s = await core.sync(T0);
+
+    expect(s.filesSyncConflict).toBe(0);
+    expect(store.countCards()).toBe(2);
+  });
+});
