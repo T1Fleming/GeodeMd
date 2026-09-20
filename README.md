@@ -26,7 +26,9 @@ cp -r demo ~/geode-demo && geode init ~/geode-demo && geode sync --dry-run
 
 ## Install
 
-Requires Node 20 or newer. `better-sqlite3` is a native module, so the Node version you build with is the one you must run with — the repo pins it in `.nvmrc`.
+Requires Node 20 or newer, and `.nvmrc` pins **24** — the version this is developed and tested against. `better-sqlite3` is a native module compiled against one Node ABI, so the version you build with is the version you must run with. If you already have a working Node, `npm install` rebuilds it for yours and you can ignore the pin; if you hit `NODE_MODULE_VERSION` errors, matching the pin is the fix.
+
+The desktop app is unaffected by this either way: Electron ships its own Node, and `desktop/postinstall` rebuilds `better-sqlite3` against *that* ABI. See [`desktop/README.md`](desktop/README.md).
 
 ```sh
 git clone https://github.com/T1Fleming/GeodeMd.git

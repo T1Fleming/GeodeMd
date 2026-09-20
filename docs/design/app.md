@@ -106,6 +106,28 @@ npm --prefix desktop start                                     # just run it
 GEODE_SELFTEST=1 npx electron dist/electron/main/index.js      # headless, exits non-zero on failure
 ```
 
+### Reviewing a real session
+
+Worth doing deliberately, and easy to skip: the review screen is covered by unit tests, a self-test driving real keypresses, and screenshots read back — none of which answer **whether it is pleasant to review in**, which is not the kind of thing a test answers.
+
+A throwaway collection, scoped to its own config so it cannot disturb the one you actually use:
+
+```sh
+DEMO=~/geode-demo
+mkdir -p $DEMO/{notes,config,data} && cp -r demo/* $DEMO/notes/
+(cd $DEMO/notes && git init -q . && git add -A && git commit -qm before)
+
+export XDG_CONFIG_HOME=$DEMO/config XDG_DATA_HOME=$DEMO/data
+npm run build && node dist/cli/index.js init $DEMO/notes && node dist/cli/index.js sync
+npm run build:desktop && npm --prefix desktop start
+```
+
+The `XDG_*` variables are the load-bearing part. Without them this writes over the config pointing at your real notes, and `init` preserves `device` — so you would not even get a refusal, you would get your live collection repointed at the demo.
+
+Two seconds of care with mtimes: a freshly copied file is inside the deferral window, so the first sync stamps nothing and reports `0 new`. Either run `sync` twice or backdate with `find $DEMO/notes -name '*.md' -exec touch -A -001000 {} \;`.
+
+`git -C $DEMO/notes diff` afterwards shows exactly what a first sync does to someone's notes, which is the other thing worth seeing once.
+
 The self-test drives every channel against a real database **and** clicks real buttons and presses real keys, because a button wired to the wrong handler passes every API-level check. `console.log("SHOT name")` from the renderer writes `name.png` of the window — the only way to find out whether anything rendered, whether text is legible, or whether a layout collapsed. Screenshots are diagnostic, never fixtures: comparing them byte-for-byte across machines fails on font rendering alone.
 
 Three substitutions keep the harness runnable rather than invasive:

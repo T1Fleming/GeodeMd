@@ -12,7 +12,7 @@ import {
   newId,
   readConfig,
 } from "./config.js";
-import { classify, exitCodeFor } from "./errors.js";
+import { classify, exitCodeFor, isBusy } from "./errors.js";
 import { ConfigError } from "../core/index.js";
 import { ID_PATTERN } from "../parser/index.js";
 
@@ -220,5 +220,42 @@ describe("exit codes", () => {
     expect(classify(new ConfigError("nope"))).toBe("config");
     expect(classify(new InitRefused("nope"))).toBe("init-refused");
     expect(classify(new Error("nope"))).toBe("internal");
+  });
+});
+
+/**
+ * `isBusy` is duck-typed on `.code`, and that is not incidental:
+ * better-sqlite3 throws its own error class, and the *class* is what gets
+ * stripped crossing Electron's IPC while the property survives.
+ */
+describe("isBusy", () => {
+  it("recognises both busy codes SQLite produces", () => {
+    // SQLITE_BUSY_SNAPSHOT is the WAL-specific one and is just as much "try
+    // again later" — matching only the bare code would miss it.
+    expect(isBusy({ code: "SQLITE_BUSY" })).toBe(true);
+    expect(isBusy({ code: "SQLITE_BUSY_SNAPSHOT" })).toBe(true);
+    expect(isBusy({ code: "SQLITE_BUSY_TIMEOUT" })).toBe(true);
+  });
+
+  it("does not treat other SQLite failures as retryable", () => {
+    // A constraint violation is a bug; reporting it as "the database was busy
+    // and will catch up" would swallow it silently.
+    expect(isBusy({ code: "SQLITE_CONSTRAINT" })).toBe(false);
+    expect(isBusy({ code: "SQLITE_CORRUPT" })).toBe(false);
+    expect(isBusy({ code: "SQLITE_READONLY" })).toBe(false);
+  });
+
+  it("survives anything at all being thrown", () => {
+    for (const thrown of [null, undefined, "SQLITE_BUSY", 42, new Error("SQLITE_BUSY"), {}]) {
+      expect(isBusy(thrown), String(thrown)).toBe(false);
+    }
+  });
+
+  it("reads the property rather than the class, which does not survive IPC", () => {
+    // An error whose prototype has been stripped by serialization still has
+    // `.code`, and that is the whole reason this is duck-typed.
+    const plain = JSON.parse(JSON.stringify({ code: "SQLITE_BUSY", message: "locked" })) as unknown;
+    expect(plain).not.toBeInstanceOf(Error);
+    expect(isBusy(plain)).toBe(true);
   });
 });
