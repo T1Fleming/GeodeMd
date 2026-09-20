@@ -105,6 +105,18 @@ Cards are *not* read from fenced or indented code blocks, inline code spans, tab
 
 Lines keep their own terminators end to end (`splitLines` splits *after* the newline), which is how a CRLF file stays CRLF and a file with no trailing newline keeps that too.
 
+## Seeing the Electron app
+
+`npm run build:desktop`, then from `desktop/`:
+
+```sh
+npm start                                   # just run it
+GEODE_SELFTEST=1 npx electron dist/electron/main/index.js   # headless, exits non-zero on failure
+GEODE_SHOT_DIR=/tmp/shots GEODE_SELFTEST=1 npx electron dist/electron/main/index.js
+```
+
+The self-test drives every IPC channel against a real database **and** clicks real buttons, because a button wired to the wrong handler passes every API-level check. `console.log("SHOT name")` from the renderer writes `name.png` of the window — which is the only way to find out whether anything rendered, whether text is legible, or whether a layout collapsed. Screenshots are diagnostic, never fixtures: comparing them byte-for-byte across machines fails on font rendering alone.
+
 ## Things that cost an hour
 
 Not discoverable from the code, and each one presented as something other than what it was.

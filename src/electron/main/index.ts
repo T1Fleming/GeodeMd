@@ -8,6 +8,7 @@
  */
 
 import { app, BrowserWindow, ipcMain } from "electron";
+import { mkdir, writeFile } from "node:fs/promises";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Core } from "../../core/index.js";
@@ -129,9 +130,33 @@ function register(): void {
  */
 const SELFTEST = process.env["GEODE_SELFTEST"] === "1";
 
+/**
+ * Where `SHOT` writes. Defaults next to the build so a stray run cannot
+ * scatter PNGs across someone's home directory.
+ */
+const SHOT_DIR = process.env["GEODE_SHOT_DIR"] ?? path.join(HERE, "..", "..", "shots");
+
+const pendingShots: Array<Promise<void>> = [];
+
+async function captureTo(name: string): Promise<void> {
+  if (!win) return;
+  try {
+    const image = await win.webContents.capturePage();
+    await mkdir(SHOT_DIR, { recursive: true });
+    const file = path.join(SHOT_DIR, `${name}.png`);
+    await writeFile(file, image.toPNG());
+    process.stdout.write(`SHOT saved ${file}\n`);
+  } catch (err) {
+    process.stderr.write(`SHOT failed: ${err instanceof Error ? err.message : String(err)}\n`);
+  }
+}
+
 async function createWindow(): Promise<void> {
   win = new BrowserWindow({
     show: !SELFTEST,
+    // A hidden window still has to paint, or capturePage returns nothing.
+    // This is the default, but it is load-bearing here and silent when wrong.
+    paintWhenInitiallyHidden: true,
     width: 900,
     height: 680,
     webPreferences: {
@@ -145,8 +170,24 @@ async function createWindow(): Promise<void> {
   // a failing self-test look like a silent hang.
   win.webContents.on("console-message", (_e, _level, message) => {
     process.stdout.write(`${message}\n`);
+
+    // `SHOT <name>` writes a PNG of the window.
+    //
+    // The self-test can prove data arrived; it cannot tell whether anything
+    // rendered, whether the text is legible, or whether the layout collapsed.
+    // For a contract that was fine. For a review screen — which is mostly a
+    // claim about how it looks — it is not, and a picture is the only way to
+    // check from outside the app.
+    if (message.startsWith("SHOT ")) {
+      const name = message.slice(5).trim().replace(/[^a-zA-Z0-9._-]/g, "_");
+      pendingShots.push(captureTo(name));
+      return;
+    }
+
     if (SELFTEST && message.startsWith("SELFTEST done")) {
-      app.exit(message.includes("FAIL") ? 1 : 0);
+      // Let in-flight captures finish before the process goes away, or the
+      // last screenshot is a zero-byte file.
+      void Promise.all(pendingShots).then(() => app.exit(message.includes("FAIL") ? 1 : 0));
     }
   });
 

@@ -112,6 +112,30 @@
       results.push(`${pass ? "  ok  " : "  FAIL"} ${name}${detail ? ` — ${detail}` : ""}`);
     };
 
+    /** Ask main for a PNG of the window. Named, so shots are comparable. */
+    const shot = async (name) => {
+      console.log(`SHOT ${name}`);
+      // capturePage is async on the other side; give it a frame to land.
+      await new Promise((r) => setTimeout(r, 300));
+    };
+
+    /**
+     * A real click, on the real element.
+     *
+     * The rest of this file calls window.geode directly, which proves the
+     * contract and proves nothing about the UI: a button wired to the wrong
+     * handler, or to none, passes every one of those checks. Clicking is what
+     * covers the wiring the user actually touches.
+     */
+    const click = async (id) => {
+      const el = document.getElementById(id);
+      if (!el) throw new Error(`no element #${id}`);
+      el.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      await new Promise((r) => setTimeout(r, 250));
+    };
+
+    const outText = () => document.getElementById("out").textContent;
+
     (async () => {
       const cfg = await geode.configRead();
       check("config/read returns a config", cfg.ok && cfg.value !== null, cfg.ok ? "" : cfg.kind);
@@ -166,6 +190,28 @@
       );
       check("run finished and progress arrived", emits > 0, `${emits} emits`);
       check("progress ended at 100%", bar.value === bar.max, `${bar.value}/${bar.max}`);
+
+      // --- the UI itself, not the API behind it -------------------------
+      await shot("01-loaded");
+
+      await click("config");
+      check("clicking config/read updates the page", outText().includes("notesPath"), "");
+
+      await click("stats");
+      check("clicking stats/read updates the page", outText().includes("total"), "");
+
+      await click("due");
+      check("clicking cards/due updates the page", outText().includes("locator"), "");
+      await shot("02-after-clicks");
+
+      await click("dry");
+      await new Promise((r) => setTimeout(r, 400));
+      check(
+        "clicking sync runs one and reports it",
+        outText().includes("filesEnumerated") || outText().includes("runId"),
+        "",
+      );
+      await shot("03-after-sync");
 
       const failed = results.some((r) => r.includes("FAIL"));
       console.log(["SELFTEST", ...results].join("\n"));

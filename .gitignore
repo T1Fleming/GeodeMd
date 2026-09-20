@@ -12,6 +12,11 @@ build/
 # desktop/README.md.
 desktop/dist/
 
+# Screenshots from the harness. Diagnostic output, never a fixture —
+# comparing them byte-for-byte across machines would fail on font rendering.
+shots/
+desktop/shots/
+
 # Test / coverage
 coverage/
 
