@@ -124,7 +124,9 @@ Practical consequence: delete a note and its cards leave the queue, but their hi
 
 Built for up to roughly a million cards across a million files of mixed sizes. A sync costs what *changed*, not what exists — a sync that finds nothing changed reads no file and writes no database row at all. That property is asserted by the test suite rather than assumed, because it is the kind of thing that regresses silently.
 
-Enumeration is the cost that grows with the collection, because a deletion leaves no trace and the only way to notice one is to look. Measured warm on a 20,000-file tree, it runs at 4.4 µs per file in flat directories and 9.5 µs in a vault of small topic folders; the stats are issued through a bounded concurrent pool rather than one at a time. Cold-cache cost is not yet measured, and these are measurements rather than extrapolations — [`docs/design/sync.md`](./docs/design/sync.md#measurements) has the method.
+Enumeration is the cost that grows with the collection, because a deletion leaves no trace and the only way to notice one is to look. Measured on a 20,000-file tree, it runs at 4.4 µs per file in flat directories and 9.5 µs in a vault of small topic folders; the stats are issued through a bounded concurrent pool rather than one at a time. A **cold** cache costs 1.09× warm — barely more, on an SSD — which settled the question of whether this stays a plain walk.
+
+These are measurements rather than extrapolations, on local APFS; [`docs/design/sync.md`](./docs/design/sync.md#measurements) has the method and the limits.
 
 ## Development
 
