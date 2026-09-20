@@ -1,7 +1,16 @@
 /**
- * Spec section 2a. Config is read in exactly ONE place — here, in `cli`.
- * `core` never reads the filesystem for config and never touches process.env
- * (section 6 rule 3).
+ * Spec section 2a. Config is read in exactly ONE place — here.
+ *
+ * `host` is the code that knows about THIS MACHINE: XDG paths, `process.env`,
+ * `os.hostname()`, how you obtain a `Core` here. `core` knows only about its
+ * arguments and is forbidden from reading any of that (section 6 rule 3).
+ * That line is the whole point of the module, and it is what lets the CLI and
+ * the Electron app share one implementation instead of each growing its own —
+ * the open question ADR 0013 named and deliberately left unanswered.
+ *
+ * `env` and `hostname` stay injectable parameters rather than being read
+ * directly. That is what makes this testable, and what lets it sit below an
+ * interface at all.
  */
 
 import * as fs from "node:fs/promises";
