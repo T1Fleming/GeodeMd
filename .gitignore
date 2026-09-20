@@ -6,6 +6,12 @@ dist/
 build/
 *.tsbuildinfo
 
+# The Electron build. A second build of the same source for a second runtime —
+# it must live under desktop/ so Node's upward node_modules walk finds the
+# Electron-ABI better-sqlite3 rather than the root Node-ABI one. See
+# desktop/README.md.
+desktop/dist/
+
 # Test / coverage
 coverage/
 

@@ -23,6 +23,8 @@ New decisions from here get an ADR when they are made, not in a later sweep — 
 | [0013](0013-cli-and-electron-are-peers.md) | The CLI and the Electron app are peer interfaces, permanently | Accepted |
 | [0014](0014-cross-device-sync-transport.md) | Cross-device sync transport | **Proposed** |
 | [0015](0015-accept-clock-skew.md) | Accept clock skew; do not build vector clocks | Accepted |
+| [0016](0016-config-lives-in-host.md) | Configuration lives in `host/`, below both interfaces | Accepted |
+| [0017](0017-core-runs-in-the-main-process.md) | `core` runs in the Electron main process, and the seam stays | Accepted |
 
 ## Writing one
 

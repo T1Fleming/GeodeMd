@@ -158,3 +158,41 @@ describe("host, shared by both interfaces", () => {
     }
   });
 });
+
+/**
+ * ADR 0013 again: two peers, one core. A peer that reaches into the other is
+ * no longer a peer, and the drift starts the day one of them needs "just one"
+ * helper from the other.
+ */
+describe("electron, the second interface", () => {
+  it("does not import cli, and cli does not import it", async () => {
+    expect(await readAll("electron"), "electron imports cli").not.toMatch(
+      /from\s+["'][^"']*\/cli/,
+    );
+    expect(await readAll("cli"), "cli imports electron").not.toMatch(
+      /from\s+["'][^"']*\/electron/,
+    );
+  });
+
+  it("nothing below the interfaces imports electron", async () => {
+    for (const dir of ["core", "store", "files", "parser", "scheduler", "host"]) {
+      expect(await readAll(dir), `${dir} imports electron`).not.toMatch(
+        /from\s+["'][^"']*\/electron/,
+      );
+    }
+  });
+
+  it("keeps onProgress off the process seam", async () => {
+    // protocol.ts is the command/reply shape. ADR 0017 keeps core in the main
+    // process for now, so nothing literally crosses a port today — but this is
+    // the contract that lets it move later, and a callback in it is what would
+    // quietly make that move impossible. `onProgress` is the specific hazard:
+    // it is a function on an options object that otherwise looks like data.
+    //
+    // Deliberately one concrete name rather than a clever regex for "any
+    // function type". A pattern broad enough to catch every shape is also
+    // broad enough to pass for the wrong reason, which is the failure mode
+    // this file exists to avoid.
+    expect(await readAll("electron")).not.toMatch(/onProgress/);
+  });
+});
