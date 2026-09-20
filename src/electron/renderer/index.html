@@ -1,0 +1,174 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>GeodeMD — IPC harness</title>
+<!--
+  Milestone 2. Deliberately plain: no React, no build step, no styling worth
+  the name. It exists to exercise the contract end to end — every channel, the
+  Result taxonomy, single-flight, and throttled progress — before a UI arrives
+  to obscure which half is broken.
+-->
+<style>
+  body { font: 13px ui-monospace, monospace; margin: 2rem; max-width: 60rem; }
+  button { font: inherit; padding: .3rem .6rem; margin-right: .4rem; }
+  pre { background: #f4f4f4; padding: .8rem; overflow-x: auto; white-space: pre-wrap; }
+  progress { width: 100%; height: 1rem; }
+  .row { margin: .8rem 0; }
+  .muted { color: #666; }
+</style>
+
+<h1>GeodeMD IPC harness</h1>
+
+<div class="row">
+  <button id="config">config/read</button>
+  <button id="stats">stats/read</button>
+  <button id="due">cards/due</button>
+  <button id="rate">rate first card (3)</button>
+</div>
+
+<div class="row">
+  <button id="sync">sync</button>
+  <button id="dry">sync --dry-run</button>
+  <button id="rebuild">rebuild</button>
+  <button id="double">start two syncs at once</button>
+  <button id="status">run/status</button>
+</div>
+
+<div class="row">
+  <progress id="bar" value="0" max="1"></progress>
+  <div id="phase" class="muted">idle</div>
+</div>
+
+<pre id="out">ready</pre>
+
+<!--
+  A plain script, NOT type="module": an ES module on a file:// page is blocked
+  by Chromium's CORS rules and silently never executes, which presents as a
+  page that loads and does nothing. Nothing here imports, so the module type
+  bought nothing and cost an hour.
+-->
+<script>
+  const out = document.getElementById("out");
+  const bar = document.getElementById("bar");
+  const phase = document.getElementById("phase");
+  let emits = 0;
+
+  const show = (label, v) => {
+    out.textContent = `${label}\n${JSON.stringify(v, null, 2)}`;
+  };
+
+  // Every call returns a Result; nothing throws. A renderer that needs a
+  // try/catch around IPC has a contract problem, not an error-handling one.
+  const call = (label, fn) => async () => {
+    const r = await fn();
+    show(r.ok ? `${label} — ok` : `${label} — ${r.kind}`, r.ok ? r.value : r.message);
+  };
+
+  document.getElementById("config").onclick = call("config/read", () => geode.configRead());
+  document.getElementById("stats").onclick = call("stats/read", () => geode.statsRead());
+  document.getElementById("due").onclick = call("cards/due", () => geode.cardsDue(20));
+  document.getElementById("status").onclick = call("run/status", () => geode.runStatus());
+
+  document.getElementById("rate").onclick = async () => {
+    const due = await geode.cardsDue(1);
+    if (!due.ok || due.value.length === 0) return show("rate", "nothing due");
+    const r = await geode.cardsReview(due.value[0].id, 3);
+    // `log-only` is a success with a qualifier, not a failure: the rating is
+    // already fsynced to the log and the next ingest reconciles it.
+    show(r.ok ? `rate — ${r.value.applied}` : `rate — ${r.kind}`, r.ok ? r.value : r.message);
+  };
+
+  const run = (kind, req) => async () => {
+    emits = 0;
+    const r = await geode.runStart(kind, req);
+    show(`${kind} start`, r.ok ? r.value : `${r.kind}: ${r.message}`);
+  };
+  document.getElementById("sync").onclick = run("sync", { full: false, dryRun: false });
+  document.getElementById("dry").onclick = run("sync", { full: false, dryRun: true });
+  document.getElementById("rebuild").onclick = run("rebuild", { full: false, dryRun: false });
+
+  // Two windows asking to sync meant one sync: the second should JOIN the
+  // first and report the same runId rather than erroring.
+  document.getElementById("double").onclick = async () => {
+    const [a, b] = await Promise.all([
+      geode.runStart("sync", { full: true, dryRun: false }),
+      geode.runStart("sync", { full: true, dryRun: false }),
+    ]);
+    show("two syncs at once", { a: a.ok ? a.value : a, b: b.ok ? b.value : b });
+  };
+
+  geode.onRunProgress((p) => {
+    emits++;
+    bar.max = Math.max(1, p.total);
+    bar.value = p.done;
+    phase.textContent = `${p.kind} · ${p.phase} · ${p.done}/${p.total} · ${emits} emits`;
+  });
+
+  // --- self-test -------------------------------------------------------
+  // Exercises every channel, the Result taxonomy, single-flight and the
+  // progress stream, then reports. Run with GEODE_SELFTEST=1.
+  if (location.search.includes("selftest")) {
+    const results = [];
+    const check = (name, pass, detail) => {
+      results.push(`${pass ? "  ok  " : "  FAIL"} ${name}${detail ? ` — ${detail}` : ""}`);
+    };
+
+    (async () => {
+      const cfg = await geode.configRead();
+      check("config/read returns a config", cfg.ok && cfg.value !== null, cfg.ok ? "" : cfg.kind);
+
+      const st = await geode.statsRead();
+      check("stats/read", st.ok, st.ok ? `total=${st.value.total}` : st.kind);
+
+      const due = await geode.cardsDue(5);
+      check("cards/due", due.ok && Array.isArray(due.value), due.ok ? `${due.value.length} cards` : due.kind);
+
+      if (due.ok && due.value.length) {
+        const rated = await geode.cardsReview(due.value[0].id, 3);
+        check("cards/review", rated.ok, rated.ok ? rated.value.applied : rated.kind);
+      }
+
+      // Subscribed BEFORE anything starts. A five-file sync finishes in
+      // milliseconds, so subscribing afterwards misses the event and waits
+      // forever — which is exactly how this harness first failed. It is also
+      // a real gap worth naming: there is currently no way to learn about a
+      // run that finished before you were listening.
+      const finished = new Promise((resolve) => geode.onRunFinished(resolve));
+
+      // Single-flight: the second must JOIN, not fail.
+      const [a, b] = await Promise.all([
+        geode.runStart("sync", { full: true, dryRun: false }),
+        geode.runStart("sync", { full: true, dryRun: false }),
+      ]);
+      check(
+        "two syncs join one run",
+        a.ok && b.ok && b.value.joined && a.value.runId === b.value.runId,
+        a.ok && b.ok ? `${a.value.runId} joined=${b.value.joined}` : "not ok",
+      );
+
+      // A rebuild may not join a sync.
+      const rb = await geode.runStart("rebuild", { full: false, dryRun: false });
+      check("rebuild refused while a sync runs", !rb.ok, rb.ok ? "was allowed" : rb.message);
+
+      await finished;
+      check("run finished and progress arrived", emits > 0, `${emits} emits`);
+      check("progress ended at 100%", bar.value === bar.max, `${bar.value}/${bar.max}`);
+
+      const failed = results.some((r) => r.includes("FAIL"));
+      console.log(["SELFTEST", ...results].join("\n"));
+      console.log(`SELFTEST done — ${failed ? "FAIL" : "all ok"}`);
+    })().catch((err) => {
+      // Without this the whole self-test rejects silently and presents as a
+      // hang — which is exactly how the harness failed twice before.
+      console.log(["SELFTEST", ...results].join("\n"));
+      console.log(`SELFTEST done — FAIL: ${err && err.message ? err.message : err}`);
+    });
+  }
+
+  geode.onRunFinished((f) => {
+    phase.textContent = `${f.kind} finished · ${emits} progress emits total`;
+    show(
+      f.result.ok ? `${f.kind} — ok` : `${f.kind} — ${f.result.kind}`,
+      f.result.ok ? f.result.value : f.result.message,
+    );
+  });
+</script>

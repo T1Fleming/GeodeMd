@@ -21,6 +21,7 @@ import type { DueCard, SyncSummary } from "../core/index.js";
 import { Store } from "../store/index.js";
 import { configPath, initConfig, InitRefused } from "../host/config.js";
 import type { FileConfig } from "../host/config.js";
+import { isBusy } from "../host/errors.js";
 import { openCore as openCoreWith, readAppConfig } from "../host/open.js";
 import { openInEditor, resolveEditor } from "./editor.js";
 import {
@@ -336,15 +337,6 @@ async function reviewLoop(core: Core, config: FileConfig, limit: number): Promis
     process.off("SIGINT", onSigint);
     restore();
   }
-}
-
-function isBusy(err: unknown): boolean {
-  return (
-    typeof err === "object" &&
-    err !== null &&
-    "code" in err &&
-    String((err as { code: unknown }).code).startsWith("SQLITE_BUSY")
-  );
 }
 
 export async function main(argv: string[]): Promise<number> {

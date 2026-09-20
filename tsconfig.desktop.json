@@ -10,6 +10,8 @@
       "electron": ["desktop/node_modules/electron/electron.d.ts"]
     }
   },
-  "include": ["src/**/*.ts"],
+  // .cts too: the preload must be CommonJS, because an ESM preload
+  // requires sandbox:false and the sandbox is worth more than consistency.
+  "include": ["src/**/*.ts", "src/**/*.cts"],
   "exclude": ["src/**/*.test.ts", "src/cli/**"]
 }

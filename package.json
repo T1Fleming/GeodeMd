@@ -15,7 +15,8 @@
     "build": "tsc",
     "test": "vitest run",
     "test:watch": "vitest",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "build:desktop": "tsc -p tsconfig.desktop.json && node -e \"const{cpSync}=require('node:fs');cpSync('src/electron/renderer','desktop/dist/electron/renderer',{recursive:true})\""
   },
   "dependencies": {
     "better-sqlite3": "11.7.0",
