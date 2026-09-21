@@ -143,6 +143,7 @@ export async function runSelfTest(): Promise<void> {
 
     await runSyncChecks();
     await runStatsChecks();
+    await runHelpChecks();
 
     const failed = results.some((r) => r.includes("FAIL"));
     console.log(["SELFTEST", ...results].join("\n"));
@@ -345,4 +346,45 @@ async function runSetupChecks(): Promise<void> {
   // The real sync writes a stamp into every file holding a card, then the app
   // lands on review.
   check("running it lands on the review screen", await until(".question", 200), text(".question"));
+}
+
+/**
+ * The Help screen.
+ *
+ * ADR 0018 named this gap: a packaged app is the one place a user cannot
+ * reach the documentation. What is worth asserting is not that a panel
+ * exists, but that it is showing the REPOSITORY'S Markdown — the whole point
+ * is one source and two surfaces, and a Help window that silently shipped a
+ * stale copy would look identical.
+ */
+async function runHelpChecks(): Promise<void> {
+  await click(".tabs .tab", "Help");
+  check("the documentation ships with the app", await until(".doclist"), "");
+
+  const titles = all(".doclink");
+  check("the guides and the reference are both there", titles.length >= 4, titles.join(" / "));
+  check(
+    "including the one about the first sync, which is the one that matters",
+    titles.some((x) => x.toLowerCase().includes("first sync")),
+    titles.join(" / "),
+  );
+
+  check("a document renders as prose, not as raw markdown", exists(".doc h1"), text(".doc h1"));
+  check("it is not showing the markdown source", !text(".doc").includes("## "), "");
+  // The thing a packaged user cannot otherwise find out.
+  check(
+    "and it explains the card syntax",
+    text(".doc").includes("::"),
+    text(".doc h1"),
+  );
+  await shot("help-01");
+
+  // Moving between documents, which is the other half of it being usable.
+  const second = document.querySelectorAll(".doclink")[1] as HTMLElement;
+  const firstTitle = text(".doc h1");
+  second.click();
+  await settle(250);
+  check("another document opens", text(".doc h1") !== firstTitle, text(".doc h1"));
+  check("and the list marks which one you are reading", exists(".doclink.on"), "");
+  await shot("help-02");
 }

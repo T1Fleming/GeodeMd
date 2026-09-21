@@ -28,6 +28,7 @@ const CH = {
   setupInspect: "geode:setup/inspect",
   setupPropose: "geode:setup/propose",
   setupWrite: "geode:setup/write",
+  linkOpen: "geode:link/open",
   runProgress: "geode:run/progress",
   runFinished: "geode:run/finished",
 } as const;
@@ -62,6 +63,7 @@ contextBridge.exposeInMainWorld("geode", {
   setupPropose: (folder: string) => ipcRenderer.invoke(CH.setupPropose, folder),
   setupWrite: (folder: string, replace: boolean) =>
     ipcRenderer.invoke(CH.setupWrite, folder, replace),
+  linkOpen: (href: string) => ipcRenderer.invoke(CH.linkOpen, href),
   onRunProgress: (fn: (p: unknown) => void) => on(CH.runProgress, fn),
   onRunFinished: (fn: (f: unknown) => void) => on(CH.runFinished, fn),
 });

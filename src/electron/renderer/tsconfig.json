@@ -17,7 +17,11 @@
       "react": ["desktop/node_modules/@types/react"],
       "react/*": ["desktop/node_modules/@types/react/*"],
       "react-dom": ["desktop/node_modules/@types/react-dom"],
-      "react-dom/*": ["desktop/node_modules/@types/react-dom/*"]
+      "react-dom/*": ["desktop/node_modules/@types/react-dom/*"],
+      // `marked` ships its own types, so this points at the package itself
+      // rather than at an @types copy. Same reason as React: one dependency
+      // tree per runtime, and Node resolves node_modules by walking UP.
+      "marked": ["desktop/node_modules/marked"]
     },
     "types": []
   },

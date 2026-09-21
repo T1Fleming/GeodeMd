@@ -75,6 +75,16 @@ The folder count comes from `host/setup.ts`, which calls the *same* `enumerate` 
 
 Routine on a desktop: the folder moved, or a drive is unmounted. Both states reach the app as "no usable collection", and giving them the same screen would greet a year-old user with a welcome page because something is unplugged. `App.tsx` tells them apart by inspecting the configured folder after reading the config, and the same component opens at the folder step with different words.
 
+## Help
+
+The user documentation, bundled and rendered in the app ([ADR 0020](../decisions/0020-ship-the-docs-inside-the-app.md)). A Vite plugin copies `docs/guides/` and `docs/reference/` into the renderer bundle at build time, and `Help.tsx` renders them with `marked`.
+
+**One source, two surfaces.** The files rendered are the repository's own, verbatim — a Help window authored separately would drift within two releases, which is what [ADR 0018](../decisions/0018-user-docs-live-in-guides-and-reference.md) was written to prevent. `design/` and `decisions/` are deliberately not bundled: they are contributor material, and shipping them buries the four documents a user needs.
+
+Links are intercepted at the container rather than rewritten in the HTML. A link to another bundled document navigates inside the window; anything else resolves against the repository's blob URL and opens in a browser. Left alone, a relative link navigates the `app://` page away from the renderer and strands the user in a blank window with no way back.
+
+`dangerouslySetInnerHTML` is safe here **because the input is ours**. The moment a note's text is rendered this way that stops being true.
+
 ## What the screens share with the CLI
 
 Anything both interfaces would want lives in `host`, not in whichever one asked for it first — the failure mode is two interfaces that each stay self-consistent while disagreeing, which no test catches:

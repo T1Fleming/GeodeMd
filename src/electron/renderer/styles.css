@@ -336,3 +336,60 @@ button.quiet:hover { color: var(--ink); border-color: transparent; }
 /* Back on the left, Continue on the right, with the gap between them doing
    the work of keeping them apart. */
 .controls.wizard { margin-top: 0.5rem; gap: 0.75rem; }
+
+/* --- the documentation ------------------------------------------------- */
+
+/* Wider than the other screens and two columns: this is the one place in the
+   app you read rather than glance, and a list of documents is only useful if
+   it stays visible while you read one. */
+.help {
+  max-width: 62rem;
+  display: grid;
+  grid-template-columns: 14rem 1fr;
+  gap: 2rem;
+  align-items: start;
+}
+
+.doclist { display: flex; flex-direction: column; gap: 0.15rem; position: sticky; top: 2rem; }
+
+.doclink {
+  border: none;
+  border-radius: 6px;
+  text-align: left;
+  color: var(--muted);
+  padding: 0.4rem 0.6rem;
+  line-height: 1.35;
+}
+.doclink:hover { border-color: transparent; color: var(--ink); }
+.doclink.on { color: var(--ink); background: var(--line); }
+
+/* Prose, so text is selectable here even though the rest of the window is a
+   keyboard surface with selection turned off. */
+.doc { user-select: text; min-width: 0; }
+.doc h1 { font-size: 1.5rem; margin: 0 0 1rem; }
+.doc h2 { font-size: 1.125rem; margin: 2rem 0 0.5rem; }
+.doc h3 { font-size: 1rem; margin: 1.5rem 0 0.4rem; }
+.doc p, .doc li { font-size: 0.9375rem; }
+.doc a { color: var(--accent); }
+.doc code {
+  background: var(--line);
+  border-radius: 4px;
+  padding: 0.1rem 0.3rem;
+  font-size: 0.875em;
+}
+.doc pre {
+  background: var(--line);
+  border-radius: 8px;
+  padding: 0.9rem 1rem;
+  overflow-x: auto;
+}
+.doc pre code { background: none; padding: 0; font-size: 0.8125rem; }
+.doc table { border-collapse: collapse; font-size: 0.875rem; display: block; overflow-x: auto; }
+.doc th, .doc td { border: 1px solid var(--line); padding: 0.35rem 0.6rem; text-align: left; }
+.doc blockquote {
+  margin: 1rem 0;
+  padding-left: 1rem;
+  border-left: 3px solid var(--line);
+  color: var(--muted);
+}
+.doc hr { border: none; border-top: 1px solid var(--line); margin: 2rem 0; }

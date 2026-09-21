@@ -174,6 +174,7 @@ export const CH = {
   setupInspect: "geode:setup/inspect",
   setupPropose: "geode:setup/propose",
   setupWrite: "geode:setup/write",
+  linkOpen: "geode:link/open",
   // Events, main → renderer.
   runProgress: "geode:run/progress",
   runFinished: "geode:run/finished",
@@ -208,6 +209,14 @@ export interface GeodeApi {
    * `--force`, surfaced as a choice rather than an error.
    */
   setupWrite(folder: string, replace: boolean): Promise<Result<AppConfig>>;
+  /**
+   * Open a link in the user's browser.
+   *
+   * The Help window renders documentation written for GitHub, so it contains
+   * links to things that are not bundled. Navigating the `app://` page to one
+   * would leave the user in a broken window with no way back.
+   */
+  linkOpen(href: string): Promise<Result<void>>;
   onRunProgress(fn: (p: RunProgress) => void): () => void;
   onRunFinished(fn: (f: RunFinished) => void): () => void;
 }

@@ -1,0 +1,64 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024" role="img" aria-label="GeodeMD">
+  <!--
+    The app icon: the geode from banner.svg, cracked open.
+
+    The mascot's arms, fists and FACE are all deliberately dropped, and the
+    face is the interesting one. The arms turn to mush at 32px and push the
+    silhouette wide, costing the boulder its size in the square. The face had
+    to go for a different reason: with no body to give it context, the brow
+    and eyes above a dark opening full of pale crystals stop reading as a
+    geode and start reading as a mouth full of fangs. The mascot needs its
+    arms to be a mascot.
+
+    What is left is the thing the name means: a dull rock with something
+    worth having inside it.
+  -->
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#111827"/>
+      <stop offset="1" stop-color="#1f2937"/>
+    </linearGradient>
+    <linearGradient id="rock" x1="0.2" y1="0" x2="0.8" y2="1">
+      <stop offset="0" stop-color="#8b95a5"/>
+      <stop offset="1" stop-color="#4b5563"/>
+    </linearGradient>
+    <radialGradient id="cavity" cx="0.5" cy="0.4" r="0.75">
+      <stop offset="0" stop-color="#0b1220"/>
+      <stop offset="1" stop-color="#131d30"/>
+    </radialGradient>
+  </defs>
+
+  <rect x="0" y="0" width="1024" height="1024" rx="230" fill="url(#bg)"/>
+  <rect x="4" y="4" width="1016" height="1016" rx="226" fill="none" stroke="#334155" stroke-width="8"/>
+
+  <!--
+    The boulder is authored at banner scale (x 74-228, y 50-204) so it stays
+    the same drawing rather than a redrawn approximation of one. Translated
+    and scaled to fill the square with a margin that survives macOS's mask.
+  -->
+  <g transform="translate(512,512) scale(4.3) translate(-151,-127)">
+    <path d="M150 50 L204 68 L228 118 L218 174 L170 204 L122 202 L82 168 L74 116 L104 66 Z"
+          fill="url(#rock)" stroke="#2f3742" stroke-width="3" stroke-linejoin="round"/>
+    <path d="M150 50 L104 66 L74 116 L122 202 L150 128 Z" fill="#000000" opacity="0.13"/>
+    <path d="M204 68 L228 118 L218 174 L150 128 Z" fill="#ffffff" opacity="0.07"/>
+
+    <!--
+      The cavity is lifted and enlarged from where it sits on the banner. On
+      the mascot it is a mouth and belongs low; here it is the subject, and
+      the crystals are the only colour in the icon — the part that survives
+      being 32 pixels wide. Left where it was, the top half of the square is
+      an undifferentiated grey mass.
+    -->
+    <g transform="translate(0,-26) translate(151,169) scale(1.18) translate(-151,-169)">
+    <path d="M110 152 L138 138 L166 140 L196 152 L184 188 L150 200 L120 186 Z"
+          fill="url(#cavity)" stroke="#2b3446" stroke-width="2.5" stroke-linejoin="round"/>
+    <path d="M125 180 L133 150 L142 180 Z" fill="#5eead4"/>
+    <path d="M142 184 L151 143 L160 184 Z" fill="#a78bfa"/>
+    <path d="M159 181 L168 152 L176 181 Z" fill="#38bdf8"/>
+    <path d="M133 150 L142 180 L137 181 Z" fill="#ffffff" opacity="0.28"/>
+    <path d="M151 143 L160 184 L155 184 Z" fill="#ffffff" opacity="0.24"/>
+    <path d="M168 152 L176 181 L172 181 Z" fill="#ffffff" opacity="0.22"/>
+    </g>
+
+  </g>
+</svg>

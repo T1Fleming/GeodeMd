@@ -27,6 +27,7 @@ New decisions from here get an ADR when they are made, not in a later sweep — 
 | [0017](0017-core-runs-in-the-main-process.md) | `core` runs in the Electron main process, and the seam stays | Accepted |
 | [0018](0018-user-docs-live-in-guides-and-reference.md) | User documentation lives in `guides/` and `reference/`, as plain Markdown | Accepted |
 | [0019](0019-report-sync-conflict-copies.md) | Report a syncer's conflict copy rather than syncing it | Accepted |
+| [0020](0020-ship-the-docs-inside-the-app.md) | Ship the user documentation inside the app | Accepted |
 
 ## Writing one
 
