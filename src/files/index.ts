@@ -12,6 +12,55 @@ import * as fs from "node:fs/promises";
 import * as path from "node:path";
 
 /** One enumerated candidate. Section 8 step 1 produces these. */
+/**
+ * Filenames a file syncer writes when it cannot merge two versions of a note.
+ *
+ * Why this is needed at all: a conflict copy is a **byte copy**, so every card
+ * in it already carries a stamp. Section 4's copy-versus-move check finds
+ * those ids still present in the original, correctly classifies each as a
+ * copy, and mints a fresh id — *into the conflict file*. The result is a
+ * duplicate of every card in that note, with its own empty history, sitting in
+ * the queue. Nothing is lost, but the user reviews everything twice until they
+ * notice ([ADR 0019](../../docs/decisions/0019-report-sync-conflict-copies.md)).
+ *
+ * The dedupe key does not help here. `(card_id, rated_at)` protects the *log*;
+ * notes have no such key, and a duplicated note is indistinguishable from one
+ * someone genuinely wrote by copying — a case the design deliberately
+ * supports.
+ *
+ * Only distinctive patterns are listed. Deliberately **not** matched:
+ *
+ * - iCloud's `note 2.md` and Google Drive's `note (1).md` — those are ordinary
+ *   filenames that thousands of people use on purpose
+ * - OneDrive's `note-DESKTOP-AB1CDE.md` — a hostname suffix, and a hostname
+ *   can be anything
+ *
+ * A pattern broad enough to catch those is broad enough to silently ignore a
+ * note somebody meant to keep, which is a worse failure than the one being
+ * fixed. Everything matched here is reported in the summary rather than
+ * skipped silently, so a false positive is visible in the one place the user
+ * is already looking.
+ */
+const SYNC_CONFLICT = [
+  /** Syncthing: `note.sync-conflict-20260101-120000-ABCDEFG.md` */
+  /\.sync-conflict-\d{8}-\d{6}-[a-z0-9]+\./i,
+  /** Dropbox and Nextcloud: `note (conflicted copy 2026-01-01).md`, with or
+   *  without an owner's name in front of "conflicted". */
+  /\([^)]*conflicted copy[^)]*\)/i,
+];
+
+/**
+ * Does this look like a syncer's conflict copy?
+ *
+ * Pure, and takes the whole relative path because that is what enumeration
+ * carries — only the basename is examined, so a *directory* that matches is
+ * not enough to condemn the notes inside it.
+ */
+export function isSyncConflict(relPath: string): boolean {
+  const name = relPath.split("/").pop() ?? relPath;
+  return SYNC_CONFLICT.some((re) => re.test(name));
+}
+
 export interface Candidate {
   /** Relative to the notes root, with forward slashes. */
   relPath: string;

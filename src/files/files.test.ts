@@ -5,6 +5,7 @@ import * as path from "node:path";
 import {
   appendLog,
   enumerate,
+  isSyncConflict,
   listShards,
   readShardFrom,
   shardName,
@@ -251,5 +252,48 @@ describe("readShardFrom", () => {
   it("returns nothing when the offset is already at EOF", async () => {
     await write(".sr/log/a.jsonl", "one\n");
     expect(await readShardFrom(root, "a.jsonl", 4)).toEqual({ text: "", consumed: 4 });
+  });
+});
+
+/**
+ * Conflict-copy detection. The cost of a false negative is a duplicate of
+ * every card in a note; the cost of a false positive is silently ignoring a
+ * note someone meant to keep. Those are not symmetric, which is why the
+ * patterns are narrow and the result is reported rather than skipped quietly.
+ */
+describe("isSyncConflict", () => {
+  it("catches Syncthing's shape", () => {
+    expect(isSyncConflict("aws/lambda.sync-conflict-20260101-120000-ABCDEFG.md")).toBe(true);
+    expect(isSyncConflict("lambda.sync-conflict-20260101-120000-7k2x9qz.md")).toBe(true);
+  });
+
+  it("catches Dropbox and Nextcloud, with or without an owner's name", () => {
+    expect(isSyncConflict("lambda (conflicted copy 2026-01-01).md")).toBe(true);
+    expect(isSyncConflict("lambda (Eric's conflicted copy 2026-01-01).md")).toBe(true);
+    expect(isSyncConflict("lambda (Conflicted Copy 2026-01-01 123456).md")).toBe(true);
+  });
+
+  it("leaves ordinary filenames alone, including the ambiguous ones", () => {
+    // iCloud's `note 2.md` and Drive's `note (1).md` really are conflict
+    // markers for those tools — and are also names thousands of people choose
+    // on purpose. A pattern wide enough to catch them silently ignores notes
+    // someone meant to keep, which is worse than the bug being fixed.
+    for (const name of [
+      "lambda.md",
+      "lambda 2.md",
+      "lambda (1).md",
+      "lambda-DESKTOP-AB1CDE.md",
+      "conflicted.md",
+      "notes about conflict resolution.md",
+      "sync-conflict.md",
+    ]) {
+      expect(isSyncConflict(name), name).toBe(false);
+    }
+  });
+
+  it("judges the filename, not the folder it sits in", () => {
+    // A directory that matches must not condemn the notes inside it.
+    expect(isSyncConflict("lambda (conflicted copy 2026-01-01)/notes.md")).toBe(false);
+    expect(isSyncConflict("archive/lambda (conflicted copy 2026-01-01).md")).toBe(true);
   });
 });

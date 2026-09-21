@@ -80,6 +80,20 @@ Against the `files` table:
 
 `(mtime, size)` is a heuristic, and where it is wrong it is **silently** wrong: a tool that rewrites a file while preserving its mtime leaves stale cards forever. That is what `--full` is for.
 
+### 2a. Conflict copies
+
+A file whose *name* looks like a file syncer's conflict copy is enumerated, counted as `filesSyncConflict`, and then left entirely alone — not read, not parsed, not stamped, not reconciled.
+
+It has to be, because a conflict copy is a byte copy: every card in it already carries a stamp, so step 4's copy-versus-move check would find each ID still present in the original, classify it as a copy, and mint a fresh one **into the copy** — duplicating every card in the note with its own empty history.
+
+Three details are load-bearing, and each is a test:
+
+- **It is still enumerated**, so step 6 does not read its absence as a vanished file and prune the original's cards.
+- **The count is taken before the unchanged check**, so it is reported on *every* sync rather than only the first. The file is still there until the user deals with it.
+- **Only distinctive patterns match** — Syncthing's, and the `(conflicted copy …)` form. Not `note 2.md` or `note (1).md`, which are ordinary filenames as often as they are conflicts.
+
+Nothing already synced is deleted; this stops new duplicates. See [ADR 0019](../decisions/0019-report-sync-conflict-copies.md).
+
 ### 3. Read and parse
 
 Collect `ParsedCard[]` for each changed or new file. An ID seen twice within one file is resolved here: the first in line order keeps it, later ones are treated as unstamped.
@@ -168,7 +182,7 @@ An individual file that cannot be read or parsed is **skipped and counted**, nev
 
 ## Summary
 
-`SyncSummary` reports files enumerated / unchanged / read / deferred / **stamped**, cards found / new / updated / pruned, whether the reconciliation pass ran, duplicates re-minted, symlinked directories skipped, log shards skipped, log bytes read, reviews ingested, files skipped on error, log lines skipped, and elapsed milliseconds.
+`SyncSummary` reports files enumerated / unchanged / read / deferred / **stamped** / sync conflicts left alone, cards found / new / updated / pruned, whether the reconciliation pass ran, duplicates re-minted, symlinked directories skipped, log shards skipped, log bytes read, reviews ingested, files skipped on error, log lines skipped, and elapsed milliseconds.
 
 **`filesStamped` is the one a first run needs**, and it is not `cardsNew`: one file can hold fifty new cards. It answers "how many of my notes does this edit", which matters because the first sync of an existing collection rewrites every file containing a card. Under `--dry-run` it reports what *would* be written, having written nothing.
 
