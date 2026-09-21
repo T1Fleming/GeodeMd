@@ -7,11 +7,12 @@
  * bench in `measure.bench.ts` is how you find out.
  */
 
-import { app, BrowserWindow, dialog, ipcMain, net, protocol } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, net, protocol, shell } from "electron";
 import { mkdir, writeFile } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
+import { ConfigError } from "../../core/index.js";
 import type { Core } from "../../core/index.js";
 import type { Store } from "../../store/index.js";
 import { configPath, initConfig } from "../../host/config.js";
@@ -35,6 +36,16 @@ import { openDetached } from "./open.js";
 import { Runner } from "./runs.js";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
+
+/**
+ * Where a documentation link that is not bundled resolves to.
+ *
+ * The Help window ships `docs/guides/` and `docs/reference/`; those link to
+ * ADRs and design docs, which are contributor material and deliberately are
+ * not shipped. Pointed at the repository so the link still goes somewhere,
+ * rather than being silently dead.
+ */
+const REPO_DOCS = "https://github.com/T1Fleming/GeodeMd/blob/main/docs";
 
 let core: Core | null = null;
 let store: Store | null = null;
@@ -246,6 +257,32 @@ function register(): void {
    * turns into a choice rather than an error. `device` and `editor` survive
    * the replace; `proposeConfig` is what lets the app say so first.
    */
+  /**
+   * Open a link in the user's browser.
+   *
+   * The `docs/` base is not decoration. The Help window renders documentation
+   * written for GitHub, so a relative link in it points at a repository path —
+   * `../decisions/0019-….md` — which means nothing to a browser. Resolving it
+   * against the repository's blob URL is what makes those links work at all
+   * for someone who installed a `.app` and has never seen the repo.
+   *
+   * Only http(s) is ever handed to the shell. `shell.openExternal` will
+   * cheerfully open a `file://` URL, and this receives strings that came from
+   * a Markdown file.
+   */
+  ipcMain.handle(CH.linkOpen, (_e, href: string) =>
+    guard<void>(async () => {
+      const resolved = href.startsWith("http")
+        ? href
+        : new URL(href.replace(/^\.\.\//, ""), `${REPO_DOCS}/`).toString();
+      const url = new URL(resolved);
+      if (url.protocol !== "https:" && url.protocol !== "http:") {
+        throw new ConfigError(`refusing to open ${url.protocol}`);
+      }
+      await shell.openExternal(url.toString());
+    }),
+  );
+
   ipcMain.handle(CH.setupWrite, (_e, folder: string, replace: boolean) =>
     guard<AppConfig>(async () => {
       const written = await initConfig(configPath(), folder, { force: replace });

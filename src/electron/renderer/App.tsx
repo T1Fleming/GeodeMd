@@ -10,6 +10,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { DueCard } from "../../core/index.js";
 import type { AppConfig, GeodeApi } from "../ipc.js";
+import { Help } from "./Help.js";
 import { Review } from "./Review.js";
 import { Setup } from "./Setup.js";
 import { Stats } from "./Stats.js";
@@ -22,12 +23,13 @@ declare global {
   }
 }
 
-type Tab = "review" | "sync" | "stats";
+type Tab = "review" | "sync" | "stats" | "help";
 
 const TABS: ReadonlyArray<readonly [Tab, string]> = [
   ["review", "Review"],
   ["sync", "Sync"],
   ["stats", "Collection"],
+  ["help", "Help"],
 ];
 
 /**
@@ -115,6 +117,7 @@ export function App(): React.JSX.Element {
       {tab === "review" && <ReviewScreen onNote={setNote} />}
       {tab === "sync" && <Sync />}
       {tab === "stats" && <Stats />}
+      {tab === "help" && <Help />}
 
       {note && (
         <div className="toast" onClick={() => setNote(null)}>

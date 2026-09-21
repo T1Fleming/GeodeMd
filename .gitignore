@@ -6,6 +6,15 @@ dist/
 build/
 *.tsbuildinfo
 
+# ...but desktop/build/ is SOURCE, not output: it holds the app icon and the
+# macOS entitlements electron-builder reads. `build/` above matches a
+# directory of that name at any depth, which silently excluded both.
+!desktop/build/
+!desktop/build/**
+
+# What electron-builder emits.
+desktop/release/
+
 # The Electron build. A second build of the same source for a second runtime —
 # it must live under desktop/ so Node's upward node_modules walk finds the
 # Electron-ABI better-sqlite3 rather than the root Node-ABI one. See

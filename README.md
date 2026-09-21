@@ -26,6 +26,18 @@ cp -r demo ~/geode-demo && geode init ~/geode-demo && geode sync --dry-run
 
 ## Install
 
+### The desktop app
+
+```sh
+npm run build:desktop && npm --prefix desktop run package
+```
+
+produces `desktop/release/*.dmg`. It is **not signed or notarized** — that needs an Apple Developer account, and [`docs/design/releasing.md`](docs/design/releasing.md) says what to set when you have one. Until then macOS Gatekeeper will refuse it until you right-click → Open.
+
+The app carries its own documentation: the guides and the configuration reference are bundled and rendered in its Help tab, so an installed copy is self-contained ([ADR 0020](docs/decisions/0020-ship-the-docs-inside-the-app.md)).
+
+### The CLI
+
 Requires Node 20 or newer, and `.nvmrc` pins **24** — the version this is developed and tested against. `better-sqlite3` is a native module compiled against one Node ABI, so the version you build with is the version you must run with. If you already have a working Node, `npm install` rebuilds it for yours and you can ignore the pin; if you hit `NODE_MODULE_VERSION` errors, matching the pin is the fix.
 
 The desktop app is unaffected by this either way: Electron ships its own Node, and `desktop/postinstall` rebuilds `better-sqlite3` against *that* ABI. See [`desktop/README.md`](desktop/README.md).

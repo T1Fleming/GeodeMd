@@ -15,6 +15,7 @@ For *why* a decision went the way it did, and what it beat, see [`docs/decisions
 | [review-flow.md](review-flow.md) | Queue construction, recording a review, the loop, stats |
 | [app.md](app.md) | The Electron app: the IPC contract, long runs, what it shares with the CLI |
 | [testing.md](testing.md) | The five expensive places, the boundaries test, the scale harness |
+| [releasing.md](releasing.md) | Packaging, signing, and the checklist before a build goes out |
 
 Configuration is documented in [`docs/reference/configuration.md`](../reference/configuration.md).
 

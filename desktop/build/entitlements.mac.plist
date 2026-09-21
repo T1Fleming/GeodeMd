@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <!--
+    The minimum the hardened runtime needs for an Electron app: V8 writes and
+    executes JIT pages, which the hardened runtime blocks by default.
+    Without these the signed app launches and dies immediately.
+  -->
+  <key>com.apple.security.cs.allow-jit</key>
+  <true/>
+  <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+  <true/>
+  <!--
+    Deliberately NOT sandboxed. GeodeMD's whole premise is reading and writing
+    a directory of the user's own notes, chosen by them at runtime; the App
+    Sandbox would require security-scoped bookmarks and would break the CLI
+    sharing the same files. This is distributed directly, not via the App
+    Store, where that is allowed.
+  -->
+  <key>com.apple.security.cs.disable-library-validation</key>
+  <true/>
+</dict>
+</plist>
