@@ -8,7 +8,7 @@ How the source is divided, and what each division is protecting.
 flowchart TD
     cli["cli/<br/>argv · review loop · ANSI"]
     electron["electron/<br/>window · IPC · renderer"]
-    host["host/<br/>config · paths · error kinds"]
+    host["host/<br/>config · paths · error kinds<br/>shared vocabulary"]
     core["core/<br/>sync · getDueCards · reviewCard · rebuild"]
     parser["parser/<br/>text to cards — PURE"]
     files["files/<br/>walk · read · stamp · log append"]

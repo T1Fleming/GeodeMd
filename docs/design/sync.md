@@ -38,6 +38,8 @@ Measured in one process against one tree, `enumerate()` only — **not extrapola
 
 20,000 files, warm cache, Node v25.4.0, macOS 26.5, 10 cores, median of 5 runs:
 
+(Taken on Node 25 while `.nvmrc` pins 24 — the numbers are a *shape*, not a reproducible benchmark, and the ratios between the rows are what the argument rests on. `enumerate.bench.test.ts` re-measures on whatever you are running.)
+
 | Tree shape | Before (sequential await) | After (bounded pool) | |
 |---|---|---|---|
 | 100 files per directory | 8.34 µs/file | **4.37 µs/file** | 1.91× |
