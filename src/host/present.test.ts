@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   ACTION_KEYS,
+  actionsAt,
   deferralReason,
   emptyCounts,
   interpretKey,
@@ -33,7 +34,7 @@ describe("interpretKey", () => {
   });
 
   it("ignores anything else rather than recording a rating nobody chose", () => {
-    for (const k of ["5", "0", "x", " ", "Enter", "ArrowDown", ""]) {
+    for (const k of ["5", "9", "x", " ", "Enter", "ArrowDown", ""]) {
       expect(interpretKey(k), k).toEqual({ kind: "ignore" });
     }
   });
@@ -48,13 +49,35 @@ describe("the shared vocabulary", () => {
   });
 
   it("agrees with interpretKey about every key it advertises", () => {
-    // A legend that disagrees with the handler is worse than no legend.
+    // A legend that disagrees with the handler is worse than no legend. The
+    // check is that every advertised key DOES something — not what it is
+    // called, because the label is a word for the user and the kind is a tag
+    // for the code, and tying them together is how `later` would be forced to
+    // be called `defer` on screen.
     for (const [key] of RATING_KEYS) {
       expect(interpretKey(key).kind, key).toBe("rate");
     }
-    for (const [key, label] of ACTION_KEYS) {
-      expect(interpretKey(key).kind, key).toBe(label);
+    for (const { key } of ACTION_KEYS) {
+      expect(interpretKey(key).kind, key).not.toBe("ignore");
     }
+  });
+
+  it("offers `later` only at the question and `open` only at the answer", () => {
+    // The two are deliberate opposites. `0` means "I am not ready to answer
+    // this", which stops being true the moment the answer is showing; `o`
+    // needs the answer on screen to be worth offering.
+    expect(actionsAt("question").map((a) => a.key)).toEqual(["0", "q"]);
+    expect(actionsAt("answer").map((a) => a.key)).toEqual(["o", "q"]);
+  });
+
+  it("offers quit at both stages, because a question you cannot leave is a trap", () => {
+    for (const stage of ["question", "answer"] as const) {
+      expect(actionsAt(stage).some((a) => a.key === "q"), stage).toBe(true);
+    }
+  });
+
+  it("maps 0 to defer, which records nothing", () => {
+    expect(interpretKey("0")).toEqual({ kind: "defer" });
   });
 });
 

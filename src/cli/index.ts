@@ -247,18 +247,36 @@ async function reviewLoop(core: Core, config: FileConfig, limit: number): Promis
   };
 
   try {
-    let index = 0;
-    for (const card of queue) {
-      index++;
-      const prompt = renderPrompt(card, index, queue.length, s, width);
+    /**
+     * A working copy, because `0` reorders it.
+     *
+     * Index-driven rather than `for…of` for exactly that reason: deferring
+     * moves a card to the back, and `at` deliberately does not advance —
+     * removing the current card shifts the next one into its place. The
+     * length never changes, so the session is over only when every card has
+     * been answered or the user quits.
+     */
+    const working = [...queue];
+    let at = 0;
+
+    while (at < working.length) {
+      const card = working[at]!;
+      const prompt = renderPrompt(card, at + 1, working.length, s, width);
       const answer = renderAnswer(card, s, width);
 
       process.stdout.write(prompt);
       // Any key flips, but `q` still quits: a question you cannot escape from
       // without answering it is not what the legend promises.
-      if (interpretKey(await key()).kind === "quit") {
+      const first = interpretKey(await key());
+      if (first.kind === "quit") {
         process.stdout.write(await sessionEnd());
         return;
+      }
+      if (first.kind === "defer") {
+        // Nothing is recorded — not a rating, not a log line. The card is
+        // simply owed an answer later in this session.
+        working.push(...working.splice(at, 1));
+        continue;
       }
       process.stdout.write(answer);
 
@@ -297,6 +315,7 @@ async function reviewLoop(core: Core, config: FileConfig, limit: number): Promis
         }
       }
       counts[rating]++;
+      at++;
     }
     process.stdout.write(await sessionEnd());
   } finally {

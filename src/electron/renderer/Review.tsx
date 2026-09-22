@@ -4,7 +4,7 @@
  */
 
 import { useCallback, useEffect, useState } from "react";
-import { ACTION_KEYS, RATING_KEYS } from "../../host/present.js";
+import { actionsAt, RATING_KEYS } from "../../host/present.js";
 import type { DueCard } from "../../core/index.js";
 import { begin, current, isOver, press, reviewed } from "./model/session.js";
 import type { Effect, Session } from "./model/session.js";
@@ -94,8 +94,14 @@ export function Review({
         )}
       </section>
 
+      {/* Both stages are mapped from the same table, never written out.
+          ACTION_KEYS exists so the two interfaces cannot advertise different
+          keys — dropping `q` is what the first version of this did, and the
+          hand-written `q quit` hint that used to sit at the question stage was
+          the same mistake waiting to happen the moment a second key belonged
+          there. Which keys belong to which stage is `host`'s to say. */}
       <footer className="legend">
-        {session.revealed ? (
+        {session.revealed && (
           <>
             {RATING_KEYS.map(([key, label]) => (
               <button key={key} className="rating" onClick={() => handle(key)}>
@@ -103,21 +109,14 @@ export function Review({
               </button>
             ))}
             <span className="spacer" />
-            {/* Mapped, not written out: ACTION_KEYS exists so the two
-                interfaces cannot advertise different keys, and hand-writing
-                one button here is exactly how that drifts. Dropping `q` is
-                what the first version of this did. */}
-            {ACTION_KEYS.map(([key, label]) => (
-              <button key={key} className="action" onClick={() => handle(key)}>
-                <kbd>{key}</kbd> {label}
-              </button>
-            ))}
           </>
-        ) : (
-          <span className="hint">
-            <kbd>q</kbd> quit
-          </span>
         )}
+        {!session.revealed && <span className="spacer" />}
+        {actionsAt(session.revealed ? "answer" : "question").map((a) => (
+          <button key={a.key} className="action" onClick={() => handle(a.key)}>
+            <kbd>{a.key}</kbd> {a.label}
+          </button>
+        ))}
       </footer>
     </main>
   );

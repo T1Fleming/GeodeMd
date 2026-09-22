@@ -181,6 +181,23 @@ describe("host, shared by both interfaces", () => {
     }
   });
 
+  it("owns which keys are offered at which point in a card", async () => {
+    // A card has two stages — question, and question-with-answer — and they
+    // offer different keys: `0 later` only before the reveal, `o open` only
+    // after. Left to the interfaces, each would decide for itself; the app
+    // already hard-wrote a `q quit` hint at the question, which is how the
+    // first version of this drifted.
+    const host = await readAll("host");
+    expect(host).toMatch(/actionsAt/);
+    expect(host).toMatch(/stage:\s*"question"/);
+
+    for (const dir of ["cli", "electron"]) {
+      expect(await readAll(dir), `${dir} decides stages for itself`).not.toMatch(
+        /stage:\s*"(question|answer|both)"/,
+      );
+    }
+  });
+
   it("owns which program opens a note, and how it is told a line", async () => {
     // Same argument as the rating table above, and the same failure mode: two
     // editor tables would each stay self-consistent while `o` landed on line 1

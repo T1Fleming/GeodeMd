@@ -6,7 +6,7 @@
 
 import type { DueCard } from "../core/index.js";
 import {
-  ACTION_KEYS,
+  actionsAt,
   emptyCounts,
   RATING_KEYS,
   ratingBreakdown,
@@ -29,15 +29,34 @@ const RULE = "─";
  * because a legend that disagrees with `interpretKey` is worse than none.
  */
 export function renderLegend(s: Style): string {
-  const pair = ([key, label]: readonly [string, string]): string =>
-    `${s.bold(key)} ${s.dim(label)}`;
-  const ratings = RATING_KEYS.map(pair).join("  ");
-  const actions = ACTION_KEYS.map(pair).join(s.dim(" · "));
+  const ratings = RATING_KEYS.map(([key, label]) => pair(key, label, s)).join("  ");
+  const actions = actionsAt("answer")
+    .map((a) => pair(a.key, a.label, s))
+    .join(s.dim(" · "));
   return `${ratings}   ${actions}`;
 }
 
-/** The uncoloured legend, which is also what the tests read. */
+/**
+ * What is on offer while the answer is still hidden.
+ *
+ * Its own function rather than a slice of the one above, because the two
+ * stages advertise genuinely different things: there are no ratings here, and
+ * `0` exists only here. Which keys belong to which stage is `host`'s to say —
+ * this only decides how they look.
+ */
+export function renderPromptLegend(s: Style): string {
+  return actionsAt("question")
+    .map((a) => pair(a.key, a.label, s))
+    .join(s.dim(" · "));
+}
+
+function pair(key: string, label: string, s: Style): string {
+  return `${s.bold(key)} ${s.dim(label)}`;
+}
+
+/** The uncoloured legends, which are also what the tests read. */
 export const LEGEND = renderLegend(PLAIN);
+export const PROMPT_LEGEND = renderPromptLegend(PLAIN);
 
 export function renderHeader(queued: number, total: number, s: Style): string {
   return `\n${INDENT}${s.dim(`${queued} of ${total} due`)}\n`;
@@ -60,7 +79,7 @@ export function renderPrompt(
   const body = wrap(card.question, width - INDENT.length)
     .map((line) => `${INDENT}${s.bold(line)}`)
     .join("\n");
-  return `\n${INDENT}${head}\n${INDENT}${rule}\n${body}\n`;
+  return `\n${INDENT}${head}\n${INDENT}${rule}\n${body}\n\n${INDENT}${renderPromptLegend(s)}\n`;
 }
 
 export function renderAnswer(card: DueCard, s: Style, width: number): string {

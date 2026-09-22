@@ -141,7 +141,7 @@ describe("interpretKey", () => {
   });
 
   it("ignores anything else rather than recording a wrong rating", () => {
-    for (const k of ["5", "0", "x", " ", ""]) {
+    for (const k of ["5", "9", "x", " ", ""]) {
       expect(interpretKey(k)).toEqual({ kind: "ignore" });
     }
   });

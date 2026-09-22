@@ -24,16 +24,44 @@ export const RATING_KEYS: ReadonlyArray<readonly [key: string, label: string]> =
   ["4", "easy"],
 ];
 
+/**
+ * Where in a card a key is offered.
+ *
+ * A review card has two states — the question, and the question with its
+ * answer showing — and until `defer` existed every key worth advertising
+ * belonged to the second. Both interfaces therefore assumed the legend *was*
+ * the answer's legend. Carrying the stage in the table is what lets each of
+ * them draw the right keys at the right moment without either one deciding
+ * for itself which those are.
+ */
+export type KeyStage = "question" | "answer" | "both";
+
+export interface ActionKey {
+  key: string;
+  label: string;
+  stage: KeyStage;
+}
+
 /** Everything at the prompt that is not a rating. */
-export const ACTION_KEYS: ReadonlyArray<readonly [key: string, label: string]> = [
-  ["o", "open"],
-  ["q", "quit"],
+export const ACTION_KEYS: readonly ActionKey[] = [
+  // `later` is offered ONLY at the question, and that is the whole design
+  // rather than a limitation — see `interpretKey` below.
+  { key: "0", label: "later", stage: "question" },
+  { key: "o", label: "open", stage: "answer" },
+  { key: "q", label: "quit", stage: "both" },
 ];
+
+/** The actions to advertise at one stage of a card, in table order. */
+export function actionsAt(stage: "question" | "answer"): ActionKey[] {
+  return ACTION_KEYS.filter((a) => a.stage === stage || a.stage === "both");
+}
 
 export type KeyAction =
   | { kind: "quit" }
   | { kind: "rate"; rating: 1 | 2 | 3 | 4 }
   | { kind: "open" }
+  /** Put this card back in the queue, unanswered. */
+  | { kind: "defer" }
   | { kind: "ignore" };
 
 /** Ctrl-C as it arrives from a raw-mode keypress. Terminal-only, harmless here. */
@@ -56,6 +84,22 @@ export function interpretKey(key: string): KeyAction {
   }
   if (key >= "1" && key <= "4") return { kind: "rate", rating: Number(key) as 1 | 2 | 3 | 4 };
   if (key === "o" || key === "O") return { kind: "open" };
+  /**
+   * `0` — "not now". The card goes back in the queue and **nothing is
+   * recorded**: no log line, no FSRS fold, no database write.
+   *
+   * It is deliberately meaningless once the answer is showing, and that is
+   * the point rather than an omission. Deferring a card you have already read
+   * the answer to would poison the measurement — you would see it again with
+   * the answer fresh, rate it well, and FSRS would record a clean success
+   * over an interval you never actually waited. A card you could not recall
+   * is a lapse, and `1` is the honest key for it.
+   *
+   * So this covers the one case a rating cannot: you are not ready to answer
+   * yet. Interrupted, distracted, or wanting to give it proper attention
+   * later. That is not a fact about your memory, so it is not recorded as one.
+   */
+  if (key === "0") return { kind: "defer" };
   return { kind: "ignore" };
 }
 

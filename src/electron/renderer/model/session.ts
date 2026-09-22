@@ -66,6 +66,9 @@ export function reviewed(s: Session): number {
  *   at that point, and recording a rating for an answer the user has not seen
  *   is worse than ignoring the key.
  * - `o` is offered only once the answer is showing, matching the CLI.
+ * - `0` is the opposite: offered only *before* it is, because deferring a
+ *   card whose answer you have read would make the next sighting a sham test.
+ *   It records nothing at all.
  * - A card rated `1` does **not** come back in this session. The queue is a
  *   snapshot, and FSRS puts a lapsed card minutes out; re-queueing inside the
  *   session would be learning-steps logic, which is out of scope.
@@ -76,6 +79,16 @@ export function press(s: Session, key: string): { next: Session; effect?: Effect
   const card = current(s)!;
 
   if (action.kind === "quit") return { next: { ...s, quit: true } };
+
+  if (action.kind === "defer") {
+    // Ignored once the answer is showing rather than treated as a reveal:
+    // `0` means "I am not ready to answer this", which is only true while
+    // the answer is still hidden.
+    if (s.revealed) return { next: s };
+    // No effect, and no counter. Nothing durable happens — the card simply
+    // moves, and `at` stays put because the splice shifts the rest forward.
+    return { next: { ...s, queue: moveToEnd(s.queue, s.at) } };
+  }
 
   if (!s.revealed) {
     // Any other key reveals, including a digit — which is why rating is only
@@ -97,4 +110,23 @@ export function press(s: Session, key: string): { next: Session; effect?: Effect
   }
 
   return { next: s };
+}
+
+/**
+ * Move one card to the back of the queue.
+ *
+ * The queue's LENGTH is unchanged, which is what keeps `isOver` honest: a
+ * deferred card is still owed an answer, so the session is not over until it
+ * gets one or the user quits. `at` is deliberately not advanced — removing
+ * the current card shifts the next one into its place.
+ *
+ * Deferring the only card left returns it immediately. That is the truthful
+ * answer to "show me something else" when there is nothing else, and `q`
+ * always works.
+ */
+function moveToEnd(queue: readonly DueCard[], at: number): DueCard[] {
+  const next = [...queue];
+  const [card] = next.splice(at, 1);
+  if (card) next.push(card);
+  return next;
 }
