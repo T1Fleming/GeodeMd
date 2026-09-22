@@ -1,6 +1,26 @@
 # Moving your notes between machines
 
-GeodeMD is a single-machine tool today. There is no sync feature, and this guide is not one — it is how to move a collection without losing scheduling, and what to expect if the same folder ends up on two machines.
+**GeodeMD has no sync feature, and is not going to get one** ([ADR 0021](../decisions/0021-no-built-in-sync-transport.md)). The unit of sync is your notes directory, and you move it with whatever you already use: Syncthing, Dropbox, iCloud Drive, git, or a USB stick.
+
+That is not a gap being apologised for. Everything two machines need in order to agree is already in the files — which is a claim with tests behind it, not a hope:
+
+- the ID written into each card line **is** its identity, so two machines agree without negotiating
+- each machine writes its own review log file, so no file is ever merged
+- replaying the same reviews lands both machines on **identical** scheduling, because the FSRS parameters are pinned in source
+- re-reading a log you already have is a no-op, so a syncer can deliver the same file twice
+- a machine that has never seen the collection catches up completely from the notes and logs alone
+
+This guide is how to do that safely, and what to expect when the same folder is on two machines at once.
+
+## The one rule
+
+**Set up one machine first, let its changes reach the other, and only then run GeodeMD on the second.**
+
+The first sync writes an ID into every card line. If two machines both do that before they have exchanged anything, each invents its own IDs for the same lines — neither is wrong, and neither has anything to agree with.
+
+What that costs is worth being exact about, because the obvious guess is wrong. You do **not** end up with doubled cards: whichever copy of the note wins carries one set of IDs, and the other set disappears when it stops appearing in any note. What you lose is the *review history recorded against the losing IDs* — still in the log, still safe, but now pointing at cards that no longer exist.
+
+No sync tool prevents this, because it happens before the sync tool ever sees a conflict. Stamping once and letting it propagate does.
 
 ## Moving to a new machine
 
@@ -54,9 +74,11 @@ So the copy is still there, still holding your other version, and still yours to
 
 ## What about reviewing on both machines?
 
-It works better than it has any right to, and it is still not a supported feature.
+It works, and it is tested — `src/core/two-devices.test.ts` runs exactly this. What it is not is *managed for you*: you are responsible for the folder reaching both ends.
 
 Reviews are recorded to the log first and the database second, both machines append to their own shard, and replay is ordered by when a review happened rather than when it arrived. A machine that was offline for three days folds its reviews in correctly when the files meet.
+
+If you use git, the merge is trivial in a way worth knowing: each machine writes to its own log file, named after its device, so there is nothing for git to merge and no conflict to resolve. Commit and push after a session; pull before one.
 
 The thing that breaks it is a **wrong system clock**. Ordering depends on the timestamp each machine recorded, so a badly wrong clock mis-orders that machine's history permanently, and no rebuild repairs it — the log itself is wrong.
 

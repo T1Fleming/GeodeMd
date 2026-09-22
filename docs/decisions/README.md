@@ -21,13 +21,14 @@ New decisions from here get an ADR when they are made, not in a later sweep — 
 | [0011](0011-enumeration-is-a-seam.md) | Enumeration is a seam: walk now, snapshot later | Accepted |
 | [0012](0012-open-the-note-from-review.md) | Review can open the note, and detects edits by an end-of-session sweep | Accepted |
 | [0013](0013-cli-and-electron-are-peers.md) | The CLI and the Electron app are peer interfaces, permanently | Accepted |
-| [0014](0014-cross-device-sync-transport.md) | Cross-device sync transport | **Proposed** |
+| [0014](0014-cross-device-sync-transport.md) | Cross-device sync transport | Superseded by [0021](0021-no-built-in-sync-transport.md) |
 | [0015](0015-accept-clock-skew.md) | Accept clock skew; do not build vector clocks | Accepted |
 | [0016](0016-config-lives-in-host.md) | Configuration lives in `host/`, below both interfaces | Accepted |
 | [0017](0017-core-runs-in-the-main-process.md) | `core` runs in the Electron main process, and the seam stays | Accepted |
 | [0018](0018-user-docs-live-in-guides-and-reference.md) | User documentation lives in `guides/` and `reference/`, as plain Markdown | Accepted |
 | [0019](0019-report-sync-conflict-copies.md) | Report a syncer's conflict copy rather than syncing it | Accepted |
 | [0020](0020-ship-the-docs-inside-the-app.md) | Ship the user documentation inside the app | Accepted |
+| [0021](0021-no-built-in-sync-transport.md) | No built-in sync transport; carry the notes directory | Accepted |
 
 ## Writing one
 

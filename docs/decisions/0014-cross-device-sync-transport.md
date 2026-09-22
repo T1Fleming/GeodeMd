@@ -1,7 +1,8 @@
 # 0014 — Cross-device sync transport
 
-- **Status:** Proposed
+- **Status:** Superseded
 - **Date:** 2026-09-19
+- **Superseded by:** [0021](0021-no-built-in-sync-transport.md) — no built-in transport; the notes directory is the unit of sync
 
 ## Context
 
