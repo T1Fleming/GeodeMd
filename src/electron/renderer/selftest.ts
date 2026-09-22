@@ -69,7 +69,34 @@ export async function runSelfTest(): Promise<void> {
     check("the review screen renders a card", exists(".question"), text(".question"));
     check("the answer starts hidden", !exists(".answer") && exists(".prompt"));
     check("the locator is shown", text(".meta .locator").includes(".md"), text(".meta .locator"));
+
+    // `0 later` is offered at the QUESTION, where `o open` is not — the two
+    // are deliberate opposites and the legend has to say so.
+    const atQuestion = all(".legend .action");
+    check("the question offers later and quit", atQuestion.length === 2, atQuestion.join(" / "));
+    check(
+      "and does not offer open, which needs an answer on screen",
+      !atQuestion.some((a) => a.includes("open")),
+      atQuestion.join(" / "),
+    );
     await shot("review-01-question");
+
+    // Defer, for real. Nothing should be recorded and the card must come back.
+    const deferred = text(".question");
+    await key("0");
+    check("0 moves to another card without revealing", text(".question") !== deferred && !exists(".answer"), text(".question"));
+    check("and does not advance the counter", text(".meta").startsWith("1 /"), text(".meta"));
+
+    // Walk back round by deferring, not by rating: the queue rotates and the
+    // session is left exactly as it started, which is the point — nothing
+    // about `0` is recorded anywhere.
+    let seen = false;
+    for (let i = 0; i < 60 && !seen; i++) {
+      if (text(".question") === deferred) { seen = true; break; }
+      await key("0");
+    }
+    check("a deferred card comes back later in the session", seen, deferred);
+    check("and the session has recorded nothing on the way round", text(".meta").startsWith("1 /"), text(".meta"));
 
     const first = text(".question");
     await key(" ");
@@ -92,6 +119,11 @@ export async function runSelfTest(): Promise<void> {
     );
     check('every action key is advertised', actions.length === 2, actions.join(' / '));
     check('open is one of them', actions.some((a) => a?.includes('open')), actions.join(' / '));
+    check(
+      'and later is NOT, because the answer is already showing',
+      !actions.some((a) => a?.includes('later')),
+      actions.join(' / '),
+    );
 
     // Press `o` for real.
     //

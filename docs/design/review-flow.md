@@ -62,11 +62,16 @@ It repairs the one-review gap left by a crash, it keeps the ingest path exercise
 Print question → any key → print answer → read `1`–`4` → record → next.
 
 - **`q` quits from either state.** Any key reveals the answer *except* `q`, which quits there and then without recording; it is the one key the "any key" rule excludes.
-- **Legend:** `1 again  2 hard  3 good  4 easy   o open · q quit`, under the answer. FSRS's four ratings are not guessable from their numbers, and neither is `o`.
+- **Legend:** `1 again  2 hard  3 good  4 easy   o open · q quit` under the answer, and `0 later · q quit` under the question. FSRS's four ratings are not guessable from their numbers, and neither is `o`. Which keys belong to which stage is `ACTION_KEYS`'s `stage` field in `host` — both interfaces map it rather than deciding, and `boundaries.test.ts` enforces that.
+- **`0` defers the card**, and is offered *only* before the answer is showing ([ADR 0022](../decisions/0022-defer-a-card-without-rating-it.md)). It records nothing — no log line, no FSRS fold, no write — and moves the card to the back of the queue. It is unavailable once the answer is on screen on purpose: deferring a card you have read the answer to would make the next sighting a sham test, and a card you could not recall is a lapse that `1` already describes honestly.
 - **`o` opens the card's note at its line**, offered only once the answer is showing. See [ADR 0012](../decisions/0012-open-the-note-from-review.md).
 - **Both interfaces open it the same way.** Which program to run, and how it is told a line, come from `host/editor.ts` — one table, so `o` cannot mean `code --goto` in the terminal and "whatever owns `.md`" in the app. What differs is the spawn: the CLI inherits the TTY and waits, the app detaches and returns at once. See [the module map](module-map.md).
 - **At the end of the session, notes that changed are named.** Every note opened is recorded with the mtime it had at the time, and the comparison happens once, when the session ends — not when the editor returns. Only a terminal editor holds the process until you quit it; `code`, `subl` and every OS opener return in milliseconds, so checking around the spawn would report nothing in exactly the setup where the user is most likely to still be typing. The queue is a snapshot, so a note edited mid-session is stale on screen, and this line is the only thing that says so.
 - **A card rated `1` is not re-shown in the same session.** The queue is materialized once, and FSRS puts a lapsed card a minute or so out, so it returns on the next `geode review`. Re-queueing inside the session is learning-steps logic, which is out of scope.
+
+**The queue is a working copy.** `0` reorders it, so the loop is index-driven in both interfaces rather than iterating the snapshot; the length never changes, and a deferred card is still owed an answer, so the session ends only when every card has one or the user quits.
+
+**Not yet honoured: FSRS's learning steps.** Our pinned parameters have `enable_short_term` on, so a new card rated `1` is due in 1 minute, `2` in 5, `3` in 10 — every new card answered anything but *easy* is already scheduled to return in the same sitting. The queue is a snapshot, so those due dates are computed and then discarded until the next session. Honouring them is Anki's behaviour and remains open; [ADR 0022](../decisions/0022-defer-a-card-without-rating-it.md) explains why `0` is complementary to that rather than a substitute for it.
 
 ### Raw mode
 

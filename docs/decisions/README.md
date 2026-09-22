@@ -29,6 +29,7 @@ New decisions from here get an ADR when they are made, not in a later sweep — 
 | [0019](0019-report-sync-conflict-copies.md) | Report a syncer's conflict copy rather than syncing it | Accepted |
 | [0020](0020-ship-the-docs-inside-the-app.md) | Ship the user documentation inside the app | Accepted |
 | [0021](0021-no-built-in-sync-transport.md) | No built-in sync transport; carry the notes directory | Accepted |
+| [0022](0022-defer-a-card-without-rating-it.md) | Defer a card without rating it | Accepted |
 
 ## Writing one
 
