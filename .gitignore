@@ -46,3 +46,10 @@ coverage/
 
 # macOS
 .DS_Store
+
+# Claude Code's session worktrees — full checkouts of this repo, node_modules
+# included, which is roughly a gigabyte that `git add -A` would otherwise try
+# to stage. `.claude/` itself is deliberately NOT ignored, so project-level
+# settings or skills can still be committed if they are ever wanted.
+.claude/worktrees/
+.claude/settings.local.json
