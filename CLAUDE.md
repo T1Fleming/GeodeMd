@@ -23,7 +23,7 @@ docs/reference/   what to look up: config keys, commands, exit codes.
 
 `README.md` is the front door and stays one: install, quickstart, the command table. Anything longer than a screen becomes a guide and gets linked.
 
-`docs/design/app.md` is the one to read before changing anything under `src/electron/` — the IPC contract's two rules, the single-flight and reconciliation rules for long runs, and why there is no cancel button.
+`docs/design/app.md` is the one to read before changing anything under `src/electron/` — the IPC contract's two rules, the single-flight and reconciliation rules for long runs, and why there is no cancel button. `docs/design/releasing.md` covers packaging, signing, and the checklist before a build goes out; read it before touching `desktop/package.json`'s `build` block.
 
 Start at [`docs/design/README.md`](docs/design/README.md): it indexes the subsystem docs and maps the brief's section numbers onto them. `docs/design/phase-1-brief.md` is the original pre-code spec — **historical, do not update it**; when it disagrees with a design doc, the design doc is right.
 
@@ -131,6 +131,15 @@ npm start                                   # just run it
 GEODE_SELFTEST=1 npx electron dist/electron/main/index.js   # headless, exits non-zero on failure
 GEODE_SHOT_DIR=/tmp/shots GEODE_SELFTEST=1 npx electron dist/electron/main/index.js
 ```
+
+With **no config present** and `GEODE_SELFTEST_FOLDER` set, the same run drives the whole first-run sequence and then continues into review, sync, stats and help:
+
+```sh
+XDG_CONFIG_HOME=/tmp/x/config XDG_DATA_HOME=/tmp/x/data \
+  GEODE_SELFTEST_FOLDER=/tmp/x/notes GEODE_SELFTEST=1 npx electron dist/electron/main/index.js
+```
+
+It performs a **real first sync** and stamps every card in that folder, so point it at a copy. Three things are substituted so the harness stays runnable rather than invasive — the editor becomes `touch`, the folder picker answers from the environment, and rebuild is confirmed but not run. All three are listed in `docs/design/app.md`.
 
 The self-test drives every IPC channel against a real database **and** clicks real buttons, because a button wired to the wrong handler passes every API-level check. `console.log("SHOT name")` from the renderer writes `name.png` of the window — which is the only way to find out whether anything rendered, whether text is legible, or whether a layout collapsed. Screenshots are diagnostic, never fixtures: comparing them byte-for-byte across machines fails on font rendering alone.
 
