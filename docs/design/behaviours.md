@@ -1,0 +1,1112 @@
+# Behaviours
+
+**Generated. Do not edit.** Every line below is the name of a test, assembled by
+`src/behaviours/reporter.ts` from the run that `npm test` just performed — so this
+file cannot describe a behaviour the suite does not check. `npm test` rewrites it, so
+a change here in a diff is a change in what GeodeMD does, and a stale copy shows up
+as an uncommitted change.
+
+It answers two questions the suite, organised by module, could not: *what does this
+app do*, and *where is that proven*. What it deliberately cannot tell you is what the
+app does **untested** — an area that looks thin here is thinly covered, and that is
+worth reading as a finding rather than a gap in the document.
+
+452 behaviours in 12 areas, which follow [the guides](../guides/) rather than the source tree.
+
+- [Reviewing](#reviewing) — 124
+- [Recognising a card](#recognising-a-card) — 57
+- [Syncing notes](#syncing-notes) — 79
+- [Recovery and the log](#recovery-and-the-log) — 26
+- [Moving between machines](#moving-between-machines) — 9
+- [Setting up this machine](#setting-up-this-machine) — 53
+- [The app's long runs](#the-apps-long-runs) — 31
+- [The terminal](#the-terminal) — 19
+- [The database as a cache](#the-database-as-a-cache) — 7
+- [At scale](#at-scale) — 9
+- [Rules the project enforces on itself](#rules-the-project-enforces-on-itself) — 31
+- [The documentation tells the truth](#the-documentation-tells-the-truth) — 7
+
+## Reviewing
+
+_A session: which card is next, what the keys mean, what a rating records, and what comes back before the sitting ends._
+
+**124 behaviours.**
+
+### interpretKey
+
+_6 · `cli/cli.test.ts`_
+
+- maps 1-4 to ratings
+- quits on q, Q, escape and Ctrl-C
+- opens the source note on o
+- ignores anything else rather than recording a wrong rating
+- names all four FSRS ratings in the legend
+- offers the source note in the legend, since nothing else advertises it
+
+### renderPrompt
+
+_2 · `cli/render.test.ts`_
+
+- repeats where you are in the session, and where the card came from
+- wraps the question to the width instead of the terminal edge
+
+### renderAnswer
+
+_1 · `cli/render.test.ts`_
+
+- shows the answer and the legend together
+
+### LEGEND
+
+_2 · `cli/render.test.ts`_
+
+- names every key the loop actually accepts
+- is plain text, so a pipe gets no escape sequences
+
+### renderSummary
+
+_3 · `cli/render.test.ts`_
+
+- counts the session and breaks it down by rating
+- stays quiet about ratings you never gave
+- says something honest about a session with no answers in it
+
+### renderStaleNote
+
+_2 · `cli/render.test.ts`_
+
+- says nothing when nothing changed
+- names the one note that changed, and counts several
+
+### renderHeader
+
+_1 · `cli/render.test.ts`_
+
+- reports the queue against the backlog it came from
+
+### a review while another writer holds the lock
+
+_6 · `core/busy.test.ts`_
+
+- fails in the way the app is written to expect
+- has already made the rating durable before SQLite is touched
+- leaves the card's state untouched rather than half-written
+- is repaired by the next ingest, with nothing lost
+- does not duplicate the review when the ingest replays it
+- succeeds normally once the lock is released
+
+### getDueCards
+
+_7 · `core/review.test.ts`_
+
+- orders new cards by (file_path, line_no) — the order they read
+- is stable across a rebuild
+- serves due cards ahead of new ones, most overdue first
+- respects the limit across both queries
+- starves new cards when the due backlog exceeds the limit
+- builds a locator from the vault-relative path and line
+- carries the path and line as data, not only as a display string
+
+### reviewCard
+
+_4 · `core/review.test.ts`_
+
+- writes the log BEFORE SQLite
+- omits elapsed and scheduled on a first review, and includes them after
+- recovers a review that reached the log but not the database
+- puts a lapsed card back within minutes, not the same session
+
+### stats
+
+_4 · `core/review.test.ts`_
+
+- counts total, due now, due before local midnight, and new
+- reports the counts as exact when nothing hit the cap
+- says so when a count stopped at the cap
+- does not count a deleted card's surviving state as due
+
+### openDetached
+
+_4 · `electron/main/open.test.ts`_
+
+- reports an editor that is not installed, rather than claiming success
+- returns as soon as the process exists, not when it exits
+- does not keep the event loop alive waiting for the child
+- passes the line through the same table the CLI uses
+
+### revealing
+
+_3 · `electron/renderer/model/session.test.ts`_
+
+- starts hidden, because the point is to recall it first
+- reveals on any key that is not a quit
+- quits from the question too, not only from the answer
+
+### rating
+
+_3 · `electron/renderer/model/session.test.ts`_
+
+- does nothing before the answer is showing
+- records the rating and moves on once revealed
+- is over when every card has graduated
+
+### a card on a learning step
+
+_9 · `electron/renderer/model/session.test.ts`_
+
+- comes back in the same session
+- goes ahead of a card that has not been seen yet, once it is due
+- does not replace the card being read the moment it ripens
+- is answered again, and counted again
+- makes the counter's denominator grow, because a second answer is owed
+- keeps the session alive while the rating is in flight
+- does not come back when the scheduler graduated it
+- does not come back when the write failed and its state is unknown
+- ignores a key pressed while nothing is on screen
+
+### opening the note
+
+_3 · `electron/renderer/model/session.test.ts`_
+
+- is offered only once the answer is showing, like the CLI
+- records each opened note once, for the end-of-session check
+- does not advance the card
+
+### keys it does not know
+
+_2 · `electron/renderer/model/session.test.ts`_
+
+- ignores them once revealed rather than guessing
+- does nothing at all once the session is over
+
+### an empty queue
+
+_1 · `electron/renderer/model/session.test.ts`_
+
+- is over immediately, with nothing to show
+
+### deferring
+
+_11 · `electron/renderer/model/session.test.ts`_
+
+- moves the card to the back and shows the next one
+- does not advance the counter, because nothing was answered
+- records nothing at all — no effect, no rating
+- is the second exception to `any key reveals`
+- does nothing once the answer is showing
+- keeps the session alive — a deferred card is still owed an answer
+- comes back round, so the card is genuinely still reachable
+- returns the only remaining card immediately, rather than pretending
+- still lets the card be answered normally afterwards
+- does not lose a card that was deferred and then answered
+- works on a card that came back on a learning step
+
+### resolveEditor
+
+_2 · `host/editor.test.ts`_
+
+- prefers the config key, then VISUAL, then EDITOR
+- is null when nothing names an editor
+
+### editorCommand
+
+_10 · `host/editor.test.ts`_
+
+- uses +LINE for the Unix family
+- uses --goto for the VS Code family
+- appends the line to the path for editors that read it there
+- carries the user's own flags through
+- recognises an editor named by its full path
+- gives an unfamiliar editor the path and nothing else
+- omits the line when there is none to give
+- falls back to the platform opener when no editor is named
+- never routes a path through cmd.exe, which would re-parse it
+- never passes a line to the OS opener, which cannot use one
+
+### OpenedNotes
+
+_5 · `host/editor.test.ts`_
+
+- reports a note that was edited while it was open
+- says nothing about a note that was only looked at
+- keeps the mtime from the FIRST open, not the most recent
+- counts a note that disappeared, and one that appeared
+- narrows to the paths asked about
+
+### interpretKey
+
+_4 · `host/present.test.ts`_
+
+- maps 1-4 to ratings
+- quits on q, Q, Ctrl-C, and escape in both spellings
+- opens the source note on o
+- ignores anything else rather than recording a rating nobody chose
+
+### the shared vocabulary
+
+_5 · `host/present.test.ts`_
+
+- names all four FSRS ratings, in order
+- agrees with interpretKey about every key it advertises
+- offers `later` only at the question and `open` only at the answer
+- offers quit at both stages, because a question you cannot leave is a trap
+- maps 0 to defer, which records nothing
+
+### ratingBreakdown
+
+_3 · `host/present.test.ts`_
+
+- stays quiet about ratings that were never given
+- reports in rating order, not insertion order
+- is empty for a session with no answers in it
+
+### an unanswered queue
+
+_3 · `host/queue.test.ts`_
+
+- serves the snapshot in order
+- is empty when it was built from nothing
+- does not hold on to the caller's array
+
+### a card that was rated
+
+_6 · `host/queue.test.ts`_
+
+- leaves the screen at once, but is still owed until the scheduler answers
+- comes back when FSRS put it on a learning step
+- is gone for the session once it graduates
+- is gone when the new state could not be learned
+- ignores an answer for a card that is not in flight
+- is treated as due now if its due date will not parse
+
+### the end of the queue
+
+_3 · `host/queue.test.ts`_
+
+- serves a waiting card early rather than idling
+- serves the earliest of several early
+- is over only when every card has graduated
+
+### the order waiting cards come back in
+
+_2 · `host/queue.test.ts`_
+
+- is by due time, earliest first
+- keeps the order they were rated in when two are due together
+
+### setting a card aside
+
+_5 · `host/queue.test.ts`_
+
+- moves it behind the cards not yet seen
+- returns the only card there is, rather than pretending
+- takes a waiting card off its learning step, because it had ripened
+- comes back rather than pulling a waiting card early
+- never loses a card or invents one
+
+### the pinned parameters
+
+_2 · `host/queue.test.ts`_
+
+- keeps every short-term step inside the same sitting
+- puts a lapsed review card back on one
+
+## Recognising a card
+
+_Text in, cards out. Also — and mostly — the shapes that are deliberately NOT cards, because a false positive writes a stamp into someone's note._
+
+**57 behaviours.**
+
+### the basic form
+
+_3 · `parser/parser.test.ts`_
+
+- splits on the first separator and trims both sides
+- reports a 0-based lineIndex
+- finds multiple cards in one document
+
+### `::` without surrounding whitespace is not a separator
+
+_4 · `parser/parser.test.ts`_
+
+- foo::bar
+- key::value in a field
+- a ::b
+- a:: b
+
+### a later separator is answer text
+
+_1 · `parser/parser.test.ts`_
+
+- keeps `::` in the answer — one line is always at most one card
+
+### leading list markers are stripped from the question
+
+_9 · `parser/parser.test.ts`_
+
+- - Q :: A
+- * Q :: A
+- + Q :: A
+- 1. Q :: A
+- 12. Q :: A
+- 1) Q :: A
+- - [ ] Q :: A
+- - [x] Q :: A
+-   - Q :: A
+
+### an empty side is not a card
+
+_5 · `parser/parser.test.ts`_
+
+- " :: A"
+- "Q :: "
+- " :: "
+- "- :: A"
+- is empty when the answer is nothing but a comment
+
+### stamps
+
+_8 · `parser/parser.test.ts`_
+
+- keeps an existing id and excludes it from the answer
+- strips a non-stamp trailing comment from the answer
+- strips a trailing comment that sits after a stamp
+- does not read a bare ^token as a stamp
+- is not a stamp: wrong length
+- is not a stamp: no prefix
+- is not a stamp: illegal char
+- is not a stamp: not at end of line
+
+### skipped contexts
+
+_14 · `parser/parser.test.ts`_
+
+- skips fenced code blocks
+- skips tilde-fenced code blocks
+- resumes after a fence closes
+- does not close a backtick fence with a tilde fence
+- skips indented code blocks (four spaces)
+- skips indented code blocks (tab)
+- skips a separator inside an inline code span
+- still parses a card whose answer contains a closed code span
+- skips table rows
+- skips blockquotes and headings
+- skips YAML frontmatter
+- parses cards after frontmatter closes
+- does not swallow the note when frontmatter is never closed
+- treats `---` below line 1 as ordinary text, not frontmatter
+
+### splitLines keeps each terminator
+
+_5 · `parser/parser.test.ts`_
+
+- preserves LF
+- preserves CRLF
+- preserves a missing final terminator
+- preserves a mixed file byte-for-byte when rejoined
+- returns nothing for empty input
+
+### stampLine
+
+_6 · `parser/parser.test.ts`_
+
+- appends a stamp to an unstamped line
+- replaces an existing stamp rather than appending a second
+- leaves a non-stamp comment in place and stamps after it
+- does not accumulate whitespace
+- rejects an id that is not the minted shape
+- round-trips: a stamped line parses back to the same id and answer
+
+### readStamp
+
+_2 · `parser/parser.test.ts`_
+
+- returns the id and the remainder
+- returns null when there is no stamp
+
+## Syncing notes
+
+_Finding what changed, stamping it, pruning what is gone, and saying what happened._
+
+**79 behaviours.**
+
+### formatSummary
+
+_3 · `cli/cli.test.ts`_
+
+- always reports the core counts
+- surfaces skipped files, which the exit code deliberately does not
+- stays quiet about zero-valued incidentals
+
+### deferralNote
+
+_3 · `cli/cli.test.ts`_
+
+- says nothing when nothing was deferred
+- explains a deferral and says what to do about it
+- agrees with itself about plurals
+
+### stamping
+
+_6 · `core/sync.test.ts`_
+
+- mints an id, writes it to the note, and creates the card row
+- is idempotent across two runs
+- preserves a CRLF file byte-for-byte apart from the stamped line
+- preserves a missing final newline
+- stamps every card in a file in one write
+- does not stamp inside a code block
+
+### the write guard
+
+_5 · `core/sync.test.ts`_
+
+- mints nothing in a file whose mtime is inside the deferral window
+- syncs already-stamped cards in a deferred file
+- re-reads a deferred file on the next sync rather than calling it unchanged
+- still records a deferred file that needed no minting
+- picks the deferred card up once the file goes quiet
+
+### identity across moves and copies
+
+_7 · `core/sync.test.ts`_
+
+- a renamed file keeps the card id and its row follows the new path
+- an edited question keeps the id and does not reset scheduling
+- re-mints a duplicated stamped line and REPLACES its stamp
+- skips a duplicate inside a DEFERRED file rather than overwriting the original
+- re-mints a card COPIED into a second file
+- tells a copy from a move within ONE file, per card
+- keeps the id for a card MOVED to a second file
+
+### configuration errors versus skips
+
+_2 · `core/sync.test.ts`_
+
+- throws on a missing notesPath rather than reporting a zero-card success
+- throws when notesPath is a file, not a directory
+
+### incremental sync
+
+_6 · `core/sync.test.ts`_
+
+- writes NOTHING when nothing changed
+- does not open an unchanged file, and does open a changed one
+- --full reads every file even when unchanged
+- records the POST-write mtime so the next run sees no change
+- loses exactly the cards deleted from a file
+- triggers the reconciliation pass only when a file vanished
+
+### progress reporting
+
+_3 · `core/sync.test.ts`_
+
+- reports every enumerated file, including the ones the cache skips
+- moves through the phases in order
+- is optional — a caller that passes nothing is unaffected
+
+### filesStamped
+
+_3 · `core/sync.test.ts`_
+
+- counts files edited, not cards — one file with many new cards is one
+- is zero on a second sync, when nothing needs a stamp
+- does not count a file whose cards were all deferred
+
+### --dry-run
+
+_3 · `core/sync.test.ts`_
+
+- reports how many files it WOULD edit, having edited none
+- writes neither a stamp nor a row, and still reports what would happen
+- leaves the real sync free to do the work afterwards
+
+### prune
+
+_2 · `core/sync.test.ts`_
+
+- removes card rows but leaves reviews and card_state untouched
+- restores a card on its original schedule, NOT queued as new
+
+### sync conflict copies
+
+_8 · `core/sync.test.ts`_
+
+- does not mint a second id for every card in the copy
+- leaves the copy's bytes untouched
+- does not disturb the original or its history
+- reports the count on every sync, not only the first
+- counts it as a conflict rather than as unchanged
+- still enumerates it, so nothing is pruned by its absence
+- does not read it, so its cards are not counted as found
+- leaves an ordinary file that merely looks similar alone
+
+### enumerate
+
+_9 · `files/files.test.ts`_
+
+- returns .md files with paths relative to the root
+- is deterministic — entries are sorted
+- skips non-.md files
+- skips every dotted directory
+- does not descend into a symlinked directory, and counts it
+- does not follow a symlinked file either
+- reports mtime and size
+- interleaves files and subdirectories in sorted order, at every depth
+- gives every candidate its OWN stat, not a neighbour's
+
+### writeIfUnchanged
+
+_4 · `files/files.test.ts`_
+
+- writes and returns the POST-write stat
+- refuses to write when size changed since the read
+- refuses to write when mtime changed but size did not
+- returns null when the file vanished
+
+### isSyncConflict
+
+_4 · `files/files.test.ts`_
+
+- catches Syncthing's shape
+- catches Dropbox and Nextcloud, with or without an owner's name
+- leaves ordinary filenames alone, including the ambiguous ones
+- judges the filename, not the folder it sits in
+
+### summaryFields
+
+_6 · `host/present.test.ts`_
+
+- always reports the core counts, even at zero
+- stays quiet about incidentals at zero
+- surfaces a skipped file, which the exit code deliberately does not
+- puts filesStamped ahead of the other incidentals
+- marks unchanged and read as a breakdown of files, and nothing else
+- keeps a detail next to the field it breaks down
+
+### deferralReason
+
+_4 · `host/present.test.ts`_
+
+- says nothing when nothing was deferred
+- explains why, because the counts alone read as a bug
+- agrees with itself about plurals
+- leaves what to do about it to the interface
+
+### PHASE_LABEL
+
+_1 · `host/present.test.ts`_
+
+- names every phase core can report
+
+## Recovery and the log
+
+_The append-only review log, and rebuilding the database from nothing but notes and logs._
+
+**26 behaviours.**
+
+### rebuild
+
+_4 · `core/rebuild.test.ts`_
+
+- reproduces cards, files, reviews and card_state IDENTICALLY, in full
+- is a differential test between fold-forward and from-scratch replay
+- catches cards.reviewed drifting out of agreement with card_state
+- a card authored while the database was gone still gets its id
+
+### log ingest
+
+_11 · `core/rebuild.test.ts`_
+
+- ingesting the same log twice changes nothing
+- merges two shards in timestamp order regardless of read order
+- a review arriving OUT OF ORDER replays in rated_at order, not ingest order
+- ingests a review for an id no longer in the notes without error
+- skips a truncated final line rather than aborting the ingest
+- completes a truncated line on the following run
+- a copy of a shard under a different name ingests zero new reviews
+- does not open a frozen shard whose size is unchanged
+- reads only the appended bytes when a shard grows
+- re-reads from zero when a shard shrank
+- counts an unparseable line as skipped, never fatal
+
+### the review log
+
+_7 · `files/files.test.ts`_
+
+- names a shard by device and the month of the timestamp
+- puts a review either side of midnight into different shards
+- creates the log directory on first write
+- appends rather than truncating
+- omits elapsed and scheduled when they are not supplied
+- treats an absent log directory as a first run, not an error
+- lists any .jsonl whatever it is named, and ignores other files
+
+### readShardFrom
+
+_4 · `files/files.test.ts`_
+
+- reads from an offset only
+- stops at the last COMPLETE line and leaves the offset before a partial one
+- returns nothing when there is no complete line at all
+- returns nothing when the offset is already at EOF
+
+## Moving between machines
+
+_One notes directory, two devices, no built-in sync transport._
+
+**9 behaviours.**
+
+### two machines, one notes directory
+
+_8 · `core/two-devices.test.ts`_
+
+- agree on card identity without ever talking to each other
+- write to separate log shards, so a syncer never has to merge one file
+- each picks up the other's reviews on the next ingest
+- converge on identical scheduling state, not merely on both having some
+- re-ingesting the same shards changes nothing
+- replays in the order things were RATED, not the order they arrived
+- survives a machine that has never seen the notes before
+- does not need the database to travel
+
+### both machines stamping before they ever exchange
+
+_1 · `core/two-devices.test.ts`_
+
+- converges on one set of ids rather than duplicating the cards
+
+## Setting up this machine
+
+_Config, XDG paths, the device name, and the first run._
+
+**53 behaviours.**
+
+### choosing a folder
+
+_4 · `electron/renderer/model/setup.test.ts`_
+
+- will not move on until one is chosen
+- accepts an empty folder, because starting from nothing is legitimate
+- refuses a path that is not a directory
+- lands on the confirm step
+
+### an existing config
+
+_4 · `electron/renderer/model/setup.test.ts`_
+
+- makes using the new folder an explicit choice
+- treats keeping the old settings as a way out, not a way forward
+- is not asked at all on a first run
+- re-opens the question when a different config is proposed
+
+### the acknowledgement
+
+_1 · `electron/renderer/model/setup.test.ts`_
+
+- is required exactly once, and blocks nothing else
+
+### the preview gate
+
+_3 · `electron/renderer/model/setup.test.ts`_
+
+- is what makes the real sync reachable at all
+- is cleared by choosing a different folder
+- survives stepping back and forward over the same folder
+
+### walking the steps
+
+_2 · `electron/renderer/model/setup.test.ts`_
+
+- does not advance past a blocker
+- goes forward and back through every step in order
+
+### previewReport
+
+_1 · `electron/renderer/model/setup.test.ts`_
+
+- reports notes edited from filesStamped, not from cardsNew
+
+### XDG paths
+
+_2 · `host/host.test.ts`_
+
+- uses the geodemd directory, while the command stays `geode`
+- falls back to ~/.config and ~/.local/share when XDG is unset
+
+### newId
+
+_2 · `host/host.test.ts`_
+
+- mints the shape section 4 specifies
+- does not repeat
+
+### defaultDevice
+
+_3 · `host/host.test.ts`_
+
+- slugifies the hostname and appends a suffix
+- gives two identically-named machines different names
+- copes with a hostname that slugifies to nothing
+
+### init
+
+_6 · `host/host.test.ts`_
+
+- writes the three keys
+- refuses to overwrite an existing config
+- preserves device under --force
+- reads an editor when one is set, and nothing when it is not
+- preserves editor under --force, like device
+- returns null for a missing or malformed config
+
+### ensureConfig
+
+_6 · `host/host.test.ts`_
+
+- readConfig alone hands out a different device every time
+- mints a device once and persists it
+- leaves an existing device alone and writes nothing
+- leaves exactly one device behind when two heals race, and settles after
+- does not leave temp files behind
+- is null for a missing config, like readConfig
+
+### exit codes
+
+_2 · `host/host.test.ts`_
+
+- gives every user-fixable kind a 1, and only a bug a 2
+- classifies while the error still has its prototype
+
+### isBusy
+
+_4 · `host/host.test.ts`_
+
+- recognises both busy codes SQLite produces
+- does not treat other SQLite failures as retryable
+- survives anything at all being thrown
+- reads the property rather than the class, which does not survive IPC
+
+### inspectFolder
+
+_7 · `host/setup.test.ts`_
+
+- counts the markdown files a sync would actually read
+- counts the same way enumerate does, dotted directories included
+- reports an empty folder rather than refusing it
+- notices a git repository, because that changes which warning is honest
+- says so when the path is gone
+- tells a file apart from a missing path
+- resolves the path it reports back
+
+### proposeConfig
+
+_5 · `host/setup.test.ts`_
+
+- proposes a fresh device and the default db path on a first run
+- keeps the device when there is already a config, and says that it did
+- mentions editor only when there is one to keep
+- writes nothing
+- resolves a relative notesPath, as init would
+
+### telling a moved folder from a first run
+
+_1 · `host/setup.test.ts`_
+
+- is a question inspectFolder answers, so the two get different screens
+
+## The app's long runs
+
+_Single-flight, progress, and how a window that missed an event catches up._
+
+**31 behaviours.**
+
+### single-flight
+
+_3 · `electron/main/runs.test.ts`_
+
+- a second sync JOINS the first rather than failing
+- a rebuild cannot join a sync
+- frees the slot when the run ends
+
+### progress
+
+_3 · `electron/main/runs.test.ts`_
+
+- emits on the timer, not on every callback
+- always ends at 100%, even if the throttle dropped the last update
+- carries the run id and kind on every emit
+
+### results
+
+_2 · `electron/main/runs.test.ts`_
+
+- returns a summary rather than throwing
+- tags a missing notes directory as config, not internal
+
+### the wire types survive structuredClone
+
+_2 · `electron/main/runs.test.ts`_
+
+- clones every payload a real run produces
+- and core's own Config does NOT — which is why the wire type differs
+
+### status survives a missed event
+
+_5 · `electron/main/runs.test.ts`_
+
+- distinguishes never-run from finished
+- keeps the last result, so a late subscriber can still learn it
+- reports running while a run is in flight
+- a new run supersedes the previous result rather than aging it out
+- status is structured-cloneable, like every other payload
+
+### percent
+
+_3 · `electron/renderer/model/run.test.ts`_
+
+- is zero before the total is known, rather than NaN
+- clamps, because done can legitimately exceed total
+- rounds to whole percent
+
+### fromStatus
+
+_4 · `electron/renderer/model/run.test.ts`_
+
+- adopts a run already in flight when a window mounts late
+- adopts a result the window was never subscribed for
+- tells never-run apart from finished
+- carries a failure across as a failure, not an empty summary
+
+### phases
+
+_1 · `electron/renderer/model/run.test.ts`_
+
+- names the phase rather than showing the enum
+
+### events out of order
+
+_5 · `electron/renderer/model/run.test.ts`_
+
+- does not put a finished run back on the bar
+- ignores a straggler from the previous run
+- lets a newer run supersede an older one
+- orders run ids numerically, not lexically
+- ignores a finish for a run that is not the current one
+
+### dryRun travels with the run
+
+_2 · `electron/renderer/model/run.test.ts`_
+
+- so a window that joined one does not claim notes were written
+- and is visible while it is still running
+
+### isRunning
+
+_1 · `electron/renderer/model/run.test.ts`_
+
+- is true only in flight, because rebuild is refused while anything runs
+
+## The terminal
+
+_Argument parsing, colour, and wrapping — the parts that are the CLI's alone._
+
+**19 behaviours.**
+
+### parseArgs
+
+_4 · `cli/cli.test.ts`_
+
+- reads a command and positionals
+- reads flags in any position
+- reads -n and --limit
+- ignores a nonsense limit rather than crashing
+
+### isEntryPoint
+
+_2 · `cli/cli.test.ts`_
+
+- recognises the module when invoked through a symlink
+- is false for an unrelated entry, or none at all
+
+### colorEnabled
+
+_4 · `cli/style.test.ts`_
+
+- follows the terminal when nothing says otherwise
+- lets NO_COLOR win over everything, FORCE_COLOR included
+- colours a pipe when FORCE_COLOR asks
+- says no to a dumb terminal
+
+### styler
+
+_2 · `cli/style.test.ts`_
+
+- is the identity when disabled, not a stripped escape
+- wraps and closes the sequence when enabled
+
+### columns
+
+_2 · `cli/style.test.ts`_
+
+- defaults when the stream has no width
+- clamps both ends, because prose is not the window
+
+### wrap
+
+_5 · `cli/style.test.ts`_
+
+- leaves short text alone
+- breaks on words at the width
+- hard-breaks a word longer than the width
+- keeps every line within the width
+- keeps explicit newlines as their own lines
+
+## The database as a cache
+
+_Schema decisions the rest of the system leans on, and what they cost._
+
+**7 behaviours.**
+
+### opening the database
+
+_3 · `store/store.test.ts`_
+
+- creates the parent directory on a first run
+- keeps `files` a rowid table, which step 6's bitmap depends on
+- stores `reviews` WITHOUT ROWID, so there is no ingest-order column
+
+### counting what is due
+
+_2 · `store/store.test.ts`_
+
+- stops at the limit rather than counting a backlog out
+- still ignores state that outlived its card
+
+### checkpointing
+
+_2 · `store/store.test.ts`_
+
+- folds the write-ahead log back into the database
+- is harmless with nothing to fold
+
+## At scale
+
+_The properties that must hold at a million cards._
+
+**9 behaviours.**
+
+### the invariant that is not a time at all
+
+_4 · `core/scale.test.ts`_
+
+- a sync that finds nothing changed performs ZERO writes
+- holds at a larger card count too — it is not a small-tree accident
+- a single-file change reads exactly one file
+- deleting a file is the only thing that triggers the reconciliation pass
+
+### shape, not seconds
+
+_3 · `core/scale.test.ts`_
+
+- a no-change sync scales with FILE count
+- a no-change sync is FLAT in cards per file
+- getDueCards is flat as the collection grows
+
+### enumeration strategies
+
+_2 · `files/enumerate.bench.test.ts`_
+
+- wide (100/dir) — 20000 files _(skipped)_
+- narrow (4/dir) — 20000 files _(skipped)_
+
+## Rules the project enforces on itself
+
+_Module boundaries, and the completeness of this document — both checked by scanning source text rather than trusted._
+
+**31 behaviours.**
+
+### every behaviour has a home
+
+_3 · `behaviours/areas.test.ts`_
+
+- classifies every test file
+- classifies every group in every file
+- finds groups in every file it classifies, so the scan cannot silently fail
+
+### the taxonomy itself
+
+_5 · `behaviours/areas.test.ts`_
+
+- points every file and override at an area that exists
+- names a file that exists for every override
+- names a group that exists for every override
+- keeps every area in use
+- gives every area a blurb, because a bare heading explains nothing
+
+### section 6 hard rules
+
+_6 · `boundaries.test.ts`_
+
+- rule 1: core never imports cli
+- rule 1: no module below cli imports cli
+- rule 2: core never writes to the terminal, exits, or prompts
+- rule 3: core reads no ambient config
+- rule 4: parser opens no file
+- parser touches no database and no clock
+
+### one module per external resource
+
+_4 · `boundaries.test.ts`_
+
+- only store/ imports better-sqlite3
+- only store/ writes SQL
+- the log lives under files/, not store/
+- scheduler pins its parameters rather than inheriting them
+
+### host, shared by both interfaces
+
+_10 · `boundaries.test.ts`_
+
+- never writes to the terminal
+- is where ambient machine state is read, so core does not have to
+- owns the review vocabulary, so the two interfaces cannot disagree
+- owns which keys are offered at which point in a card
+- owns when a rated card comes back, so a session means the same in both
+- owns which program opens a note, and how it is told a line
+- owns what a sync summary says, so the two cannot report differently
+- leaves the spawn to each interface, because the two are not the same
+- is the only place above core that walks the notes tree
+- core does not import host either — it takes its config as an argument
+
+### electron, the second interface
+
+_3 · `boundaries.test.ts`_
+
+- does not import cli, and cli does not import it
+- nothing below the interfaces imports electron
+- keeps onProgress out of the wire types
+
+## The documentation tells the truth
+
+_Documents that make checkable claims, checked._
+
+**7 behaviours.**
+
+### the demo collection
+
+_2 · `demo.test.ts`_
+
+- holds the number of cards its README advertises
+- is unstamped, so a reader sees what they would write themselves
+
+### syntax.md keeps its promises
+
+_5 · `demo.test.ts`_
+
+- skips every shape it demonstrates
+- does not read the inline code span as a card
+- strips list markers and task boxes from the question
+- strips a trailing comment that is not a stamp
+- keeps a later separator as answer text
+
