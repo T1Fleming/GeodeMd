@@ -3,7 +3,7 @@ import { colorEnabled, columns, styler, wrap } from "./style.js";
 
 const env = (o: Record<string, string>): NodeJS.ProcessEnv => o as NodeJS.ProcessEnv;
 
-describe("colorEnabled", () => {
+describe("when colour is used, and when it is not", () => {
   it("follows the terminal when nothing says otherwise", () => {
     expect(colorEnabled(env({}), true)).toBe(true);
     expect(colorEnabled(env({}), false)).toBe(false);
@@ -24,7 +24,7 @@ describe("colorEnabled", () => {
   });
 });
 
-describe("styler", () => {
+describe("styling text, or leaving it plain", () => {
   it("is the identity when disabled, not a stripped escape", () => {
     const s = styler(false);
     expect(s.bold("x")).toBe("x");
@@ -37,7 +37,7 @@ describe("styler", () => {
   });
 });
 
-describe("columns", () => {
+describe("how wide the terminal is", () => {
   it("defaults when the stream has no width", () => {
     expect(columns({})).toBe(80);
     // A pty opened without a winsize reports 0, which means unknown — not the
@@ -51,7 +51,7 @@ describe("columns", () => {
   });
 });
 
-describe("wrap", () => {
+describe("wrapping text to a width", () => {
   it("leaves short text alone", () => {
     expect(wrap("a short line", 40)).toEqual(["a short line"]);
   });

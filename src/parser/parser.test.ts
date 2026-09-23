@@ -198,7 +198,7 @@ describe("splitLines keeps each terminator", () => {
   });
 });
 
-describe("stampLine", () => {
+describe("writing a stamp into a line", () => {
   it("appends a stamp to an unstamped line", () => {
     expect(stampLine("Q :: A", ID)).toBe(`Q :: A <!-- ${ID} -->`);
   });
@@ -227,7 +227,7 @@ describe("stampLine", () => {
   });
 });
 
-describe("readStamp", () => {
+describe("reading a stamp back off a line", () => {
   it("returns the id and the remainder", () => {
     // `rest` is the raw remainder; trimming is the caller's business.
     expect(readStamp(`Q :: A <!-- ${ID} -->`)).toEqual({ id: ID, rest: "Q :: A " });

@@ -133,16 +133,16 @@ export const BY_FILE: Readonly<Record<string, string>> = {
  * sync reporting under "Reviewing", which is how a taxonomy stops being read.
  */
 export const BY_GROUP: Readonly<Record<string, string>> = {
-  "host/present.test.ts:summaryFields": "Syncing notes",
-  "host/present.test.ts:deferralReason": "Syncing notes",
-  "host/present.test.ts:PHASE_LABEL": "Syncing notes",
+  "host/present.test.ts:which counts a sync summary shows": "Syncing notes",
+  "host/present.test.ts:why a freshly-edited file was left alone": "Syncing notes",
+  "host/present.test.ts:what each sync phase is called": "Syncing notes",
 
   "files/files.test.ts:the review log": "Recovery and the log",
-  "files/files.test.ts:readShardFrom": "Recovery and the log",
+  "files/files.test.ts:reading a log shard from where it left off": "Recovery and the log",
 
-  "cli/cli.test.ts:formatSummary": "Syncing notes",
-  "cli/cli.test.ts:deferralNote": "Syncing notes",
-  "cli/cli.test.ts:interpretKey": "Reviewing",
+  "cli/cli.test.ts:what a sync reports in the terminal": "Syncing notes",
+  "cli/cli.test.ts:explaining a file that was left alone": "Syncing notes",
+  "cli/cli.test.ts:the keys the loop honours": "Reviewing",
 };
 
 /**

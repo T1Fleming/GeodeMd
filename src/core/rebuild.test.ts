@@ -59,7 +59,7 @@ async function logLine(name: string, obj: unknown): Promise<void> {
   await fs.appendFile(path.join(dir, name), `${JSON.stringify(obj)}\n`, "utf8");
 }
 
-describe("rebuild", () => {
+describe("rebuilding from notes and logs", () => {
   it("reproduces cards, files, reviews and card_state IDENTICALLY, in full", async () => {
     await write("a.md", "A :: 1\nB :: 2\n");
     await write("sub/c.md", "C :: 3\n");
@@ -114,7 +114,7 @@ describe("rebuild", () => {
   });
 });
 
-describe("log ingest", () => {
+describe("ingesting the log", () => {
   it("ingesting the same log twice changes nothing", async () => {
     await write("a.md", "A :: 1\n");
     await core.sync(T0);

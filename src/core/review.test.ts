@@ -41,7 +41,7 @@ async function write(rel: string, content: string): Promise<void> {
   await fs.utimes(abs, MTIME, MTIME);
 }
 
-describe("getDueCards", () => {
+describe("the order cards are served in", () => {
   it("orders new cards by (file_path, line_no) — the order they read", async () => {
     await write("z.md", "Z1 :: 1\nZ2 :: 2\n");
     await write("a.md", "A1 :: 1\nA2 :: 2\n");
@@ -112,7 +112,7 @@ describe("getDueCards", () => {
   });
 });
 
-describe("reviewCard", () => {
+describe("recording a review", () => {
   it("writes the log BEFORE SQLite", async () => {
     await write("a.md", "A :: 1\n");
     await core.sync(T0);
@@ -180,7 +180,7 @@ describe("reviewCard", () => {
   });
 });
 
-describe("stats", () => {
+describe("reporting what is due and what is new", () => {
   it("counts total, due now, due before local midnight, and new", async () => {
     await write("a.md", "A :: 1\nB :: 2\n");
     await core.sync(T0);

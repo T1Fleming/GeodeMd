@@ -32,57 +32,35 @@ _A session: which card is next, what the keys mean, what a rating records, and w
 
 **124 behaviours.**
 
-### interpretKey
+### the order cards are served in
 
-_6 · `cli/cli.test.ts`_
+_7 · `core/review.test.ts`_
 
-- maps 1-4 to ratings
-- quits on q, Q, escape and Ctrl-C
-- opens the source note on o
-- ignores anything else rather than recording a wrong rating
-- names all four FSRS ratings in the legend
-- offers the source note in the legend, since nothing else advertises it
+- orders new cards by (file_path, line_no) — the order they read
+- is stable across a rebuild
+- serves due cards ahead of new ones, most overdue first
+- respects the limit across both queries
+- starves new cards when the due backlog exceeds the limit
+- builds a locator from the vault-relative path and line
+- carries the path and line as data, not only as a display string
 
-### renderPrompt
+### recording a review
 
-_2 · `cli/render.test.ts`_
+_4 · `core/review.test.ts`_
 
-- repeats where you are in the session, and where the card came from
-- wraps the question to the width instead of the terminal edge
+- writes the log BEFORE SQLite
+- omits elapsed and scheduled on a first review, and includes them after
+- recovers a review that reached the log but not the database
+- puts a lapsed card back within minutes, not the same session
 
-### renderAnswer
+### reporting what is due and what is new
 
-_1 · `cli/render.test.ts`_
+_4 · `core/review.test.ts`_
 
-- shows the answer and the legend together
-
-### LEGEND
-
-_2 · `cli/render.test.ts`_
-
-- names every key the loop actually accepts
-- is plain text, so a pipe gets no escape sequences
-
-### renderSummary
-
-_3 · `cli/render.test.ts`_
-
-- counts the session and breaks it down by rating
-- stays quiet about ratings you never gave
-- says something honest about a session with no answers in it
-
-### renderStaleNote
-
-_2 · `cli/render.test.ts`_
-
-- says nothing when nothing changed
-- names the one note that changed, and counts several
-
-### renderHeader
-
-_1 · `cli/render.test.ts`_
-
-- reports the queue against the backlog it came from
+- counts total, due now, due before local midnight, and new
+- reports the counts as exact when nothing hit the cap
+- says so when a count stopped at the cap
+- does not count a deleted card's surviving state as due
 
 ### a review while another writer holds the lock
 
@@ -95,44 +73,156 @@ _6 · `core/busy.test.ts`_
 - does not duplicate the review when the ingest replays it
 - succeeds normally once the lock is released
 
-### getDueCards
+### an unanswered queue
 
-_7 · `core/review.test.ts`_
+_3 · `host/queue.test.ts`_
 
-- orders new cards by (file_path, line_no) — the order they read
-- is stable across a rebuild
-- serves due cards ahead of new ones, most overdue first
-- respects the limit across both queries
-- starves new cards when the due backlog exceeds the limit
-- builds a locator from the vault-relative path and line
-- carries the path and line as data, not only as a display string
+- serves the snapshot in order
+- is empty when it was built from nothing
+- does not hold on to the caller's array
 
-### reviewCard
+### a card that was rated
 
-_4 · `core/review.test.ts`_
+_6 · `host/queue.test.ts`_
 
-- writes the log BEFORE SQLite
-- omits elapsed and scheduled on a first review, and includes them after
-- recovers a review that reached the log but not the database
-- puts a lapsed card back within minutes, not the same session
+- leaves the screen at once, but is still owed until the scheduler answers
+- comes back when FSRS put it on a learning step
+- is gone for the session once it graduates
+- is gone when the new state could not be learned
+- ignores an answer for a card that is not in flight
+- is treated as due now if its due date will not parse
 
-### stats
+### the end of the queue
 
-_4 · `core/review.test.ts`_
+_3 · `host/queue.test.ts`_
 
-- counts total, due now, due before local midnight, and new
-- reports the counts as exact when nothing hit the cap
-- says so when a count stopped at the cap
-- does not count a deleted card's surviving state as due
+- serves a waiting card early rather than idling
+- serves the earliest of several early
+- is over only when every card has graduated
 
-### openDetached
+### the order waiting cards come back in
 
-_4 · `electron/main/open.test.ts`_
+_2 · `host/queue.test.ts`_
 
-- reports an editor that is not installed, rather than claiming success
-- returns as soon as the process exists, not when it exits
-- does not keep the event loop alive waiting for the child
-- passes the line through the same table the CLI uses
+- is by due time, earliest first
+- keeps the order they were rated in when two are due together
+
+### setting a card aside
+
+_5 · `host/queue.test.ts`_
+
+- moves it behind the cards not yet seen
+- returns the only card there is, rather than pretending
+- takes a waiting card off its learning step, because it had ripened
+- comes back rather than pulling a waiting card early
+- never loses a card or invents one
+
+### the pinned parameters
+
+_2 · `host/queue.test.ts`_
+
+- keeps every short-term step inside the same sitting
+- puts a lapsed review card back on one
+
+### what a keypress means
+
+_4 · `host/present.test.ts`_
+
+- maps 1-4 to ratings
+- quits on q, Q, Ctrl-C, and escape in both spellings
+- opens the source note on o
+- ignores anything else rather than recording a rating nobody chose
+
+### the shared vocabulary
+
+_5 · `host/present.test.ts`_
+
+- names all four FSRS ratings, in order
+- agrees with interpretKey about every key it advertises
+- offers `later` only at the question and `open` only at the answer
+- offers quit at both stages, because a question you cannot leave is a trap
+- maps 0 to defer, which records nothing
+
+### which ratings a session summary mentions
+
+_3 · `host/present.test.ts`_
+
+- stays quiet about ratings that were never given
+- reports in rating order, not insertion order
+- is empty for a session with no answers in it
+
+### which program opens a note
+
+_2 · `host/editor.test.ts`_
+
+- prefers the config key, then VISUAL, then EDITOR
+- is null when nothing names an editor
+
+### how an editor is told which line
+
+_10 · `host/editor.test.ts`_
+
+- uses +LINE for the Unix family
+- uses --goto for the VS Code family
+- appends the line to the path for editors that read it there
+- carries the user's own flags through
+- recognises an editor named by its full path
+- gives an unfamiliar editor the path and nothing else
+- omits the line when there is none to give
+- falls back to the platform opener when no editor is named
+- never routes a path through cmd.exe, which would re-parse it
+- never passes a line to the OS opener, which cannot use one
+
+### noticing a note you edited while reviewing
+
+_5 · `host/editor.test.ts`_
+
+- reports a note that was edited while it was open
+- says nothing about a note that was only looked at
+- keeps the mtime from the FIRST open, not the most recent
+- counts a note that disappeared, and one that appeared
+- narrows to the paths asked about
+
+### what a question looks like
+
+_2 · `cli/render.test.ts`_
+
+- repeats where you are in the session, and where the card came from
+- wraps the question to the width instead of the terminal edge
+
+### what an answer looks like
+
+_1 · `cli/render.test.ts`_
+
+- shows the answer and the legend together
+
+### what the legend says
+
+_2 · `cli/render.test.ts`_
+
+- names every key the loop actually accepts
+- is plain text, so a pipe gets no escape sequences
+
+### the tally at the end of a session
+
+_3 · `cli/render.test.ts`_
+
+- counts the session and breaks it down by rating
+- stays quiet about ratings you never gave
+- says something honest about a session with no answers in it
+
+### naming the notes you edited while reviewing
+
+_2 · `cli/render.test.ts`_
+
+- says nothing when nothing changed
+- names the one note that changed, and counts several
+
+### how much is due, said once at the top
+
+_1 · `cli/render.test.ts`_
+
+- reports the queue against the backlog it came from
 
 ### revealing
 
@@ -201,115 +291,25 @@ _11 · `electron/renderer/model/session.test.ts`_
 - does not lose a card that was deferred and then answered
 - works on a card that came back on a learning step
 
-### resolveEditor
+### launching an editor without holding the app open
 
-_2 · `host/editor.test.ts`_
+_4 · `electron/main/open.test.ts`_
 
-- prefers the config key, then VISUAL, then EDITOR
-- is null when nothing names an editor
+- reports an editor that is not installed, rather than claiming success
+- returns as soon as the process exists, not when it exits
+- does not keep the event loop alive waiting for the child
+- passes the line through the same table the CLI uses
 
-### editorCommand
+### the keys the loop honours
 
-_10 · `host/editor.test.ts`_
-
-- uses +LINE for the Unix family
-- uses --goto for the VS Code family
-- appends the line to the path for editors that read it there
-- carries the user's own flags through
-- recognises an editor named by its full path
-- gives an unfamiliar editor the path and nothing else
-- omits the line when there is none to give
-- falls back to the platform opener when no editor is named
-- never routes a path through cmd.exe, which would re-parse it
-- never passes a line to the OS opener, which cannot use one
-
-### OpenedNotes
-
-_5 · `host/editor.test.ts`_
-
-- reports a note that was edited while it was open
-- says nothing about a note that was only looked at
-- keeps the mtime from the FIRST open, not the most recent
-- counts a note that disappeared, and one that appeared
-- narrows to the paths asked about
-
-### interpretKey
-
-_4 · `host/present.test.ts`_
+_6 · `cli/cli.test.ts`_
 
 - maps 1-4 to ratings
-- quits on q, Q, Ctrl-C, and escape in both spellings
+- quits on q, Q, escape and Ctrl-C
 - opens the source note on o
-- ignores anything else rather than recording a rating nobody chose
-
-### the shared vocabulary
-
-_5 · `host/present.test.ts`_
-
-- names all four FSRS ratings, in order
-- agrees with interpretKey about every key it advertises
-- offers `later` only at the question and `open` only at the answer
-- offers quit at both stages, because a question you cannot leave is a trap
-- maps 0 to defer, which records nothing
-
-### ratingBreakdown
-
-_3 · `host/present.test.ts`_
-
-- stays quiet about ratings that were never given
-- reports in rating order, not insertion order
-- is empty for a session with no answers in it
-
-### an unanswered queue
-
-_3 · `host/queue.test.ts`_
-
-- serves the snapshot in order
-- is empty when it was built from nothing
-- does not hold on to the caller's array
-
-### a card that was rated
-
-_6 · `host/queue.test.ts`_
-
-- leaves the screen at once, but is still owed until the scheduler answers
-- comes back when FSRS put it on a learning step
-- is gone for the session once it graduates
-- is gone when the new state could not be learned
-- ignores an answer for a card that is not in flight
-- is treated as due now if its due date will not parse
-
-### the end of the queue
-
-_3 · `host/queue.test.ts`_
-
-- serves a waiting card early rather than idling
-- serves the earliest of several early
-- is over only when every card has graduated
-
-### the order waiting cards come back in
-
-_2 · `host/queue.test.ts`_
-
-- is by due time, earliest first
-- keeps the order they were rated in when two are due together
-
-### setting a card aside
-
-_5 · `host/queue.test.ts`_
-
-- moves it behind the cards not yet seen
-- returns the only card there is, rather than pretending
-- takes a waiting card off its learning step, because it had ripened
-- comes back rather than pulling a waiting card early
-- never loses a card or invents one
-
-### the pinned parameters
-
-_2 · `host/queue.test.ts`_
-
-- keeps every short-term step inside the same sitting
-- puts a lapsed review card back on one
+- ignores anything else rather than recording a wrong rating
+- names all four FSRS ratings in the legend
+- offers the source note in the legend, since nothing else advertises it
 
 ## Recognising a card
 
@@ -406,7 +406,7 @@ _5 · `parser/parser.test.ts`_
 - preserves a mixed file byte-for-byte when rejoined
 - returns nothing for empty input
 
-### stampLine
+### writing a stamp into a line
 
 _6 · `parser/parser.test.ts`_
 
@@ -417,7 +417,7 @@ _6 · `parser/parser.test.ts`_
 - rejects an id that is not the minted shape
 - round-trips: a stamped line parses back to the same id and answer
 
-### readStamp
+### reading a stamp back off a line
 
 _2 · `parser/parser.test.ts`_
 
@@ -430,21 +430,31 @@ _Finding what changed, stamping it, pruning what is gone, and saying what happen
 
 **79 behaviours.**
 
-### formatSummary
+### which counts a sync summary shows
 
-_3 · `cli/cli.test.ts`_
+_6 · `host/present.test.ts`_
 
-- always reports the core counts
-- surfaces skipped files, which the exit code deliberately does not
-- stays quiet about zero-valued incidentals
+- always reports the core counts, even at zero
+- stays quiet about incidentals at zero
+- surfaces a skipped file, which the exit code deliberately does not
+- puts filesStamped ahead of the other incidentals
+- marks unchanged and read as a breakdown of files, and nothing else
+- keeps a detail next to the field it breaks down
 
-### deferralNote
+### why a freshly-edited file was left alone
 
-_3 · `cli/cli.test.ts`_
+_4 · `host/present.test.ts`_
 
 - says nothing when nothing was deferred
-- explains a deferral and says what to do about it
+- explains why, because the counts alone read as a bug
 - agrees with itself about plurals
+- leaves what to do about it to the interface
+
+### what each sync phase is called
+
+_1 · `host/present.test.ts`_
+
+- names every phase core can report
 
 ### stamping
 
@@ -541,7 +551,7 @@ _8 · `core/sync.test.ts`_
 - does not read it, so its cards are not counted as found
 - leaves an ordinary file that merely looks similar alone
 
-### enumerate
+### walking the notes tree
 
 _9 · `files/files.test.ts`_
 
@@ -555,7 +565,7 @@ _9 · `files/files.test.ts`_
 - interleaves files and subdirectories in sorted order, at every depth
 - gives every candidate its OWN stat, not a neighbour's
 
-### writeIfUnchanged
+### refusing to write over someone else's edit
 
 _4 · `files/files.test.ts`_
 
@@ -564,7 +574,7 @@ _4 · `files/files.test.ts`_
 - refuses to write when mtime changed but size did not
 - returns null when the file vanished
 
-### isSyncConflict
+### recognising a syncer's conflict copy
 
 _4 · `files/files.test.ts`_
 
@@ -573,31 +583,21 @@ _4 · `files/files.test.ts`_
 - leaves ordinary filenames alone, including the ambiguous ones
 - judges the filename, not the folder it sits in
 
-### summaryFields
+### what a sync reports in the terminal
 
-_6 · `host/present.test.ts`_
+_3 · `cli/cli.test.ts`_
 
-- always reports the core counts, even at zero
-- stays quiet about incidentals at zero
-- surfaces a skipped file, which the exit code deliberately does not
-- puts filesStamped ahead of the other incidentals
-- marks unchanged and read as a breakdown of files, and nothing else
-- keeps a detail next to the field it breaks down
+- always reports the core counts
+- surfaces skipped files, which the exit code deliberately does not
+- stays quiet about zero-valued incidentals
 
-### deferralReason
+### explaining a file that was left alone
 
-_4 · `host/present.test.ts`_
+_3 · `cli/cli.test.ts`_
 
 - says nothing when nothing was deferred
-- explains why, because the counts alone read as a bug
+- explains a deferral and says what to do about it
 - agrees with itself about plurals
-- leaves what to do about it to the interface
-
-### PHASE_LABEL
-
-_1 · `host/present.test.ts`_
-
-- names every phase core can report
 
 ## Recovery and the log
 
@@ -605,7 +605,28 @@ _The append-only review log, and rebuilding the database from nothing but notes 
 
 **26 behaviours.**
 
-### rebuild
+### the review log
+
+_7 · `files/files.test.ts`_
+
+- names a shard by device and the month of the timestamp
+- puts a review either side of midnight into different shards
+- creates the log directory on first write
+- appends rather than truncating
+- omits elapsed and scheduled when they are not supplied
+- treats an absent log directory as a first run, not an error
+- lists any .jsonl whatever it is named, and ignores other files
+
+### reading a log shard from where it left off
+
+_4 · `files/files.test.ts`_
+
+- reads from an offset only
+- stops at the last COMPLETE line and leaves the offset before a partial one
+- returns nothing when there is no complete line at all
+- returns nothing when the offset is already at EOF
+
+### rebuilding from notes and logs
 
 _4 · `core/rebuild.test.ts`_
 
@@ -614,7 +635,7 @@ _4 · `core/rebuild.test.ts`_
 - catches cards.reviewed drifting out of agreement with card_state
 - a card authored while the database was gone still gets its id
 
-### log ingest
+### ingesting the log
 
 _11 · `core/rebuild.test.ts`_
 
@@ -629,27 +650,6 @@ _11 · `core/rebuild.test.ts`_
 - reads only the appended bytes when a shard grows
 - re-reads from zero when a shard shrank
 - counts an unparseable line as skipped, never fatal
-
-### the review log
-
-_7 · `files/files.test.ts`_
-
-- names a shard by device and the month of the timestamp
-- puts a review either side of midnight into different shards
-- creates the log directory on first write
-- appends rather than truncating
-- omits elapsed and scheduled when they are not supplied
-- treats an absent log directory as a first run, not an error
-- lists any .jsonl whatever it is named, and ignores other files
-
-### readShardFrom
-
-_4 · `files/files.test.ts`_
-
-- reads from an offset only
-- stops at the last COMPLETE line and leaves the offset before a partial one
-- returns nothing when there is no complete line at all
-- returns nothing when the offset is already at EOF
 
 ## Moving between machines
 
@@ -681,6 +681,94 @@ _1 · `core/two-devices.test.ts`_
 _Config, XDG paths, the device name, and the first run._
 
 **53 behaviours.**
+
+### XDG paths
+
+_2 · `host/host.test.ts`_
+
+- uses the geodemd directory, while the command stays `geode`
+- falls back to ~/.config and ~/.local/share when XDG is unset
+
+### minting a card id
+
+_2 · `host/host.test.ts`_
+
+- mints the shape section 4 specifies
+- does not repeat
+
+### naming this device
+
+_3 · `host/host.test.ts`_
+
+- slugifies the hostname and appends a suffix
+- gives two identically-named machines different names
+- copes with a hostname that slugifies to nothing
+
+### writing a config for the first time
+
+_6 · `host/host.test.ts`_
+
+- writes the three keys
+- refuses to overwrite an existing config
+- preserves device under --force
+- reads an editor when one is set, and nothing when it is not
+- preserves editor under --force, like device
+- returns null for a missing or malformed config
+
+### reading a config, and healing a missing device
+
+_6 · `host/host.test.ts`_
+
+- readConfig alone hands out a different device every time
+- mints a device once and persists it
+- leaves an existing device alone and writes nothing
+- leaves exactly one device behind when two heals race, and settles after
+- does not leave temp files behind
+- is null for a missing config, like readConfig
+
+### exit codes
+
+_2 · `host/host.test.ts`_
+
+- gives every user-fixable kind a 1, and only a bug a 2
+- classifies while the error still has its prototype
+
+### recognising a busy database
+
+_4 · `host/host.test.ts`_
+
+- recognises both busy codes SQLite produces
+- does not treat other SQLite failures as retryable
+- survives anything at all being thrown
+- reads the property rather than the class, which does not survive IPC
+
+### what the folder you chose contains
+
+_7 · `host/setup.test.ts`_
+
+- counts the markdown files a sync would actually read
+- counts the same way enumerate does, dotted directories included
+- reports an empty folder rather than refusing it
+- notices a git repository, because that changes which warning is honest
+- says so when the path is gone
+- tells a file apart from a missing path
+- resolves the path it reports back
+
+### what writing a config would change
+
+_5 · `host/setup.test.ts`_
+
+- proposes a fresh device and the default db path on a first run
+- keeps the device when there is already a config, and says that it did
+- mentions editor only when there is one to keep
+- writes nothing
+- resolves a relative notesPath, as init would
+
+### telling a moved folder from a first run
+
+_1 · `host/setup.test.ts`_
+
+- is a question inspectFolder answers, so the two get different screens
 
 ### choosing a folder
 
@@ -721,99 +809,11 @@ _2 · `electron/renderer/model/setup.test.ts`_
 - does not advance past a blocker
 - goes forward and back through every step in order
 
-### previewReport
+### what the preview says would change
 
 _1 · `electron/renderer/model/setup.test.ts`_
 
 - reports notes edited from filesStamped, not from cardsNew
-
-### XDG paths
-
-_2 · `host/host.test.ts`_
-
-- uses the geodemd directory, while the command stays `geode`
-- falls back to ~/.config and ~/.local/share when XDG is unset
-
-### newId
-
-_2 · `host/host.test.ts`_
-
-- mints the shape section 4 specifies
-- does not repeat
-
-### defaultDevice
-
-_3 · `host/host.test.ts`_
-
-- slugifies the hostname and appends a suffix
-- gives two identically-named machines different names
-- copes with a hostname that slugifies to nothing
-
-### init
-
-_6 · `host/host.test.ts`_
-
-- writes the three keys
-- refuses to overwrite an existing config
-- preserves device under --force
-- reads an editor when one is set, and nothing when it is not
-- preserves editor under --force, like device
-- returns null for a missing or malformed config
-
-### ensureConfig
-
-_6 · `host/host.test.ts`_
-
-- readConfig alone hands out a different device every time
-- mints a device once and persists it
-- leaves an existing device alone and writes nothing
-- leaves exactly one device behind when two heals race, and settles after
-- does not leave temp files behind
-- is null for a missing config, like readConfig
-
-### exit codes
-
-_2 · `host/host.test.ts`_
-
-- gives every user-fixable kind a 1, and only a bug a 2
-- classifies while the error still has its prototype
-
-### isBusy
-
-_4 · `host/host.test.ts`_
-
-- recognises both busy codes SQLite produces
-- does not treat other SQLite failures as retryable
-- survives anything at all being thrown
-- reads the property rather than the class, which does not survive IPC
-
-### inspectFolder
-
-_7 · `host/setup.test.ts`_
-
-- counts the markdown files a sync would actually read
-- counts the same way enumerate does, dotted directories included
-- reports an empty folder rather than refusing it
-- notices a git repository, because that changes which warning is honest
-- says so when the path is gone
-- tells a file apart from a missing path
-- resolves the path it reports back
-
-### proposeConfig
-
-_5 · `host/setup.test.ts`_
-
-- proposes a fresh device and the default db path on a first run
-- keeps the device when there is already a config, and says that it did
-- mentions editor only when there is one to keep
-- writes nothing
-- resolves a relative notesPath, as init would
-
-### telling a moved folder from a first run
-
-_1 · `host/setup.test.ts`_
-
-- is a question inspectFolder answers, so the two get different screens
 
 ## The app's long runs
 
@@ -861,7 +861,7 @@ _5 · `electron/main/runs.test.ts`_
 - a new run supersedes the previous result rather than aging it out
 - status is structured-cloneable, like every other payload
 
-### percent
+### how far along a run is
 
 _3 · `electron/renderer/model/run.test.ts`_
 
@@ -869,7 +869,7 @@ _3 · `electron/renderer/model/run.test.ts`_
 - clamps, because done can legitimately exceed total
 - rounds to whole percent
 
-### fromStatus
+### adopting a run the window did not start
 
 _4 · `electron/renderer/model/run.test.ts`_
 
@@ -878,7 +878,7 @@ _4 · `electron/renderer/model/run.test.ts`_
 - tells never-run apart from finished
 - carries a failure across as a failure, not an empty summary
 
-### phases
+### naming the phase a run is in
 
 _1 · `electron/renderer/model/run.test.ts`_
 
@@ -901,7 +901,7 @@ _2 · `electron/renderer/model/run.test.ts`_
 - so a window that joined one does not claim notes were written
 - and is visible while it is still running
 
-### isRunning
+### whether anything is running
 
 _1 · `electron/renderer/model/run.test.ts`_
 
@@ -913,7 +913,7 @@ _Argument parsing, colour, and wrapping — the parts that are the CLI's alone._
 
 **19 behaviours.**
 
-### parseArgs
+### reading the command line
 
 _4 · `cli/cli.test.ts`_
 
@@ -922,14 +922,14 @@ _4 · `cli/cli.test.ts`_
 - reads -n and --limit
 - ignores a nonsense limit rather than crashing
 
-### isEntryPoint
+### telling a run apart from an import
 
 _2 · `cli/cli.test.ts`_
 
 - recognises the module when invoked through a symlink
 - is false for an unrelated entry, or none at all
 
-### colorEnabled
+### when colour is used, and when it is not
 
 _4 · `cli/style.test.ts`_
 
@@ -938,21 +938,21 @@ _4 · `cli/style.test.ts`_
 - colours a pipe when FORCE_COLOR asks
 - says no to a dumb terminal
 
-### styler
+### styling text, or leaving it plain
 
 _2 · `cli/style.test.ts`_
 
 - is the identity when disabled, not a stripped escape
 - wraps and closes the sequence when enabled
 
-### columns
+### how wide the terminal is
 
 _2 · `cli/style.test.ts`_
 
 - defaults when the stream has no width
 - clamps both ends, because prose is not the window
 
-### wrap
+### wrapping text to a width
 
 _5 · `cli/style.test.ts`_
 
@@ -1026,24 +1026,6 @@ _Module boundaries, and the completeness of this document — both checked by sc
 
 **31 behaviours.**
 
-### every behaviour has a home
-
-_3 · `behaviours/areas.test.ts`_
-
-- classifies every test file
-- classifies every group in every file
-- finds groups in every file it classifies, so the scan cannot silently fail
-
-### the taxonomy itself
-
-_5 · `behaviours/areas.test.ts`_
-
-- points every file and override at an area that exists
-- names a file that exists for every override
-- names a group that exists for every override
-- keeps every area in use
-- gives every area a blurb, because a bare heading explains nothing
-
 ### section 6 hard rules
 
 _6 · `boundaries.test.ts`_
@@ -1086,6 +1068,24 @@ _3 · `boundaries.test.ts`_
 - does not import cli, and cli does not import it
 - nothing below the interfaces imports electron
 - keeps onProgress out of the wire types
+
+### every behaviour has a home
+
+_3 · `behaviours/areas.test.ts`_
+
+- classifies every test file
+- classifies every group in every file
+- finds groups in every file it classifies, so the scan cannot silently fail
+
+### the taxonomy itself
+
+_5 · `behaviours/areas.test.ts`_
+
+- points every file and override at an area that exists
+- names a file that exists for every override
+- names a group that exists for every override
+- keeps every area in use
+- gives every area a blurb, because a bare heading explains nothing
 
 ## The documentation tells the truth
 

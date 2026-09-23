@@ -20,6 +20,18 @@ That total assertion is what removing the tombstone columns bought ([ADR 0010](.
 
 It rests on the pinned scheduler parameters: **read a failure here as scheduler nondeterminism before assuming it is an ingest bug.**
 
+## The behaviour index
+
+`npm test` writes [behaviours.md](behaviours.md) — every `describe` and `it` in the suite, assembled into twelve areas that follow [the guides](../guides/) rather than the source tree. It exists because the suite is organised by module, which is right for the code and useless for the question *what does this app do*: `0 later` is asserted in six files.
+
+Three things make it worth having rather than a curiosity:
+
+- **It is written by the test run**, not by a script someone remembers to run. A behaviour change lands in the diff next to the code that caused it, and a stale copy shows up as an uncommitted change.
+- **An unclassified group fails the suite.** `src/behaviours/areas.test.ts` asserts that every test file and every top-level `describe` maps to an area, that overrides still name files and groups that exist, and that its own source scan finds something in every file. That last one immediately caught the scan missing `describe.skipIf(...)`.
+- **Group names are behaviour, not functions.** `describe("the order cards are served in")`, not `describe("getDueCards")` — the index is only as readable as the names in it, and about half of them were function names before this existed.
+
+Two limits worth stating. It lists what is **tested**, so a thin area is thinly covered rather than simple — read it as a coverage lens as much as a catalogue. And it writes nothing when the run is filtered to a subset, because otherwise `vitest run one.test.ts` would replace the index with one file's behaviours.
+
 ## The boundaries test
 
 `src/boundaries.test.ts` asserts the module rules by scanning source text — see [module-map.md](module-map.md). It is a test, not a compile step; `npm run build` will happily compile a violation.

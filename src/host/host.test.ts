@@ -45,7 +45,7 @@ describe("XDG paths", () => {
   });
 });
 
-describe("newId", () => {
+describe("minting a card id", () => {
   it("mints the shape section 4 specifies", () => {
     for (let i = 0; i < 100; i++) expect(newId()).toMatch(ID_PATTERN);
   });
@@ -56,7 +56,7 @@ describe("newId", () => {
   });
 });
 
-describe("defaultDevice", () => {
+describe("naming this device", () => {
   it("slugifies the hostname and appends a suffix", () => {
     const d = defaultDevice("MacBook-Pro.local");
     expect(d).toMatch(/^macbook-pro-[a-z0-9]{4}$/);
@@ -73,7 +73,7 @@ describe("defaultDevice", () => {
   });
 });
 
-describe("init", () => {
+describe("writing a config for the first time", () => {
   it("writes the three keys", async () => {
     const file = path.join(dir, "config.json");
     const c = await initConfig(file, dir);
@@ -131,7 +131,7 @@ describe("init", () => {
   });
 });
 
-describe("ensureConfig", () => {
+describe("reading a config, and healing a missing device", () => {
   /** A config written by hand, or by an older version, with no device. */
   async function withoutDevice(): Promise<string> {
     const file = path.join(dir, "config.json");
@@ -228,7 +228,7 @@ describe("exit codes", () => {
  * better-sqlite3 throws its own error class, and the *class* is what gets
  * stripped crossing Electron's IPC while the property survives.
  */
-describe("isBusy", () => {
+describe("recognising a busy database", () => {
   it("recognises both busy codes SQLite produces", () => {
     // SQLITE_BUSY_SNAPSHOT is the WAL-specific one and is just as much "try
     // again later" — matching only the bare code would miss it.

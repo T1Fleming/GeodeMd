@@ -22,7 +22,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
-import { AREAS, areaFor } from "./areas.js";
+import { AREAS, BY_FILE, areaFor } from "./areas.js";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const SRC = path.join(HERE, "..");
@@ -121,18 +121,25 @@ function render(files: RunFile[]): string {
   const sections = files.flatMap((f) => sectionsIn(f, unclassified));
   const total = sections.reduce((n, s) => n + size(s), 0);
 
-  // Grouped by area, in `AREAS` order; within an area by file path, and within a
-  // file in source order — so a reader following a behaviour into the code lands
-  // in one place rather than hopping between files.
+  /**
+   * Grouped by area in `AREAS` order; within an area, in the order the files
+   * appear in `BY_FILE`; within a file, in source order.
+   *
+   * That middle rule is why `BY_FILE` is written grouped and not alphabetised:
+   * its order is the narrative one — core, then host, then the two interfaces —
+   * so an area reads from the decision outwards to how it is drawn, rather than
+   * in whatever order a path sorts. Curation for free, in a table that has to
+   * exist anyway.
+   */
+  const order = Object.keys(BY_FILE);
+  const rank = (s: Section): number => {
+    const at = order.indexOf(s.file);
+    return at === -1 ? order.length : at;
+  };
   const byArea = new Map<string, Section[]>();
   for (const area of AREAS) {
     const mine = sections.filter((s) => s.area === area.name);
-    if (mine.length > 0) {
-      byArea.set(
-        area.name,
-        [...mine].sort((a, b) => (a.file === b.file ? 0 : a.file.localeCompare(b.file))),
-      );
-    }
+    if (mine.length > 0) byArea.set(area.name, [...mine].sort((a, b) => rank(a) - rank(b)));
   }
 
   const lines: string[] = [

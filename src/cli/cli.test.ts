@@ -21,7 +21,7 @@ afterEach(async () => {
   await fs.rm(dir, { recursive: true, force: true });
 });
 
-describe("parseArgs", () => {
+describe("reading the command line", () => {
   it("reads a command and positionals", () => {
     const a = parseArgs(["init", "/notes"]);
     expect(a.command).toBe("init");
@@ -46,7 +46,7 @@ describe("parseArgs", () => {
   });
 });
 
-describe("formatSummary", () => {
+describe("what a sync reports in the terminal", () => {
   const base = {
     filesEnumerated: 10,
     filesUnchanged: 9,
@@ -85,7 +85,7 @@ describe("formatSummary", () => {
   });
 });
 
-describe("deferralNote", () => {
+describe("explaining a file that was left alone", () => {
   const base = {
     filesEnumerated: 1,
     filesUnchanged: 0,
@@ -122,7 +122,7 @@ describe("deferralNote", () => {
   });
 });
 
-describe("interpretKey", () => {
+describe("the keys the loop honours", () => {
   it("maps 1-4 to ratings", () => {
     for (const k of ["1", "2", "3", "4"]) {
       expect(interpretKey(k)).toEqual({ kind: "rate", rating: Number(k) });
@@ -158,7 +158,7 @@ describe("interpretKey", () => {
   });
 });
 
-describe("isEntryPoint", () => {
+describe("telling a run apart from an import", () => {
   it("recognises the module when invoked through a symlink", async () => {
     // `npm link` puts a symlink on PATH, so argv[1] is the link while
     // import.meta.url is the resolved file. Comparing them unresolved makes the

@@ -7,7 +7,7 @@ import { OpenedNotes, editorCommand, resolveEditor } from "./editor.js";
 const env = (o: Record<string, string>): NodeJS.ProcessEnv => o as NodeJS.ProcessEnv;
 const FILE = "/notes/algorithms/Sorting.md";
 
-describe("resolveEditor", () => {
+describe("which program opens a note", () => {
   it("prefers the config key, then VISUAL, then EDITOR", () => {
     const all = env({ VISUAL: "vis", EDITOR: "ed" });
     expect(resolveEditor("cfg", all)).toBe("cfg");
@@ -23,7 +23,7 @@ describe("resolveEditor", () => {
   });
 });
 
-describe("editorCommand", () => {
+describe("how an editor is told which line", () => {
   it("uses +LINE for the Unix family", () => {
     for (const name of ["vi", "vim", "nvim", "nano", "emacs"]) {
       expect(editorCommand(name, FILE, 142)).toEqual({ cmd: name, args: [`+142`, FILE] });
@@ -97,7 +97,7 @@ describe("editorCommand", () => {
  * files and real mtimes: the whole point is that it notices an edit made by a
  * program this one never sees.
  */
-describe("OpenedNotes", () => {
+describe("noticing a note you edited while reviewing", () => {
   let dir: string;
 
   beforeEach(async () => {

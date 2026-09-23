@@ -20,7 +20,7 @@ const card: DueCard = {
   locator: "algorithms/Sorting.md:142",
 };
 
-describe("renderPrompt", () => {
+describe("what a question looks like", () => {
   it("repeats where you are in the session, and where the card came from", () => {
     // The count printed once at the top of a fifty-card session is no help by
     // card thirty.
@@ -38,7 +38,7 @@ describe("renderPrompt", () => {
   });
 });
 
-describe("renderAnswer", () => {
+describe("what an answer looks like", () => {
   it("shows the answer and the legend together", () => {
     const out = renderAnswer(card, PLAIN, 60);
     expect(out).toContain("O(n log n)");
@@ -46,7 +46,7 @@ describe("renderAnswer", () => {
   });
 });
 
-describe("LEGEND", () => {
+describe("what the legend says", () => {
   it("names every key the loop actually accepts", () => {
     for (const word of ["again", "hard", "good", "easy", "open", "quit"]) {
       expect(LEGEND).toContain(word);
@@ -60,7 +60,7 @@ describe("LEGEND", () => {
   });
 });
 
-describe("renderSummary", () => {
+describe("the tally at the end of a session", () => {
   it("counts the session and breaks it down by rating", () => {
     const out = renderSummary({ ...emptyCounts(), 1: 1, 3: 8 }, PLAIN);
     expect(out).toContain("9 reviewed");
@@ -79,7 +79,7 @@ describe("renderSummary", () => {
   });
 });
 
-describe("renderStaleNote", () => {
+describe("naming the notes you edited while reviewing", () => {
   it("says nothing when nothing changed", () => {
     // Concatenated with the summary unconditionally, so it has to be empty
     // rather than a blank line.
@@ -95,7 +95,7 @@ describe("renderStaleNote", () => {
   });
 });
 
-describe("renderHeader", () => {
+describe("how much is due, said once at the top", () => {
   it("reports the queue against the backlog it came from", () => {
     expect(renderHeader(50, 1240, PLAIN)).toContain("50 of 1240 due");
   });
