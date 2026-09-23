@@ -419,6 +419,13 @@ async function runHelpChecks(): Promise<void> {
     titles.some((x) => x.toLowerCase().includes("first sync")),
     titles.join(" / "),
   );
+  // Nothing in this window explains `1 2 3 4` or `0` on its own, and a user who
+  // installed a .dmg has no README to fall back on (ADR 0020).
+  check(
+    "and the one that explains the review keys",
+    titles.some((x) => x.toLowerCase() === "reviewing"),
+    titles.join(" / "),
+  );
 
   check("a document renders as prose, not as raw markdown", exists(".doc h1"), text(".doc h1"));
   check("it is not showing the markdown source", !text(".doc").includes("## "), "");

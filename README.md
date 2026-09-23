@@ -96,7 +96,9 @@ geode review -n 200   # a bigger session
 geode stats
 ```
 
-Any key reveals the answer — except `q`, which quits there and then without recording anything. Once the answer is showing: `1` again · `2` hard · `3` good · `4` easy, and `q` to stop. Each card shows its source line — `algorithms/Sorting.md:142` — and `o` opens that note at that line in your editor and drops you back on the same card when you close it. If any note you opened changed during the session, the last line says so, because the queue is holding the text from your last `geode sync`.
+Any key reveals the answer — except `q`, which quits there and then without recording anything. Once the answer is showing: `1` again · `2` hard · `3` good · `4` easy, and `q` to stop. Before it is showing, `0` defers the card without recording anything at all. Each card shows its source line — `algorithms/Sorting.md:142` — and `o` opens that note at that line in your editor and drops you back on the same card when you close it. If any note you opened changed during the session, the last line says so, because the queue is holding the text from your last `geode sync`.
+
+A card rated anything but `easy` is usually due again within ten minutes, so it comes back before the session ends and the counter's total grows to match — [the reviewing guide](./docs/guides/reviewing.md) covers that, and which rating to press when.
 
 Your editor is `editor` in the config file if you set it, then `$VISUAL`, then `$EDITOR`, and failing all three whatever your OS opens a `.md` with:
 
@@ -142,7 +144,7 @@ The first two are durable and are what you back up. The database is **fully deri
 
 Practical consequence: delete a note and its cards leave the queue, but their history does not go anywhere. Restore the note a year later and the cards come back on their original schedule.
 
-Guides: [when something looks wrong](./docs/guides/recovery.md) · [moving your notes between machines](./docs/guides/moving-notes.md).
+Guides: [reviewing](./docs/guides/reviewing.md) · [when something looks wrong](./docs/guides/recovery.md) · [moving your notes between machines](./docs/guides/moving-notes.md).
 
 ## Scale
 
