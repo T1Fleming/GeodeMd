@@ -37,6 +37,8 @@ import { openCore as openCoreWith, readAppConfig } from "../host/open.js";
 export { interpretKey };
 export type { KeyAction };
 import { openInEditor } from "./editor.js";
+import { keyFromKeypress } from "./keys.js";
+import type { Keypress } from "./keys.js";
 import {
   emptyCounts,
   renderAnswer,
@@ -209,16 +211,13 @@ async function reviewLoop(core: Core, config: FileConfig, limit: number): Promis
 
   const key = async (): Promise<string> =>
     new Promise((resolve) => {
-      const handler = (str: string, k: { name?: string; ctrl?: boolean }): void => {
+      const handler = (str: string, k: Keypress): void => {
         process.stdin.off("keypress", handler);
-        if (k?.ctrl && k.name === "c") resolve("q");
-        // Escape arrives as the raw `\x1b` byte in `str`, which is not what
-        // `interpretKey` matches on — so it fell through to "any key reveals"
-        // here while the app, which passes the DOM's `"Escape"`, quit. Passing
-        // the NAME for this one key is what keeps both interfaces agreeing
-        // about a key `host` already owns.
-        else if (k?.name === "escape") resolve("escape");
-        else resolve(str ?? k?.name ?? "");
+        // The translation is `keys.ts`, which is pure and therefore tested: this
+        // is the one line of the loop that used to decide what a keystroke was,
+        // and getting it wrong is how `escape` came to do nothing here while it
+        // quit in the app.
+        resolve(keyFromKeypress(str, k));
       };
       process.stdin.on("keypress", handler);
     });

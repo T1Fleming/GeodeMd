@@ -11,9 +11,9 @@ app do*, and *where is that proven*. What it deliberately cannot tell you is wha
 app does **untested** — an area that looks thin here is thinly covered, and that is
 worth reading as a finding rather than a gap in the document.
 
-485 behaviours in 12 areas, which follow [the guides](../guides/) rather than the source tree.
+490 behaviours in 12 areas, which follow [the guides](../guides/) rather than the source tree.
 
-- [Reviewing](#reviewing) — 124
+- [Reviewing](#reviewing) — 129
 - [Recognising a card](#recognising-a-card) — 57
 - [Syncing notes](#syncing-notes) — 79
 - [Recovery and the log](#recovery-and-the-log) — 26
@@ -30,7 +30,7 @@ worth reading as a finding rather than a gap in the document.
 
 _A session: which card is next, what the keys mean, what a rating records, and what comes back before the sitting ends._
 
-**124 behaviours.**
+**129 behaviours.**
 
 ### the order cards are served in
 
@@ -310,6 +310,16 @@ _6 · `cli/cli.test.ts`_
 - ignores anything else rather than recording a wrong rating
 - names all four FSRS ratings in the legend
 - offers the source note in the legend, since nothing else advertises it
+
+### what a terminal keypress means
+
+_5 · `cli/cli.test.ts`_
+
+- passes a printable key through as typed
+- uses the NAME for escape, not the escape byte readline also reports
+- reads Ctrl-C as a quit, where the name alone would read as `c`
+- survives readline reporting one half or neither
+- names only keys that `host` does something with
 
 ## Recognising a card
 

@@ -11,6 +11,7 @@ import {
   LEGEND,
   parseArgs,
 } from "./index.js";
+import { NAMED_KEYS, honoured, keyFromKeypress } from "./keys.js";
 
 let dir: string;
 
@@ -181,5 +182,52 @@ describe("telling a run apart from an import", () => {
     expect(isEntryPoint(pathToFileURL(a).href, b)).toBe(false);
     expect(isEntryPoint(pathToFileURL(a).href, undefined)).toBe(false);
     expect(isEntryPoint(pathToFileURL(a).href, path.join(dir, "missing.js"))).toBe(false);
+  });
+});
+
+/**
+ * The translation from a terminal keypress to what `host` understands.
+ *
+ * Its own group because it was its own bug: `escape` quit in the app and did
+ * nothing in the terminal, and the reason was one line inside the review loop —
+ * which needs a pseudo-terminal to reach, so nothing tested it.
+ */
+describe("what a terminal keypress means", () => {
+  it("passes a printable key through as typed", () => {
+    for (const key of ["1", "2", "3", "4", "0", "o", "q", "x"]) {
+      expect(keyFromKeypress(key, { name: key })).toBe(key);
+    }
+    expect(keyFromKeypress(" ", { name: "space" })).toBe(" ");
+  });
+
+  it("uses the NAME for escape, not the escape byte readline also reports", () => {
+    // `str` is "\x1b", `name` is "escape", and `host` speaks the word. This is
+    // the exact shape of the bug: passing `str` here reveals the answer instead
+    // of quitting.
+    expect(keyFromKeypress("\u001b", { name: "escape", sequence: "\u001b" })).toBe("escape");
+    expect(honoured(keyFromKeypress("\u001b", { name: "escape" }))).toBe(true);
+  });
+
+  it("reads Ctrl-C as a quit, where the name alone would read as `c`", () => {
+    const ctrlC = keyFromKeypress("\u0003", { name: "c", ctrl: true });
+    expect(interpretKey(ctrlC).kind).toBe("quit");
+    // And a plain `c` stays the unknown key it is.
+    expect(interpretKey(keyFromKeypress("c", { name: "c" })).kind).toBe("ignore");
+  });
+
+  it("survives readline reporting one half or neither", () => {
+    // A paste, a resize, an unusual terminal: `str` or `key` can be missing, and
+    // an empty string is an unrecognised key rather than a crash.
+    expect(keyFromKeypress(undefined, { name: "f5" })).toBe("f5");
+    expect(keyFromKeypress("z", undefined)).toBe("z");
+    expect(keyFromKeypress(undefined, undefined)).toBe("");
+    expect(interpretKey("").kind).toBe("ignore");
+  });
+
+  it("names only keys that `host` does something with", () => {
+    // The anti-drift rule: a word in `NAMED` that `interpretKey` ignores would be
+    // a second key table starting to form, which is what `host` exists to prevent.
+    expect(NAMED_KEYS.length).toBeGreaterThan(0);
+    for (const name of NAMED_KEYS) expect(honoured(name), name).toBe(true);
   });
 });

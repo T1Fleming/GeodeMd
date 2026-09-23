@@ -147,6 +147,7 @@ export const BY_GROUP: Readonly<Record<string, string>> = {
   "cli/cli.test.ts:what a sync reports in the terminal": "Syncing notes",
   "cli/cli.test.ts:explaining a file that was left alone": "Syncing notes",
   "cli/cli.test.ts:the keys the loop honours": "Reviewing",
+  "cli/cli.test.ts:what a terminal keypress means": "Reviewing",
 };
 
 /**
