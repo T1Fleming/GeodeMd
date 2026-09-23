@@ -40,6 +40,7 @@
     "files": [
       "dist/**/*",
       "!dist/shots${/*}",
+      "!dist/measure${/*}",
       "package.json"
     ],
     "asarUnpack": [
