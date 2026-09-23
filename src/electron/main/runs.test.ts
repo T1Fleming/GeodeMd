@@ -217,7 +217,7 @@ describe("the wire types survive structuredClone", () => {
     for (const p of h.progress) expect(structuredClone(p)).toEqual(p);
     for (const f of h.finished) expect(structuredClone(f)).toEqual(f);
     expect(structuredClone(core.getDueCards(T0, 5))).toEqual(core.getDueCards(T0, 5));
-    expect(structuredClone(core.stats(T0))).toEqual(core.stats(T0));
+    expect(structuredClone(core.stats(T0, 1000))).toEqual(core.stats(T0, 1000));
   });
 
   it("and core's own Config does NOT — which is why the wire type differs", async () => {

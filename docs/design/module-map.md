@@ -53,6 +53,7 @@ src/
               shared vocabulary: keys, summary fields, the review queue
   cli/        argv, terminal I/O                  one of two interfaces
   electron/   window, IPC contract, renderer      the other
+  measure/    the scale harness: what it measures, and what builds the collection
   index.ts    the public API: re-exports Core, Store, FsrsScheduler, parser fns
 ```
 

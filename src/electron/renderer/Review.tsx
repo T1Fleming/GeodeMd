@@ -4,7 +4,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { actionsAt, RATING_KEYS } from "../../host/present.js";
+import { actionsAt, countText, RATING_KEYS } from "../../host/present.js";
 import type { DueCard } from "../../core/index.js";
 import { begin, current, isOver, owed, press, reviewed, scheduled } from "./model/session.js";
 import type { Effect, Session } from "./model/session.js";
@@ -14,6 +14,8 @@ interface Props {
   queue: DueCard[];
   /** Total due, which is not the queue length — the queue is capped. */
   backlog: number;
+  /** True when `backlog` is a floor because a due count stopped at the cap. */
+  backlogCapped: boolean;
   /**
    * Which opened notes were actually edited. Null while the answer is still
    * being fetched — the check is a stat of every opened file, so the finished
@@ -33,6 +35,7 @@ interface Props {
 export function Review({
   queue,
   backlog,
+  backlogCapped,
   stale,
   onRate,
   onOpen,
@@ -120,7 +123,9 @@ export function Review({
           {done + 1} / {done + owed(session)}
         </span>
         <span className="locator">{card.locator}</span>
-        {backlog > queue.length && <span className="backlog">{backlog} due</span>}
+        {backlog > queue.length && (
+          <span className="backlog">{countText(backlog, backlogCapped)} due</span>
+        )}
       </header>
 
       <section className="card">

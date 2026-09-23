@@ -14,6 +14,8 @@ export interface Stats {
   dueNow: number;
   dueBeforeMidnight: number;
   newCards: number;
+  /** A due count stopped at `COUNT_CAP`, so the due figures are floors (ADR 0024). */
+  capped: boolean;
 }
 
 export type WorkerCommand =

@@ -58,7 +58,12 @@ function pair(key: string, label: string, s: Style): string {
 export const LEGEND = renderLegend(PLAIN);
 export const PROMPT_LEGEND = renderPromptLegend(PLAIN);
 
-export function renderHeader(queued: number, total: number, s: Style): string {
+/**
+ * `12 of 400 due`. The total arrives as TEXT, because a count that stopped at
+ * the cap reads `10000+` and deciding that is `host`'s job, not this file's
+ * (ADR 0024).
+ */
+export function renderHeader(queued: number, total: string, s: Style): string {
   return `\n${INDENT}${s.dim(`${queued} of ${total} due`)}\n`;
 }
 

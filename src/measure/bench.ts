@@ -11,14 +11,15 @@
  * No BrowserWindow. The question is about the main process's event loop, and a
  * window would only add a second variable and a popup.
  *
- *   npm --prefix desktop run measure -- <notesDir> <configFile>
+ *   node dist/measure/vault.js /tmp/vault        # build the collection first
+ *   npm --prefix desktop run measure -- /tmp/vault/config.json
  */
 
-import { app, utilityProcess } from "electron";
+import { app, powerSaveBlocker, utilityProcess } from "electron";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { openCore, readAppConfig } from "../host/open.js";
-import type { WorkerCommand, WorkerReply } from "./protocol.js";
+import type { WorkerCommand, WorkerReply } from "../electron/protocol.js";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
@@ -61,6 +62,13 @@ class Liveness {
 
 type Op = "sync" | "rebuild" | "reviews";
 
+interface Result {
+  worst: number;
+  overFrame: number;
+  /** Wall clock for the operation, without which a stall figure cannot be read. */
+  elapsed: number;
+}
+
 /**
  * Core in the main process — the simple design the plan rejected on argument.
  *
@@ -70,12 +78,25 @@ type Op = "sync" | "rebuild" | "reviews";
  * block. A burst of ratings is an `fsync` each. Measuring only `sync` would
  * have answered the easy question and missed the one that decides this.
  */
-async function inMain(configFile: string, op: Op): Promise<{ worst: number; overFrame: number }> {
+async function inMain(configFile: string, op: Op): Promise<Result> {
   const config = await readAppConfig(configFile);
   if (!config) throw new Error(`no config at ${configFile}`);
   const { core, store } = openCore(config);
 
+  /**
+   * Start from a database that owes nothing.
+   *
+   * Each operation is measured after the previous one has already run — and the
+   * one before this is the same operation in the worker, which writes 4,000
+   * ratings and is then killed without closing. The write-ahead log it leaves
+   * behind is folded in by whoever writes next, so without this the rating
+   * figure is partly a charge for the *worker's* ratings, and a reader would
+   * take it for a cost of rating. Nothing a real session does resembles that.
+   */
+  core.checkpoint();
+
   const probe = new Liveness();
+  const began = performance.now();
   probe.start();
   try {
     if (op === "sync") {
@@ -91,7 +112,7 @@ async function inMain(configFile: string, op: Op): Promise<{ worst: number; over
   } finally {
     store.close();
   }
-  return probe.stop();
+  return { ...probe.stop(), elapsed: performance.now() - began };
 }
 
 /**
@@ -113,11 +134,8 @@ function withTimeout<T>(p: Promise<T>, ms: number, what: string): Promise<T> {
 }
 
 /** Core in a utility process — two hops, main never touches SQLite. */
-async function inWorker(
-  configFile: string,
-  op: Op,
-): Promise<{ worst: number; overFrame: number }> {
-  const child = utilityProcess.fork(path.join(HERE, "worker", "main.js"), [], {
+async function inWorker(configFile: string, op: Op): Promise<Result> {
+  const child = utilityProcess.fork(path.join(HERE, "..", "electron", "worker", "main.js"), [], {
     stdio: "pipe",
   });
   child.stdout?.on("data", (b: Buffer) => process.stderr.write(`[worker] ${b.toString()}`));
@@ -136,6 +154,7 @@ async function inWorker(
   );
 
   const probe = new Liveness();
+  const began = performance.now();
   probe.start();
   try {
     await withTimeout(
@@ -155,17 +174,39 @@ async function inWorker(
   } finally {
     const stats = probe.stop();
     child.kill();
-    return { worst: stats.worst, overFrame: stats.overFrame };
+    return { worst: stats.worst, overFrame: stats.overFrame, elapsed: performance.now() - began };
   }
 }
 
-function row(label: string, r: { worst: number; overFrame: number }): string {
+/**
+ * The elapsed time belongs next to the stall, and leaving it out was the first
+ * report's other flaw: "worst 142 ms" means one thing inside a five-second
+ * rebuild and something else entirely inside a three-minute one, and a reader
+ * cannot tell which from a stall figure alone.
+ */
+function row(label: string, r: Result): string {
   const verdict = r.worst > 100 ? "UNUSABLE" : r.worst > 16 ? "janky" : "smooth";
-  return `  ${label.padEnd(22)} worst ${r.worst.toFixed(1).padStart(9)} ms   ${String(r.overFrame).padStart(4)} stalls >16ms   ${verdict}`;
+  return (
+    `  ${label.padEnd(22)} worst ${r.worst.toFixed(1).padStart(9)} ms   ` +
+    `${String(r.overFrame).padStart(4)} stalls >16ms   ` +
+    `${(r.elapsed / 1000).toFixed(1).padStart(7)} s total   ${verdict}`
+  );
 }
 
 void app.whenReady().then(async () => {
   const configFile = process.argv[process.argv.length - 1]!;
+  /**
+   * macOS naps an app that has no window and is doing nothing, and a napped
+   * process's timers stop firing — so the probe recorded a single 161-SECOND
+   * "stall" for every run where main was merely waiting on the worker. That is
+   * not a stall, it is the measurement instrument going to sleep, and it made
+   * the utilityProcess column of the first report unreadable.
+   *
+   * Held for the whole run rather than per operation: what is being prevented
+   * is suspension of an idle process, which is exactly the state the worker
+   * rows put main in.
+   */
+  const awake = powerSaveBlocker.start("prevent-app-suspension");
   try {
     let out =
       `\n  worst MAIN-process event-loop stall, by operation\n` +
@@ -187,9 +228,11 @@ void app.whenReady().then(async () => {
 
     out += `  >16ms drops a frame. >100ms is a click that feels ignored.\n\n`;
     process.stdout.write(out);
+    powerSaveBlocker.stop(awake);
     app.exit(0);
   } catch (err) {
     process.stderr.write(`measure failed: ${err instanceof Error ? err.stack : String(err)}\n`);
+    powerSaveBlocker.stop(awake);
     app.exit(1);
   }
 });

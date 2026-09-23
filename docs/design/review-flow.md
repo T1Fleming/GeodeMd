@@ -2,9 +2,9 @@
 
 ```ts
 getDueCards(now: Date, limit = 50): DueCard[]
-countDue(now: Date): number
+countDue(now: Date, limit: number): number
 reviewCard(cardId: string, rating: 1|2|3|4, now: Date): Promise<CardState>
-stats(now: Date)
+stats(now: Date, limit: number)
 ```
 
 `reviewCard` returns the state it computed. A caller needs it to know that the scheduler wants this card again in ten minutes ([ADR 0023](../decisions/0023-honour-short-term-learning-steps.md)); recomputing it outside would mean a second copy of the fold.
@@ -35,13 +35,15 @@ Ordering is deterministic and testable. No randomization, no burying, no sibling
 
 `countDue` joins `card_state` to `cards` rather than counting state rows alone. `card_state` deliberately outlives the card it belongs to, so counting state alone reports cards that no longer exist and `stats` could print due + new greater than total.
 
+**That join is also why the count is capped.** It probes `cards` once per due row, so the cost is proportional to the size of the *due set* — a number the user's habits set, not the collection's size. Measured at a million cards with 389,000 due, it was 205 ms, and `stats` asks for two of these plus a count of the new cards: 632 ms of frozen main process for four numbers ([ADR 0024](../decisions/0024-remeasure-the-main-process-stall.md)). Every count that can grow without bound now stops at a limit and reports a floor, which `host`'s `countText` renders as `10000+`. The limit is `host`'s `COUNT_CAP` and `stats(now, limit)` takes it as an argument — the same rule as `now`: `core` reads no policy of its own. `countCards` is the exception: a total is a fact about the collection rather than about a backlog.
+
 ### Two consequences worth knowing in advance
 
 **Due cards are served ahead of new ones**, so a backlog larger than `limit` starves new cards completely until it clears. That is the intended trade — recovering what you already half-know beats piling on more — and the escape hatch is a larger `-n`, not a scheduling rule.
 
 **Pruning happens in `sync`, and `review` does not run one.** A note deleted after the last sync leaves its cards in the queue until the next `sync`. Making `review` walk the tree first would charge every session a full walk — tolerable at twenty thousand files, not at a hundred thousand — to avoid being asked about a card you deleted. `sync` after editing is the contract.
 
-The `50 of 1240 due` header comes from a separate `COUNT(*)` against the same index, not from the length of a fetched list: at a million cards the count is the cheap part and materializing the queue would not be. There is deliberately no *persistent* daily-limit state, which would be durable state living outside the notes and the logs.
+The `50 of 1240 due` header comes from a separate `COUNT(*)` against the same index, not from the length of a fetched list — materializing the queue to count it would be far worse. The brief called the count "the cheap part", and at a large backlog it is not: see the cap above, and `10000+` in place of a number nobody needed exactly. There is deliberately no *persistent* daily-limit state, which would be durable state living outside the notes and the logs.
 
 ## Recording a review
 

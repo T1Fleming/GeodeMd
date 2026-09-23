@@ -31,6 +31,7 @@ New decisions from here get an ADR when they are made, not in a later sweep — 
 | [0021](0021-no-built-in-sync-transport.md) | No built-in sync transport; carry the notes directory | Accepted |
 | [0022](0022-defer-a-card-without-rating-it.md) | Defer a card without rating it | Accepted |
 | [0023](0023-honour-short-term-learning-steps.md) | Honour FSRS's short-term learning steps | Accepted |
+| [0024](0024-remeasure-the-main-process-stall.md) | The main-process stall at fifty times the measurement | Accepted |
 
 ## Writing one
 

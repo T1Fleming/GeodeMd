@@ -4,7 +4,7 @@
  * `core` runs here rather than in a utility process — measured, not assumed;
  * see ADR 0017. The decision rests on `core`'s long operations being chunked,
  * so a change that introduces one long synchronous span invalidates it and the
- * bench in `measure.bench.ts` is how you find out.
+ * bench in `src/measure/bench.ts` is how you find out.
  */
 
 import { app, BrowserWindow, dialog, ipcMain, net, protocol, shell } from "electron";
@@ -20,6 +20,7 @@ import type { FileConfig } from "../../host/config.js";
 import { inspectFolder, proposeConfig } from "../../host/setup.js";
 import { OpenedNotes, resolveEditor } from "../../host/editor.js";
 import { classify, isBusy } from "../../host/errors.js";
+import { COUNT_CAP } from "../../host/present.js";
 import { openCore, readAppConfig } from "../../host/open.js";
 import { CH } from "../ipc.js";
 import type {
@@ -135,7 +136,7 @@ function register(): void {
   ipcMain.handle(CH.statsRead, () =>
     guard<Stats>(async () => {
       const c = await ensureCore();
-      return c.stats(new Date());
+      return c.stats(new Date(), COUNT_CAP);
     }),
   );
 

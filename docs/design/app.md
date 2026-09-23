@@ -17,7 +17,9 @@ src/electron/
   renderer/model/     the decisions, as pure functions
 ```
 
-`core` runs in the **main process**, measured rather than assumed ([ADR 0017](../decisions/0017-core-runs-in-the-main-process.md)). The decision rests on `core`'s long operations being chunked, so a change that introduces one long synchronous span invalidates it — `measure.bench.ts` is how you find out.
+`core` runs in the **main process**, measured rather than assumed ([ADR 0017](../decisions/0017-core-runs-in-the-main-process.md)), and re-measured at ten and fifty times that collection ([ADR 0024](../decisions/0024-remeasure-the-main-process-stall.md)). The decision rests on `core`'s long operations being chunked, so a change that introduces one long synchronous span invalidates it — `src/measure/bench.ts` is how you find out, and `src/measure/vault.ts` builds a collection big enough to ask.
+
+What ADR 0024 changed, and what it left: every count that can grow without bound stops at `COUNT_CAP`, because `stats` — the Collection tab, which nobody thinks of as expensive — cost 632 ms at a million cards; `sync` folds the WAL back in before returning, so the first rating of a session does not pay for it. `rebuild` still stalls the loop for ~240 ms at a time, and that is accepted: it is modal, it offers no cancel, and nothing else in the window does anything while it runs.
 
 `main/runs.ts` and `main/open.ts` deliberately import nothing from Electron, which is what lets them be tested under plain vitest against a real `Core` and a real temp vault. Follow that when adding to `main/`: the Electron-shaped part is usually thin, and everything under it is ordinary code.
 

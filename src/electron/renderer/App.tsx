@@ -133,7 +133,7 @@ type Screen =
   | { at: "loading" }
   | { at: "error"; message: string }
   | { at: "empty"; total: number }
-  | { at: "review"; queue: DueCard[]; backlog: number };
+  | { at: "review"; queue: DueCard[]; backlog: number; capped: boolean };
 
 const LIMIT = 50;
 
@@ -151,9 +151,10 @@ function ReviewScreen({ onNote }: { onNote: (m: string) => void }): React.JSX.El
     if (!due.ok) return setScreen({ at: "error", message: due.message });
     if (!stats.ok) return setScreen({ at: "error", message: stats.message });
 
+    // A floor when the due count stopped at the cap (ADR 0024); the chip says so.
     const backlog = stats.value.dueNow + stats.value.newCards;
     if (due.value.length === 0) return setScreen({ at: "empty", total: stats.value.total });
-    setScreen({ at: "review", queue: due.value, backlog });
+    setScreen({ at: "review", queue: due.value, backlog, capped: stats.value.capped });
   }, []);
 
   useEffect(() => {
@@ -232,6 +233,7 @@ function ReviewScreen({ onNote }: { onNote: (m: string) => void }): React.JSX.El
     <Review
       queue={screen.queue}
       backlog={screen.backlog}
+      backlogCapped={screen.capped}
       stale={stale}
       onRate={onRate}
       onOpen={onOpen}

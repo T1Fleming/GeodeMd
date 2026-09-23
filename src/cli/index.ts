@@ -22,7 +22,13 @@ import { configPath, initConfig, InitRefused } from "../host/config.js";
 import type { FileConfig } from "../host/config.js";
 import { OpenedNotes, resolveEditor } from "../host/editor.js";
 import { isBusy } from "../host/errors.js";
-import { deferralReason, interpretKey, summaryFields } from "../host/present.js";
+import {
+  COUNT_CAP,
+  countText,
+  deferralReason,
+  interpretKey,
+  summaryFields,
+} from "../host/present.js";
 import type { KeyAction } from "../host/present.js";
 import { openQueue, owed, rated, scheduled, serve, setAside } from "../host/queue.js";
 import type { Scheduled } from "../host/queue.js";
@@ -157,8 +163,10 @@ async function reviewLoop(core: Core, config: FileConfig, limit: number): Promis
   // What the queue was drawn FROM, which is both halves of section 9's two
   // queries. `countDue` alone counts only cards with scheduling state, so a
   // first session — every card new — headed itself "2 of 0 due".
-  const available = core.stats(now);
-  const total = available.dueNow + available.newCards;
+  const available = core.stats(now, COUNT_CAP);
+  // A floor rather than a total when the due count stopped at the cap: the sum
+  // of a capped count and an exact one is "at least this many".
+  const total = countText(available.dueNow + available.newCards, available.capped);
 
   const s = styler(colorEnabled(process.env, Boolean(process.stdout.isTTY)));
   const width = columns(process.stdout);
@@ -413,11 +421,14 @@ export async function main(argv: string[]): Promise<number> {
       const { core, store } = await openCore();
       try {
         await core.ingestLogs(new Date());
-        const s = core.stats(new Date());
+        const s = core.stats(new Date(), COUNT_CAP);
+        // `10000+` when a count stopped at the cap (ADR 0024). The wording is
+        // host's, so `geode stats` and the app's Collection tab cannot disagree
+        // about what a capped number looks like.
         process.stdout.write(`total:                ${s.total}\n`);
-        process.stdout.write(`due now:              ${s.dueNow}\n`);
-        process.stdout.write(`due before midnight:  ${s.dueBeforeMidnight}\n`);
-        process.stdout.write(`new:                  ${s.newCards}\n`);
+        process.stdout.write(`due now:              ${countText(s.dueNow)}\n`);
+        process.stdout.write(`due before midnight:  ${countText(s.dueBeforeMidnight)}\n`);
+        process.stdout.write(`new:                  ${countText(s.newCards)}\n`);
         return 0;
       } finally {
         store.close();

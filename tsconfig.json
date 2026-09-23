@@ -30,7 +30,7 @@
     "src/electron/main/index.ts",
     "src/electron/preload.cts",
     "src/electron/renderer/**",
-    "src/electron/measure.bench.ts",
+    "src/measure/bench.ts",
     "src/electron/worker/**"
   ]
 }

@@ -278,9 +278,12 @@ async function runStatsChecks(): Promise<void> {
     labels.includes("due now") && labels.includes("due before midnight"),
     labels.join(" / "),
   );
+  // A trailing `+` is allowed and is not a formatting slip: a count that
+  // stopped at `COUNT_CAP` reads `10000+` (ADR 0024). Nothing caps on a
+  // 23-card collection, so this run should see plain digits.
   check(
     "the numbers are numbers",
-    all(".tile .value").every((v) => /^\d+$/.test(v)),
+    all(".tile .value").every((v) => /^\d+\+?$/.test(v)),
     all(".tile .value").join(" / "),
   );
   await shot("stats-01");

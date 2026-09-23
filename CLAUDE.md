@@ -80,6 +80,7 @@ src/host/       this machine: XDG paths, env, hostname, config, error kinds,
                 the review queue (which card is next, and when one comes back)
 src/cli/        argv, review loop, ANSI              one of two interfaces
 src/electron/   window, IPC contract, renderer       the other
+src/measure/    the scale harness: bench.ts measures, vault.ts builds what it measures
 src/index.ts    the public API: re-exports Core, Store, FsrsScheduler, and the parser functions
 ```
 
@@ -155,6 +156,10 @@ Not discoverable from the code, and each one presented as something other than w
 
 **The `write()` helper in `src/core/sync.test.ts` backdates mtime on purpose**, to keep fixtures out of the 2-second deferral window. A test that needs a file to *be* deferred must write it directly with `fs.writeFile`, as the existing deferral tests do. Using the helper gives a test that asserts a deferral which cannot happen.
 
+**A count of what is due costs a probe per due card.** `stats` measured 632 ms at a million cards with a large backlog, which is a frozen main process on the screen least likely to be suspected ([ADR 0024](docs/decisions/0024-remeasure-the-main-process-stall.md)). Every count that can grow without bound stops at a limit and says `10000+`; `countCards` is the deliberate exception. The limit is `host`'s `COUNT_CAP` and `stats(now, limit)` takes it as an argument, like `now`. A new count over an unbounded set needs the same treatment.
+
+**A value import from `core` into `host/present.ts` puts `better-sqlite3` in the renderer bundle.** The renderer imports `present.ts` for the key table, so a runtime import there is transitive into a browser bundle — it presented as `c(...).join is not a function` from minified code, nowhere near the cause. Type-only imports from `core` are fine and are why the file has always had them. That is the mechanical reason policy like `COUNT_CAP` lives in `host` and is passed *into* `core`, rather than the reverse.
+
 **Two builds, two dependency sets.** `npm run build` is the CLI and needs nothing from `desktop/`. `npm run build:desktop` emits to `desktop/dist/` — it must, because Node resolves `node_modules` by walking *up*, and output under `dist/` finds the root Node-ABI `better-sqlite3` rather than the Electron-ABI one. The root tsconfig therefore excludes exactly the files that `import "electron"`; everything else under `src/electron/` stays type-checked and testable. See `desktop/README.md`.
 
-**Anything awaiting an external process needs a timeout.** Three separate failures in this app presented as a silent hang rather than an error — a worker that could not load, a completion event subscribed to too late, and a page script that never ran. Each cost far more to diagnose than the bug deserved. `measure.bench.ts` and the renderer self-test both have hard timeouts for this reason.
+**Anything awaiting an external process needs a timeout.** Three separate failures in this app presented as a silent hang rather than an error — a worker that could not load, a completion event subscribed to too late, and a page script that never ran. Each cost far more to diagnose than the bug deserved. `src/measure/bench.ts` and the renderer self-test both have hard timeouts for this reason.

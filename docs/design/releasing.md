@@ -79,10 +79,17 @@ The last one is not a formality. Two interfaces over one database is the design 
 
 ## Before shipping to a large collection
 
-[ADR 0017](../decisions/0017-core-runs-in-the-main-process.md) put `core` in the main process on a measurement taken at **20,000 cards and 8,000 reviews**, and explicitly did not extrapolate to the million-card design target.
+[ADR 0017](../decisions/0017-core-runs-in-the-main-process.md) put `core` in the main process on a measurement taken at **20,000 cards and 8,000 reviews**, and explicitly did not extrapolate to the million-card design target. [ADR 0024](../decisions/0024-remeasure-the-main-process-stall.md) is that measurement taken again at 200,000 and 1,000,000, and records what was done about it.
+
+Build a collection, then measure against it — the bench measures, it does not generate:
 
 ```sh
-npm --prefix desktop run measure
+npm run build                                          # the generator runs under plain node
+node dist/measure/vault.js /tmp/vault 1000000 400000   # cards, reviews
+npm run build:desktop
+npm --prefix desktop run measure -- /tmp/vault/config.json
 ```
 
-If the worst main-process stall has grown past a frame — 16 ms — the seam is already in place: implement `protocol.ts` over a `MessagePort` into a `utilityProcess`. Do not guess; the whole point of that ADR is that this question is answered by measuring.
+Expect, at a million cards: `sync` under 10 ms, a rating burst around 120 ms a couple of times over 4,000 ratings, and `rebuild` around 160 ms across forty seconds — the last two are known and accepted, because a rebuild is modal and offers no cancel and a rating hitch lands between two cards. At 200,000 cards nothing should drop a frame at all. A **new** stall outside those, or one that has grown, is the signal: the seam is already in place, so the answer is to implement `protocol.ts` over a `MessagePort` into a `utilityProcess`. Do not guess; the whole point of both ADRs is that this question is answered by measuring.
+
+The first `stats` call is the largest stall knowingly left in the app — 0.6 s at a million cards, 9 ms after that, all of it the one count that is not capped. Worth re-checking on the machine you are shipping to.

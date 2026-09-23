@@ -76,7 +76,7 @@ describe("two machines, one notes directory", () => {
     const [id1, id2] = await bothSync();
     expect(desktop.store.getCard(id1!)).toBeDefined();
     expect(desktop.store.getCard(id2!)).toBeDefined();
-    expect(desktop.core.stats(T0).total).toBe(2);
+    expect(desktop.core.stats(T0, 1000).total).toBe(2);
   });
 
   it("write to separate log shards, so a syncer never has to merge one file", async () => {
@@ -228,7 +228,7 @@ describe("both machines stamping before they ever exchange", () => {
 
       // And this is the cost: the review is stranded on an id no note holds.
       expect(laptop.store.getCard(mine[0]!)).toBeUndefined();
-      expect(laptop.core.stats(LATER).newCards).toBe(2);
+      expect(laptop.core.stats(LATER, 1000).newCards).toBe(2);
     } finally {
       store.close();
     }

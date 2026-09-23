@@ -261,8 +261,25 @@ export class Store {
     return this.one<{ n: number }>("SELECT COUNT(*) AS n FROM cards")!.n;
   }
 
-  countNew(): number {
-    return this.one<{ n: number }>("SELECT COUNT(*) AS n FROM cards WHERE reviewed = 0")!.n;
+  /**
+   * How many cards have never been reviewed, counting no further than `limit`.
+   *
+   * Capped for the same reason `countDue` is (ADR 0024), and the numbers are
+   * nearly as bad: this is a count of every entry in the partial index, which
+   * at a million cards with 600,000 of them new measured 526 ms on a cold cache
+   * against 10 ms for the first ten thousand. What it counts is a set the user's
+   * habits set the size of — a collection synced and not yet reviewed is all of
+   * it — so the bound belongs here rather than in a hope.
+   *
+   * `countCards` is deliberately NOT capped: the total is a fact about the
+   * collection rather than about a backlog, and "10000+ cards in total" would
+   * be a worse answer than the 4 ms it costs warm.
+   */
+  countNew(limit: number): number {
+    return this.one<{ n: number }>(
+      "SELECT COUNT(*) AS n FROM (SELECT 1 FROM cards WHERE reviewed = 0 LIMIT ?)",
+      limit,
+    )!.n;
   }
 
   // -- reviews -------------------------------------------------------------
@@ -379,17 +396,65 @@ export class Store {
    * it out of the new queue — so counting state alone reports cards that no
    * longer exist, and `geode stats` could print due + new greater than total.
    */
-  countDue(now: string): number {
+  /**
+   * How many cards are due, counting no further than `limit`.
+   *
+   * The limit is not a nicety. This counts *matching rows*, each of which
+   * probes `cards` to check the card still exists — `card_state` deliberately
+   * outlives the card it belongs to, so counting state alone over-reports — and
+   * the cost is therefore proportional to the size of the due set rather than
+   * to the collection. Measured at a million cards with 389,000 of them due, it
+   * is 205 ms: a fifth of a second of frozen main process for a number on a
+   * screen (ADR 0024). Stopping the scan early bounds that by construction,
+   * where a faster query would only move the wall further out.
+   *
+   * The caller decides what "far enough" means and what to say about a count
+   * that hit it: both are `host`'s (`COUNT_CAP`, `countText`), and `core` takes
+   * the limit as an argument rather than knowing it.
+   */
+  countDue(now: string, limit: number): number {
     return this.one<{ n: number }>(
-      `SELECT COUNT(*) AS n
-         FROM card_state s JOIN cards c ON c.id = s.card_id
-        WHERE s.due <= ?`,
+      `SELECT COUNT(*) AS n FROM (
+         SELECT 1
+           FROM card_state s JOIN cards c ON c.id = s.card_id
+          WHERE s.due <= ?
+          LIMIT ?
+       )`,
       now,
+      limit,
     )!.n;
   }
 
   /** Section 9: "due before local midnight" is a forecast, not the queue. */
-  countDueBefore(instant: string): number {
-    return this.countDue(instant);
+  countDueBefore(instant: string, limit: number): number {
+    return this.countDue(instant, limit);
+  }
+
+  /**
+   * Fold the write-ahead log back into the database, as far as it can without
+   * blocking a reader.
+   *
+   * SQLite does this by itself every 1,000 pages, and the auto-checkpoint that
+   * follows a large sync is one of the two interactive stalls ADR 0024
+   * measured: the WAL a million-card sync leaves behind is folded in by
+   * whichever write comes next, which is the user's first rating. Doing it here
+   * puts the cost inside the operation that earned it — one with a progress bar
+   * already on screen.
+   *
+   * `PASSIVE` rather than `TRUNCATE` because it never waits: a checkpoint that
+   * blocks on a reader would trade a stall for a hang, which is a worse deal.
+   */
+  checkpoint(): { busy: number; log: number; checkpointed: number } {
+    // Returned rather than discarded so the work is observable: `PASSIVE`
+    // reuses the WAL file instead of shrinking it, so the file's size says
+    // nothing about whether anything was folded in. `log` and `checkpointed`
+    // are the WAL's size in frames and how many of them are back-filled —
+    // equal means the whole log is in the database.
+    const [row] = this.db.pragma("wal_checkpoint(PASSIVE)") as Array<{
+      busy: number;
+      log: number;
+      checkpointed: number;
+    }>;
+    return row ?? { busy: 0, log: 0, checkpointed: 0 };
   }
 }

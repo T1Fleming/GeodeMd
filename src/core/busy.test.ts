@@ -135,7 +135,7 @@ describe("a review while another writer holds the lock", () => {
     // The write is one transaction, so a busy failure is all-or-nothing: no
     // review row without the state that goes with it.
     expect(store.getState(id)).toBeUndefined();
-    expect(core.stats(T0).newCards).toBe(1);
+    expect(core.stats(T0, 1000).newCards).toBe(1);
   });
 
   it("is repaired by the next ingest, with nothing lost", async () => {
@@ -150,7 +150,7 @@ describe("a review while another writer holds the lock", () => {
     const state = store.getState(id);
     expect(state).toBeDefined();
     expect(state!.reps).toBe(1);
-    expect(core.stats(T0).newCards).toBe(0);
+    expect(core.stats(T0, 1000).newCards).toBe(0);
   });
 
   it("does not duplicate the review when the ingest replays it", async () => {
