@@ -76,7 +76,8 @@ src/store/      the only module that touches SQLite
 src/scheduler/  FSRS, with its parameters pinned in source (not inherited from ts-fsrs defaults)
 src/core/       the Core class — sync, ingestLogs, getDueCards, countDue, reviewCard, stats, rebuild
 src/host/       this machine: XDG paths, env, hostname, config, error kinds,
-                shared vocabulary: ratings, editor resolution, summary fields, phases
+                shared vocabulary: ratings, editor resolution, summary fields, phases,
+                the review queue (which card is next, and when one comes back)
 src/cli/        argv, review loop, ANSI              one of two interfaces
 src/electron/   window, IPC contract, renderer       the other
 src/index.ts    the public API: re-exports Core, Store, FsrsScheduler, and the parser functions
@@ -92,6 +93,7 @@ Hard rules enforced by `boundaries.test.ts` (know these before moving code betwe
 - `core` never writes to the terminal (`console.*`), never calls `process.exit`/`process.stdout`/`process.stderr`, and never reads `process.env` — it takes everything as arguments, which is what lets one core serve both interfaces.
 - `host` may read ambient machine state — that is its whole job — but never writes to the terminal, because a GUI shares it.
 - `host` owns the review vocabulary (`RATING_KEYS`, `interpretKey`, `ACTION_KEYS`). Neither interface may define its own rating table, nor decide **which keys are offered at which stage of a card** — `ACTION_KEYS` carries a `stage` (`question` / `answer` / `both`) and both interfaces map `actionsAt()`. The test greps for `stage: "…"` outside `host`.
+- `host` owns **the review queue** (`host/queue.ts`): which card is shown next, and when a rated card comes back. FSRS's short-term steps put a new card rated anything but `easy` one to ten minutes out, and both interfaces honour that rather than deciding for themselves ([ADR 0023](docs/decisions/0023-honour-short-term-learning-steps.md)); the test greps for `inShortTermSteps` outside `host`. What is left to each is the loop around it — a `while` in the CLI, a state machine in the renderer.
 - `host` owns what a sync summary *says* — `summaryFields` (which counts, in what order), `deferralReason`, and `PHASE_LABEL`. Neither interface may restate the list; the test greps for `duplicate ids re-minted` and `reading review history` outside `host`. What is left to each is layout: the CLI joins with commas and folds `detail` fields into parentheses, the app lays them out as a grid.
 - `host` also owns *which program opens a note* (`resolveEditor`, `editorCommand`, the `+142`/`--goto`/`:142` tables). Neither interface may define its own editor table — the test greps for `--goto` outside `host`. The `spawn` is the opposite case and stays split: `cli/` uses `stdio: "inherit"` and awaits the child because a terminal editor holds the TTY, `electron/` uses `detached: true` and returns at once because a GUI has no TTY and must not block for as long as a note stays open. `host` spawns nothing, which is what keeps it usable from both.
 - `parser` opens no file, touches no database, and calls no clock (`new Date()`/`Date.now()`) — it is pure text-in, cards-out.
@@ -107,6 +109,8 @@ Other properties the test suite asserts rather than assumes (regressions here ar
 ## Conventions
 
 **Time is injected, never read.** Every `Core` method takes `now: Date` as an explicit parameter — `sync(now, opts)`, `getDueCards(now, limit)`, `reviewCard(id, rating, now)`, and the rest. This is the practical form of "no ambient state": `core` and `parser` never call `Date.now()` themselves, which is what makes scheduling deterministic and rebuild-from-log reproducible. A new method on `Core` that needs the time takes it as an argument.
+
+The rule carries up into the interfaces where scheduling is involved: `serve(queue, now)` and `press(session, key, now)` take the clock rather than reading it, which is the only reason a ten-minute learning step is testable without waiting ten minutes. Each interface reads the real clock at the edge, on a keypress — never while drawing, or a card would change under the reader.
 
 **Purity is split from I/O even inside an interface.** `render.ts` builds strings and `index.ts` decides when to print them; `host/editor.ts` keeps `resolveEditor`/`editorCommand` pure and each interface confines its own `spawn` to one place (`cli/editor.ts` inherits the TTY and waits, `electron/main/open.ts` detaches and returns). In `electron`, `main/runs.ts` holds single-flight and the progress throttle with no Electron imports at all, so it tests under plain vitest. The payoff is the same both times: the decisions are testable without a pseudo-terminal or a running app. Follow the split when adding to either.
 

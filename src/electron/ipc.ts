@@ -60,6 +60,20 @@ export interface Stats {
  */
 export interface Rated {
   applied: "db" | "log-only";
+  /**
+   * The card's new due time and state, or null when they are not known.
+   *
+   * The session needs this to honour FSRS's short-term steps: a new card rated
+   * anything but *easy* is due again in one to ten minutes and comes back in
+   * the same sitting (ADR 0023). Facts rather than a verdict — whether those
+   * facts mean "again today" is `host/queue.ts`'s to answer, so the renderer
+   * and the CLI cannot come to different conclusions from the same rating.
+   *
+   * Null on `log-only`: the rating is in the log, but the state that the
+   * database refused to hold was never computed on this side of the failure.
+   * One lost re-show, no lost review.
+   */
+  next: { due: string; state: number } | null;
 }
 
 /**

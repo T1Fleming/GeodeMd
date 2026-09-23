@@ -589,8 +589,13 @@ export class Core {
    * Append to the log, fsync, THEN update SQLite. A crash between the two
    * leaves the DB behind by one review, which the next ingest repairs; the
    * reverse order loses the review outright.
+   *
+   * **Returns the resulting state**, which is the only way a caller can learn
+   * that the scheduler wants this card again in ten minutes. Recomputing it
+   * outside would mean a second copy of the fold, and the two would disagree
+   * the first time either changed (ADR 0023).
    */
-  async reviewCard(cardId: string, rating: 1 | 2 | 3 | 4, now: Date): Promise<void> {
+  async reviewCard(cardId: string, rating: 1 | 2 | 3 | 4, now: Date): Promise<CardState> {
     const previous = this.store.getState(cardId) ?? null;
     const at = files.formatAt(now);
 
@@ -610,6 +615,7 @@ export class Core {
       this.store.insertReview(cardId, at, rating);
       this.store.putState(cardId, next);
     });
+    return next;
   }
 
   stats(now: Date): {

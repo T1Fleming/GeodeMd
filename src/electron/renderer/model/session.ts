@@ -6,19 +6,37 @@
  * same split the CLI already has (`render.ts` builds strings, `index.ts`
  * decides when to print), one interface further down.
  *
- * The keyboard vocabulary is NOT redefined here: `interpretKey` and
- * `RATING_KEYS` come from `host`, so this cannot drift from the CLI about what
- * `3` does or whether `escape` quits.
+ * Neither the keyboard vocabulary nor the queue's rules are redefined here:
+ * `interpretKey` and `RATING_KEYS` come from `host`, and so does the queue
+ * itself (`host/queue.ts`), so this cannot drift from the CLI about what `3`
+ * does, about whether `escape` quits, or about when a card comes back.
+ *
+ * What is left here is what a *screen* needs on top of a queue: whether the
+ * answer is showing, what has been rated, which notes were opened.
  */
 
 import type { DueCard } from "../../../core/index.js";
 import { emptyCounts, interpretKey } from "../../../host/present.js";
 import type { KeyAction, RatingCounts } from "../../../host/present.js";
+import * as queue from "../../../host/queue.js";
+import type { ReviewQueue, Scheduled } from "../../../host/queue.js";
 
 export interface Session {
-  queue: readonly DueCard[];
-  /** Index into `queue`. Equal to `queue.length` when the session is over. */
-  at: number;
+  queue: ReviewQueue;
+  /**
+   * The card on screen, or null when there is nothing to show yet.
+   *
+   * **Chosen when a key is pressed, never while drawing.** Which card is due
+   * depends on the clock, and a component that asked "what now?" on every
+   * render would swap the card out from under someone mid-read the moment a
+   * learning card ripened. The clock is read on a keypress and the answer is
+   * kept here (ADR 0023).
+   *
+   * Null is the narrow window where every remaining card has been rated and
+   * the scheduler's answer has not come back: see `ReviewQueue.inFlight`. Not
+   * the same as the session being over — ask `isOver`.
+   */
+  card: DueCard | null;
   /** The answer is hidden until asked for. */
   revealed: boolean;
   counts: RatingCounts;
@@ -37,21 +55,44 @@ export type Effect =
   | { kind: "rate"; cardId: string; rating: 1 | 2 | 3 | 4 }
   | { kind: "open"; card: DueCard };
 
-export function begin(queue: readonly DueCard[]): Session {
-  return { queue, at: 0, revealed: false, counts: emptyCounts(), quit: false, opened: [] };
+/**
+ * No clock needed: every card in a fresh snapshot is due now by construction —
+ * `getDueCards` returns what is due and what is new, and nothing else.
+ */
+export function begin(cards: readonly DueCard[]): Session {
+  const q = queue.openQueue(cards);
+  return {
+    queue: q,
+    card: cards[0] ?? null,
+    revealed: false,
+    counts: emptyCounts(),
+    quit: false,
+    opened: [],
+  };
 }
 
 export function current(s: Session): DueCard | null {
-  return s.at < s.queue.length ? s.queue[s.at]! : null;
+  return s.card;
 }
 
 export function isOver(s: Session): boolean {
-  return s.quit || s.at >= s.queue.length;
+  return s.quit || queue.isEmpty(s.queue);
 }
 
-/** Cards answered so far. Not `at`, which also advances on a quit. */
+/** Cards answered so far. Not a position in the queue — a card can return. */
 export function reviewed(s: Session): number {
   return s.counts[1] + s.counts[2] + s.counts[3] + s.counts[4];
+}
+
+/**
+ * How many answers this sitting still owes, including the card on screen.
+ *
+ * The counter's denominator, and it **grows**: a card rated anything but easy
+ * is owed again. `3 / 24` after `3 / 23` is not a bug, it is the second look
+ * being earned.
+ */
+export function owed(s: Session): number {
+  return queue.owed(s.queue);
 }
 
 /**
@@ -69,14 +110,18 @@ export function reviewed(s: Session): number {
  * - `0` is the opposite: offered only *before* it is, because deferring a
  *   card whose answer you have read would make the next sighting a sham test.
  *   It records nothing at all.
- * - A card rated `1` does **not** come back in this session. The queue is a
- *   snapshot, and FSRS puts a lapsed card minutes out; re-queueing inside the
- *   session would be learning-steps logic, which is out of scope.
+ * - A rated card leaves the screen at once and comes back only if the
+ *   scheduler says so, which the caller reports through `scheduled` — the
+ *   session never guesses at an interval.
  */
-export function press(s: Session, key: string): { next: Session; effect?: Effect } {
+export function press(s: Session, key: string, now: Date): { next: Session; effect?: Effect } {
   if (isOver(s)) return { next: s };
+  const card = s.card;
+  // Nothing on screen: every remaining card is in flight. A keypress in that
+  // window is a key pressed at no card, and must not land on the next one.
+  if (!card) return { next: s };
+
   const action: KeyAction = interpretKey(key);
-  const card = current(s)!;
 
   if (action.kind === "quit") return { next: { ...s, quit: true } };
 
@@ -85,9 +130,9 @@ export function press(s: Session, key: string): { next: Session; effect?: Effect
     // `0` means "I am not ready to answer this", which is only true while
     // the answer is still hidden.
     if (s.revealed) return { next: s };
-    // No effect, and no counter. Nothing durable happens — the card simply
-    // moves, and `at` stays put because the splice shifts the rest forward.
-    return { next: { ...s, queue: moveToEnd(s.queue, s.at) } };
+    // No effect, and no counter. Nothing durable happens.
+    const q = queue.setAside(s.queue, card);
+    return { next: { ...s, queue: q, card: queue.serve(q, now) } };
   }
 
   if (!s.revealed) {
@@ -98,8 +143,9 @@ export function press(s: Session, key: string): { next: Session; effect?: Effect
 
   if (action.kind === "rate") {
     const counts = { ...s.counts, [action.rating]: s.counts[action.rating] + 1 };
+    const q = queue.rated(s.queue, card);
     return {
-      next: { ...s, at: s.at + 1, revealed: false, counts },
+      next: { ...s, queue: q, card: queue.serve(q, now), revealed: false, counts },
       effect: { kind: "rate", cardId: card.id, rating: action.rating },
     };
   }
@@ -113,20 +159,24 @@ export function press(s: Session, key: string): { next: Session; effect?: Effect
 }
 
 /**
- * Move one card to the back of the queue.
+ * The scheduler's answer for a card that was rated: when it is due, and in
+ * what state. Null when the write failed and the new state is unknown.
  *
- * The queue's LENGTH is unchanged, which is what keeps `isOver` honest: a
- * deferred card is still owed an answer, so the session is not over until it
- * gets one or the user quits. `at` is deliberately not advanced — removing
- * the current card shifts the next one into its place.
+ * The caller reports this when `cardsReview` resolves, which is after the
+ * keypress that caused it — the one place the session is driven by something
+ * other than a key. Rating the last card is the case that makes it necessary:
+ * the session cannot be over until this arrives, because the answer may be
+ * "show it again in a minute".
  *
- * Deferring the only card left returns it immediately. That is the truthful
- * answer to "show me something else" when there is nothing else, and `q`
- * always works.
+ * The card on screen is never replaced by this. A waiting card that ripens
+ * while someone is reading takes its turn at the next keypress, not mid-read.
  */
-function moveToEnd(queue: readonly DueCard[], at: number): DueCard[] {
-  const next = [...queue];
-  const [card] = next.splice(at, 1);
-  if (card) next.push(card);
-  return next;
+export function scheduled(
+  s: Session,
+  cardId: string,
+  next: Scheduled | null,
+  now: Date,
+): Session {
+  const q = queue.scheduled(s.queue, cardId, next, now);
+  return { ...s, queue: q, card: s.card ?? queue.serve(q, now) };
 }

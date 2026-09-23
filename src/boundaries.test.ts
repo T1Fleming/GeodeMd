@@ -198,6 +198,29 @@ describe("host, shared by both interfaces", () => {
     }
   });
 
+  it("owns when a rated card comes back, so a session means the same in both", async () => {
+    // FSRS wants a new card again in one to ten minutes (ADR 0023), and what a
+    // session DOES about that is a set of decisions rather than a rendering:
+    // whether the card jumps ahead of one not yet seen, what happens when the
+    // only card left is due in forty seconds, whether the counter's total may
+    // grow. Two interfaces answering those differently would each stay
+    // self-consistent while disagreeing about what a session is — the same
+    // failure mode as two rating tables, and just as invisible.
+    //
+    // `inShortTermSteps` is the marker: it is the scheduler's own state test,
+    // it is what the policy is built on, and it has no business anywhere else.
+    const host = await readAll("host");
+    expect(host).toMatch(/openQueue/);
+    expect(host).toMatch(/inShortTermSteps/);
+
+    for (const dir of ["cli", "electron"]) {
+      expect(
+        await readAll(dir),
+        `${dir} decides for itself when a card comes back`,
+      ).not.toMatch(/inShortTermSteps/);
+    }
+  });
+
   it("owns which program opens a note, and how it is told a line", async () => {
     // Same argument as the rating table above, and the same failure mode: two
     // editor tables would each stay self-consistent while `o` landed on line 1

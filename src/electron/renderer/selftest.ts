@@ -46,6 +46,15 @@ async function click(sel: string, label: string): Promise<void> {
   await settle();
 }
 
+/**
+ * The counter's denominator: answers this sitting still owes.
+ *
+ * Worth reading rather than just the position, because it is the only visible
+ * evidence that a rated card was re-queued — the re-show itself is ten minutes
+ * of wall clock away and cannot be driven from here (ADR 0023).
+ */
+const owedNow = (): number => Number(text(".meta span").split("/")[1]?.trim());
+
 /** Wait for something to appear rather than for a timer. */
 async function until(sel: string, tries = 60): Promise<boolean> {
   for (let i = 0; i < tries && !exists(sel); i++) await settle(50);
@@ -144,11 +153,21 @@ export async function runSelfTest(): Promise<void> {
       text(".toast"),
     );
 
+    const owedBefore = owedNow();
     await key("3");
     await settle(200);
     check("rating advances to the next card", text(".question") !== first, text(".question"));
     check("and hides the answer again", !exists(".answer"));
     check("the counter advanced", text(".meta").startsWith("2 /"), text(".meta"));
+    // A new card rated `good` is due again in ten minutes, so the sitting owes
+    // one more answer than it did. The second sighting cannot be driven from
+    // here; the total growing is the evidence that it was queued rather than
+    // computed and thrown away, which is what this used to do.
+    check(
+      "a card rated good is owed a second answer in the same sitting",
+      owedNow() === owedBefore + 1,
+      `${owedBefore} -> ${owedNow()}`,
+    );
 
     // A digit before the reveal must not record a rating for an answer the
     // user has not seen.

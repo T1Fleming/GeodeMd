@@ -150,13 +150,16 @@ function register(): void {
     guard<Rated>(async () => {
       const c = await ensureCore();
       try {
-        await c.reviewCard(cardId, rating, new Date());
-        return { applied: "db" };
+        const next = await c.reviewCard(cardId, rating, new Date());
+        // Only what a session needs. `CardState` carries stability, difficulty
+        // and the rest, and none of it belongs on a wire type that exists to
+        // answer "when do I show this again?".
+        return { applied: "db", next: { due: next.due, state: next.state } };
       } catch (err) {
         // The rating is already fsynced to the log, so a busy database is not a
         // failure — the next ingest reconciles it. Reported as success with a
         // qualifier so the UI can say so quietly and move on.
-        if (isBusy(err)) return { applied: "log-only" };
+        if (isBusy(err)) return { applied: "log-only", next: null };
         throw err;
       }
     }),

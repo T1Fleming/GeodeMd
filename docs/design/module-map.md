@@ -50,6 +50,7 @@ src/
   scheduler/  ts-fsrs behind a two-method interface
   core/       the Core class; orchestration. Knows only its arguments
   host/       this machine: XDG paths, env, hostname, config, error kinds
+              shared vocabulary: keys, summary fields, the review queue
   cli/        argv, terminal I/O                  one of two interfaces
   electron/   window, IPC contract, renderer      the other
   index.ts    the public API: re-exports Core, Store, FsrsScheduler, parser fns
@@ -95,6 +96,7 @@ The same split runs through everything `host` holds. Each row below is one quest
 | `summaryFields` — which counts a sync reports, in order | `", "` versus a grid |
 | `deferralReason` — why a file was left alone | what to do about it (`geode sync` versus a button) |
 | `PHASE_LABEL` — what `scan`/`prune`/`ingest` are called | where the bar goes |
+| `queue.ts` — which card is next, and when a rated card comes back | a `while` loop in one, a state machine in the other |
 
 The failure mode these prevent is not a crash. It is two interfaces that each stay perfectly self-consistent while disagreeing with each other, which no test catches and no user reports as a bug.
 

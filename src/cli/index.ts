@@ -24,6 +24,8 @@ import { OpenedNotes, resolveEditor } from "../host/editor.js";
 import { isBusy } from "../host/errors.js";
 import { deferralReason, interpretKey, summaryFields } from "../host/present.js";
 import type { KeyAction } from "../host/present.js";
+import { openQueue, owed, rated, scheduled, serve, setAside } from "../host/queue.js";
+import type { Scheduled } from "../host/queue.js";
 import { openCore as openCoreWith, readAppConfig } from "../host/open.js";
 
 export { interpretKey };
@@ -248,20 +250,26 @@ async function reviewLoop(core: Core, config: FileConfig, limit: number): Promis
 
   try {
     /**
-     * A working copy, because `0` reorders it.
+     * What the session still owes, and which card is next.
      *
-     * Index-driven rather than `for…of` for exactly that reason: deferring
-     * moves a card to the back, and `at` deliberately does not advance —
-     * removing the current card shifts the next one into its place. The
-     * length never changes, so the session is over only when every card has
-     * been answered or the user quits.
+     * Both the reordering `0` does and the re-showing a learning step asks for
+     * live in `host/queue.ts` rather than in this loop, because the app needs
+     * the identical rules and two copies would drift (ADR 0023). All that is
+     * left here is asking what to show, and saying what happened.
      */
-    const working = [...queue];
-    let at = 0;
+    let pending = openQueue(queue);
+    let answered = 0;
 
-    while (at < working.length) {
-      const card = working[at]!;
-      const prompt = renderPrompt(card, at + 1, working.length, s, width);
+    for (;;) {
+      // Null means nothing to show. In this loop it also means nothing is
+      // owed: every rating reports its outcome before the next card is asked
+      // for, so no card is ever in flight at this line.
+      const card = serve(pending, new Date());
+      if (!card) break;
+      // Answers given and answers owed, not a position in a fixed list: a card
+      // on a learning step is owed a second one, so the total grows as those
+      // are earned. `host/queue.ts` counts it.
+      const prompt = renderPrompt(card, answered + 1, answered + owed(pending), s, width);
       const answer = renderAnswer(card, s, width);
 
       process.stdout.write(prompt);
@@ -275,7 +283,7 @@ async function reviewLoop(core: Core, config: FileConfig, limit: number): Promis
       if (first.kind === "defer") {
         // Nothing is recorded — not a rating, not a log line. The card is
         // simply owed an answer later in this session.
-        working.push(...working.splice(at, 1));
+        pending = setAside(pending, card);
         continue;
       }
       process.stdout.write(answer);
@@ -301,8 +309,18 @@ async function reviewLoop(core: Core, config: FileConfig, limit: number): Promis
         if (action.kind === "rate") rating = action.rating;
       }
 
+      pending = rated(pending, card);
+      /**
+       * The card's new state, and null when the write failed.
+       *
+       * This is what decides whether the card comes back in this sitting: FSRS
+       * puts a new card rated anything but *easy* one to ten minutes out, and
+       * the queue re-shows it when that time comes. A busy database costs the
+       * re-show and not the review — the rating is already in the log.
+       */
+      let next: Scheduled | null = null;
       try {
-        await core.reviewCard(card.id, rating, new Date());
+        next = await core.reviewCard(card.id, rating, new Date());
       } catch (err) {
         // WAL allows one writer. By now the rating is already fsynced into the
         // log, so this is precisely the condition the next ingest repairs.
@@ -314,8 +332,9 @@ async function reviewLoop(core: Core, config: FileConfig, limit: number): Promis
           throw err;
         }
       }
+      pending = scheduled(pending, card.id, next, new Date());
       counts[rating]++;
-      at++;
+      answered++;
     }
     process.stdout.write(await sessionEnd());
   } finally {

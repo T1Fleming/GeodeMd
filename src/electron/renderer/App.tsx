@@ -16,6 +16,7 @@ import { Setup } from "./Setup.js";
 import { Stats } from "./Stats.js";
 import { Sync } from "./Sync.js";
 import type { Session } from "./model/session.js";
+import type { Scheduled } from "../../host/queue.js";
 
 declare global {
   interface Window {
@@ -159,16 +160,28 @@ function ReviewScreen({ onNote }: { onNote: (m: string) => void }): React.JSX.El
     void load();
   }, [load]);
 
+  /**
+   * Record a rating, and hand back what the scheduler decided.
+   *
+   * The return value is what lets the session honour FSRS's short-term steps
+   * (ADR 0023): a new card rated anything but *easy* is due again in minutes
+   * and comes back in this sitting. Null means the new state is not known —
+   * the write failed, or the database was busy — and the card simply does not
+   * return today. The rating itself is safe in the log either way.
+   */
   const onRate = useCallback(
-    async (cardId: string, rating: 1 | 2 | 3 | 4) => {
+    async (cardId: string, rating: 1 | 2 | 3 | 4): Promise<Scheduled | null> => {
       const r = await window.geode.cardsReview(cardId, rating);
-      if (r.ok && r.value.applied === "log-only") {
+      if (!r.ok) {
+        onNote(r.message);
+        return null;
+      }
+      if (r.value.applied === "log-only") {
         // Not a failure: the rating is already fsynced to the log and the next
         // ingest reconciles the row. A dialog here would be a lie.
         onNote("saved — the database was busy and will catch up");
-      } else if (!r.ok) {
-        onNote(r.message);
       }
+      return r.value.next;
     },
     [onNote],
   );

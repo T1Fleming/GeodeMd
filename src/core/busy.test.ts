@@ -172,7 +172,9 @@ describe("a review while another writer holds the lock", () => {
     await core.reviewCard(id, 3, T0).catch(() => undefined);
     releaseWriteLock();
 
-    await expect(core.reviewCard(id, 3, T0)).resolves.toBeUndefined();
-    expect(store.getState(id)).toBeDefined();
+    // Resolves with the new state — which is also how a caller knows the
+    // scheduler wants this card again in ten minutes (ADR 0023).
+    const next = await core.reviewCard(id, 3, T0);
+    expect(next.due).toBe(store.getState(id)!.due);
   });
 });
