@@ -204,6 +204,12 @@ async function reviewLoop(core: Core, config: FileConfig, limit: number): Promis
       const handler = (str: string, k: { name?: string; ctrl?: boolean }): void => {
         process.stdin.off("keypress", handler);
         if (k?.ctrl && k.name === "c") resolve("q");
+        // Escape arrives as the raw `\x1b` byte in `str`, which is not what
+        // `interpretKey` matches on — so it fell through to "any key reveals"
+        // here while the app, which passes the DOM's `"Escape"`, quit. Passing
+        // the NAME for this one key is what keeps both interfaces agreeing
+        // about a key `host` already owns.
+        else if (k?.name === "escape") resolve("escape");
         else resolve(str ?? k?.name ?? "");
       };
       process.stdin.on("keypress", handler);
