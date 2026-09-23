@@ -11,7 +11,7 @@ app do*, and *where is that proven*. What it deliberately cannot tell you is wha
 app does **untested** — an area that looks thin here is thinly covered, and that is
 worth reading as a finding rather than a gap in the document.
 
-452 behaviours in 12 areas, which follow [the guides](../guides/) rather than the source tree.
+485 behaviours in 12 areas, which follow [the guides](../guides/) rather than the source tree.
 
 - [Reviewing](#reviewing) — 124
 - [Recognising a card](#recognising-a-card) — 57
@@ -23,8 +23,8 @@ worth reading as a finding rather than a gap in the document.
 - [The terminal](#the-terminal) — 19
 - [The database as a cache](#the-database-as-a-cache) — 7
 - [At scale](#at-scale) — 9
-- [Rules the project enforces on itself](#rules-the-project-enforces-on-itself) — 31
-- [The documentation tells the truth](#the-documentation-tells-the-truth) — 7
+- [Rules the project enforces on itself](#rules-the-project-enforces-on-itself) — 35
+- [The documentation tells the truth](#the-documentation-tells-the-truth) — 36
 
 ## Reviewing
 
@@ -1024,7 +1024,7 @@ _2 · `files/enumerate.bench.test.ts`_
 
 _Module boundaries, and the completeness of this document — both checked by scanning source text rather than trusted._
 
-**31 behaviours.**
+**35 behaviours.**
 
 ### section 6 hard rules
 
@@ -1061,6 +1061,15 @@ _10 · `boundaries.test.ts`_
 - is the only place above core that walks the notes tree
 - core does not import host either — it takes its config as an argument
 
+### the journeys stay journeys
+
+_4 · `boundaries.test.ts`_
+
+- has one per guide, and every one of them reads its guide
+- never reads the cache to prove a claim
+- names every group as a sentence rather than after a function
+- asserts something in every single test
+
 ### electron, the second interface
 
 _3 · `boundaries.test.ts`_
@@ -1091,7 +1100,7 @@ _5 · `behaviours/areas.test.ts`_
 
 _Documents that make checkable claims, checked._
 
-**7 behaviours.**
+**36 behaviours.**
 
 ### the demo collection
 
@@ -1109,4 +1118,93 @@ _5 · `demo.test.ts`_
 - strips list markers and task boxes from the question
 - strips a trailing comment that is not a stamp
 - keeps a later separator as answer text
+
+### the examples the guide shows a reader
+
+_4 · `journeys/first-sync.test.ts`_
+
+- shows a stamped line that really is one
+- shows three shapes that are cards, and they all are
+- is right that `foo::bar` is not one
+- is right about every context it says is skipped
+
+### looking before it writes
+
+_2 · `journeys/first-sync.test.ts`_
+
+- writes nothing on a dry run — not a stamp, not a database row
+- reports the two numbers the guide tells a reader to compare
+
+### the real sync
+
+_2 · `journeys/first-sync.test.ts`_
+
+- edits every file that contains a card, and only those
+- leaves a second run with nothing to do, so the edit happens once
+
+### the guide's four ratings are the four the app honours
+
+_3 · `journeys/reviewing.test.ts`_
+
+- names the same keys, in the same order, with the same words
+- advertises no key that does nothing
+- puts `0` and `o` at the stages it says they are offered at
+
+### the intervals the guide quotes are the ones FSRS produces
+
+_2 · `journeys/reviewing.test.ts`_
+
+- matches every row of the table, against the real scheduler
+- is right that a long-standing card rated `1` comes back in five minutes
+
+### a rating is safe the moment it is given
+
+_2 · `journeys/reviewing.test.ts`_
+
+- is in the review log on disk, which is what the guide promises
+- survives quitting halfway, as the guide says it does
+
+### the session's own claims about what you get
+
+_2 · `journeys/reviewing.test.ts`_
+
+- serves due cards before new ones, most overdue first
+- does not walk the notes, so a deleted card can still turn up
+
+### what the guide says is durable, and where it says it lives
+
+_3 · `journeys/recovery.test.ts`_
+
+- names the log path the code actually writes to
+- names three things, and calls exactly one of them a cache
+- writes a log line at the path it promised, for a real review
+
+### deleting the database
+
+_2 · `journeys/recovery.test.ts`_
+
+- loses nothing that a rebuild does not put back
+- stamps nothing new on the way back, because the notes already carry the ids
+
+### what rebuilding does not fix
+
+_2 · `journeys/recovery.test.ts`_
+
+- leaves a deleted card out of the queue, but keeps its history
+- is what `geode rebuild` means, and the guide spells the command the same way
+
+### what the guide says two machines need in order to agree
+
+_3 · `journeys/moving-notes.test.ts`_
+
+- gives each machine its own log file, so none is ever merged
+- makes re-reading a log you already have a no-op, so a syncer may deliver it twice
+- lets a machine that has never seen the collection catch up from the files alone
+
+### the conflict copies the guide promises to leave alone
+
+_2 · `journeys/moving-notes.test.ts`_
+
+- recognises both shapes it names, and neither shape it says it will not
+- leaves one alone in a real sync, and says that it did
 

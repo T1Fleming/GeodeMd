@@ -21,4 +21,6 @@ The situations the [README](../../README.md) can only warn about in a sentence. 
 
 ## Writing one
 
+**These guides are tested.** Each one has a journey in `src/journeys/` that reads it and checks what it claims — the key tables, the intervals, the example card lines, the paths, the filenames it promises to recognise. If you change a claim here and `npm test` fails, one of the two was wrong, and the test names which. Write tables rather than prose where a number or a key is the point, because a table can be checked and a sentence often cannot.
+
 Say what goes wrong as well as what to do. The parts of this tool that need a guide are the parts where the safe path and the obvious path differ — and a guide that only lists the happy path leaves the reader exactly where the README did.

@@ -20,6 +20,16 @@ That total assertion is what removing the tombstone columns bought ([ADR 0010](.
 
 It rests on the pinned scheduler parameters: **read a failure here as scheduler nondeterminism before assuming it is an ingest bug.**
 
+## The journeys
+
+`src/journeys/` is the outer tier: **one file per guide in `docs/guides/`**, and every test in it is anchored to a claim that guide makes. They read the guide — its tables, its fenced examples, its sentences — and check what they find against real behaviour on a real temp collection with a file-backed database.
+
+This is where the idea in `demo.test.ts` goes next. That test exists because `demo/geodemd/syntax.md` claims a set of shapes are skipped and something had to keep the claim honest; the journeys point the same idea at the documentation users actually read. The reviewing guide's key table is checked against `host`'s tables, its interval table against the real scheduler, the recovery guide's log path against `files`, and the two conflict-copy filenames the moving-notes guide promises to recognise — plus the two it promises *not* to — against `isSyncConflict`.
+
+The tier earns being separate only while it stays small and user-shaped, so four rules in `boundaries.test.ts` hold it there. A journey must read its guide, must name every group as a sentence rather than after a function, must assert something in every test, and must never reach into the store to prove a claim. Those are the guarantees a Gherkin layer would have given by grammar; here they are the same source scan as every other boundary, with no second runner and no step definitions. Each was checked by breaking it on purpose.
+
+**What is deliberately not here.** The mechanisms: `host/queue.test.ts` covers the queue, `sync.test.ts` covers stamping, `rebuild.test.ts` covers the identity of a rebuild. A journey that re-proved those would be a slow second copy of the suite. And the CLI's interactive loop is still not covered by anything, because it needs a TTY — see below.
+
 ## The behaviour index
 
 `npm test` writes [behaviours.md](behaviours.md) — every `describe` and `it` in the suite, assembled into twelve areas that follow [the guides](../guides/) rather than the source tree. It exists because the suite is organised by module, which is right for the code and useless for the question *what does this app do*: `0 later` is asserted in six files.

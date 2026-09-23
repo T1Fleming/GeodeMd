@@ -121,6 +121,10 @@ export const BY_FILE: Readonly<Record<string, string>> = {
   "boundaries.test.ts": "Rules the project enforces on itself",
   "behaviours/areas.test.ts": "Rules the project enforces on itself",
   "demo.test.ts": "The documentation tells the truth",
+  "journeys/first-sync.test.ts": "The documentation tells the truth",
+  "journeys/reviewing.test.ts": "The documentation tells the truth",
+  "journeys/recovery.test.ts": "The documentation tells the truth",
+  "journeys/moving-notes.test.ts": "The documentation tells the truth",
 };
 
 /**

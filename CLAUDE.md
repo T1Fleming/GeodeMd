@@ -47,6 +47,8 @@ npx vitest run -t "some test name"
 
 The full suite takes about a second, scale harness included — there is no speed reason to run a subset, so prefer `npm test`. A **full** run also rewrites `docs/design/behaviours.md`; a filtered one deliberately leaves it alone, so commit that file from a full run.
 
+Editing a guide in `docs/guides/` can fail `src/journeys/` — that is the point: each guide has a journey holding it to its tables, examples and sentences. Change the claim and the test with it, or find out which one was wrong.
+
 Name a `describe` after the behaviour, not the function under test — the behaviour index is built from those names, and `src/behaviours/areas.test.ts` fails if a new group is not classified in `src/behaviours/areas.ts`.
 
 The suite runs serially (`pool: forks`, `singleFork: true`) — see `vitest.config.ts` — because sync/scale tests touch real temp directories and mtimes, and wall-clock assertions in the scale harness would otherwise fight for I/O.
@@ -85,6 +87,8 @@ src/host/       this machine: XDG paths, env, hostname, config, error kinds,
 src/cli/        argv, review loop, ANSI              one of two interfaces
 src/electron/   window, IPC contract, renderer       the other
 src/measure/    the scale harness: bench.ts measures, vault.ts builds what it measures
+src/journeys/   one test file per guide, each holding that guide to what it claims
+src/behaviours/ the taxonomy and reporter behind docs/design/behaviours.md
 src/index.ts    the public API: re-exports Core, Store, FsrsScheduler, and the parser functions
 ```
 

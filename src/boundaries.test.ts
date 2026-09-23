@@ -290,6 +290,91 @@ describe("host, shared by both interfaces", () => {
 });
 
 /**
+ * The journeys: the outer tier of the suite.
+ *
+ * `src/journeys/` holds one file per guide in `docs/guides/`, and each test there
+ * is anchored to a claim the guide makes. The tier is only useful while it stays
+ * *that* — a tier that drifts into unit tests becomes a slower second copy of the
+ * suite, and the drift is invisible one convenient assertion at a time.
+ *
+ * So the rules below are what a Gherkin layer would have enforced by grammar,
+ * done with the same text scan as everything else in this file: journeys read a
+ * guide, name behaviours in sentences, assert something, and never reach into the
+ * cache. See `docs/design/testing.md`.
+ */
+describe("the journeys stay journeys", () => {
+  const JOURNEYS = path.join(SRC, "journeys");
+
+  async function journeyTests(): Promise<Array<{ name: string; text: string }>> {
+    const out: Array<{ name: string; text: string }> = [];
+    for (const entry of await fs.readdir(JOURNEYS, { withFileTypes: true })) {
+      if (!entry.isFile() || !entry.name.endsWith(".test.ts")) continue;
+      out.push({
+        name: entry.name,
+        text: await fs.readFile(path.join(JOURNEYS, entry.name), "utf8"),
+      });
+    }
+    return out;
+  }
+
+  it("has one per guide, and every one of them reads its guide", async () => {
+    const guides = (await fs.readdir(path.join(SRC, "..", "docs", "guides")))
+      .filter((n) => n.endsWith(".md") && n !== "README.md")
+      .sort();
+    const journeys = (await journeyTests()).map((f) => f.name).sort();
+    expect(journeys).toEqual(guides.map((g) => g.replace(/\.md$/, ".test.ts")));
+
+    for (const file of await journeyTests()) {
+      // Reading the guide is the whole point: a journey that asserts from memory
+      // is an ordinary test that has wandered into the wrong directory.
+      expect(stripComments(file.text), `${file.name} never reads its guide`).toMatch(
+        /from\s+["']\.\/guide\.js["']/,
+      );
+    }
+  });
+
+  it("never reads the cache to prove a claim", async () => {
+    // A journey goes through `core` and `host`, as a user does. Reaching into the
+    // store to check a row is how a journey becomes a unit test with extra setup —
+    // and `collection.ts`, which is not a test, is the one place that may hold one.
+    for (const file of await journeyTests()) {
+      expect(stripComments(file.text), `${file.name} reaches into the store`).not.toMatch(
+        /\bstore\./,
+      );
+      expect(stripComments(file.text), `${file.name} imports the store`).not.toMatch(
+        importsModule("store"),
+      );
+    }
+  });
+
+  it("names every group as a sentence rather than after a function", async () => {
+    // The index is built from these names, so `describe("getDueCards")` here would
+    // put an export in a document about what the app does. A space is a crude
+    // test for a sentence and it is the one that has never been wrong yet.
+    for (const file of await journeyTests()) {
+      for (const [, , name] of file.text.matchAll(/^describe[^"\'`\n]*(["\'`])(.+?)\1/gm)) {
+        expect(name, `${file.name}: "${name}" is not a sentence`).toContain(" ");
+      }
+    }
+  });
+
+  it("asserts something in every single test", async () => {
+    // Cucumber fails a scenario whose sentence has no step behind it; vitest will
+    // happily pass `it("comes back in ten minutes", () => {})` forever. This is
+    // that guarantee, for the tier where the sentences are the deliverable.
+    for (const file of await journeyTests()) {
+      const bodies = file.text.split(/\n  it\(/).slice(1);
+      expect(bodies.length, `${file.name} has no tests`).toBeGreaterThan(0);
+      for (const body of bodies) {
+        const [first] = body.split(/\n  \}\);/);
+        const title = /^[^"\'`]*(["\'`])(.+?)\1/.exec(body)?.[2] ?? "?";
+        expect(first, `${file.name}: "${title}" asserts nothing`).toMatch(/expect\(/);
+      }
+    }
+  });
+});
+
+/**
  * ADR 0013 again: two peers, one core. A peer that reaches into the other is
  * no longer a peer, and the drift starts the day one of them needs "just one"
  * helper from the other.
