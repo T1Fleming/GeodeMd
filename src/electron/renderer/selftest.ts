@@ -231,6 +231,7 @@ export async function runSelfTest(): Promise<void> {
 
     await runSyncChecks();
     await runStatsChecks();
+    await runChangeFolderChecks();
     await runHelpChecks();
 
     const failed = results.some((r) => r.includes("FAIL"));
@@ -324,6 +325,53 @@ async function runStatsChecks(): Promise<void> {
     all(".tile .value").join(" / "),
   );
   await shot("stats-01");
+}
+
+/**
+ * Changing the notes folder (#43), and backing out of it.
+ *
+ * Only the way out is driven to the end. Going through would re-point and
+ * re-sync this run's collection, and the picker can only answer with the
+ * folder already in use — which is itself worth checking, because that is the
+ * one answer a change must refuse.
+ */
+async function runChangeFolderChecks(): Promise<void> {
+  await click(".tabs .tab", "Collection");
+  check("the collection screen names its folder", await until(".folder .path"), text(".folder .path"));
+  const before = text(".folder .path");
+  await shot("folder-01-collection");
+
+  await click(".folder button", "Change folder");
+  check(
+    "changing it opens the setup at the folder step",
+    await until(".setup h2") && text(".setup h2").includes("Change your notes folder"),
+    text(".setup h2"),
+  );
+  check("and says where the notes are now", text(".setup .lead").includes(before), text(".setup .lead"));
+  const buttons = all(".controls.wizard button");
+  check("with a way back out", buttons.includes("Cancel"), buttons.join(" / "));
+  check("and no Back into a first run's welcome", !buttons.includes("Back"), buttons.join(" / "));
+  await shot("folder-02-change");
+
+  // Under the first-run harness the picker answers with the folder that run
+  // configured; otherwise it answers as a cancel and nothing is picked.
+  await click(".setup button", "Choose folder");
+  if (await until(".tiles", 20)) {
+    check(
+      "the folder already in use is refused",
+      text(".blocker").includes("already your notes folder"),
+      text(".blocker"),
+    );
+    const cont = document.querySelector(".controls.wizard button.primary") as HTMLButtonElement;
+    check("and Continue stays disabled", cont?.disabled === true);
+    await shot("folder-03-same");
+  }
+
+  await click(".controls.wizard button", "Cancel");
+  check("cancelling returns to the app", await until(".tabs"), "");
+  await click(".tabs .tab", "Collection");
+  await until(".folder .path");
+  check("with the folder unchanged", text(".folder .path") === before, text(".folder .path"));
 }
 
 /**

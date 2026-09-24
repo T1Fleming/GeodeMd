@@ -41,12 +41,16 @@ const TABS: ReadonlyArray<readonly [Tab, string]> = [
  * collection", and giving them the same screen would greet someone who has
  * used the app for a year as though they had just installed it — when all
  * that happened is an external drive is unplugged.
+ *
+ * `change` is the third way into the same sequence: a working config the user
+ * has asked to point somewhere else (#43).
  */
 type Boot =
   | { at: "checking" }
   | { at: "setup" }
   | { at: "repair"; config: AppConfig }
-  | { at: "ready" }
+  | { at: "change"; config: AppConfig }
+  | { at: "ready"; config: AppConfig }
   | { at: "error"; message: string };
 
 export function App(): React.JSX.Element {
@@ -73,7 +77,7 @@ export function App(): React.JSX.Element {
     if (!folder.value.exists || !folder.value.isDirectory) {
       return setBoot({ at: "repair", config: c.value });
     }
-    setBoot({ at: "ready" });
+    setBoot({ at: "ready", config: c.value });
   }, []);
 
   useEffect(() => {
@@ -82,15 +86,20 @@ export function App(): React.JSX.Element {
 
   if (boot.at === "checking") return <p className="muted">loading…</p>;
   if (boot.at === "error") return <p className="error">{boot.message}</p>;
-  if (boot.at === "setup" || boot.at === "repair") {
+  if (boot.at === "setup" || boot.at === "repair" || boot.at === "change") {
     return (
       <div className="app">
         <Setup
-          repairing={boot.at === "repair" ? boot.config : null}
+          from={
+            boot.at === "setup" ? null : { reason: boot.at, notesPath: boot.config.notesPath }
+          }
           onReady={() => {
             setTab("review");
             void check();
           }}
+          // Re-read rather than restore the old state: the config was written
+          // back on the way out, and reading it is how that gets confirmed.
+          onCancel={() => void check()}
         />
       </div>
     );
@@ -118,7 +127,12 @@ export function App(): React.JSX.Element {
           given. */}
       {tab === "review" && <ReviewScreen onNote={setNote} />}
       {tab === "sync" && <Sync />}
-      {tab === "stats" && <Stats />}
+      {tab === "stats" && (
+        <Stats
+          notesPath={boot.config.notesPath}
+          onChangeFolder={() => setBoot({ at: "change", config: boot.config })}
+        />
+      )}
       {tab === "help" && <Help />}
 
       {note && (

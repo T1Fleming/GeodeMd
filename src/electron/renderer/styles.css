@@ -286,6 +286,19 @@ button.quiet:hover { color: var(--ink); border-color: transparent; }
 .tile.strong .value { color: var(--ink); font-size: 2.25rem; }
 .tile.strong .label { color: var(--ink); }
 
+/* Which folder the numbers are about, set apart like `.rebuild`: changing it
+   is not something you do on the way past. */
+.folder {
+  margin-top: auto;
+  padding-top: 1rem;
+  border-top: 1px solid var(--line);
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+
 /* --- first run ---------------------------------------------------------- */
 
 /* Centred vertically, unlike the other screens: there is no navigation yet

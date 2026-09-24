@@ -4,14 +4,17 @@ import {
   begin,
   blockers,
   canAdvance,
+  canCancel,
   canSync,
   next,
   picked,
   previewReport,
   previewed,
   proposed,
+  restoreTo,
   setAcknowledged,
   setReplace,
+  wroteConfig,
 } from "./setup.js";
 import type { Setup } from "./setup.js";
 import type { AppConfig, ConfigProposal, FolderReport, SyncSummary } from "../../ipc.js";
@@ -183,6 +186,56 @@ describe("walking the steps", () => {
       expect(s.step).toBe(step);
     }
     expect(back(s).step).toBe("welcome");
+  });
+});
+
+describe("pointing a working config at a different folder", () => {
+  const change = () => begin({ reason: "change", notesPath: "/old/notes" });
+
+  it("opens at the folder step, not the welcome", () => {
+    const s = change();
+    expect(s.step).toBe("confirm");
+    // Nor can Back walk into the welcome: that is a first run's greeting.
+    expect(back(s)).toBe(s);
+  });
+
+  it("asks for a folder before anything else", () => {
+    expect(canAdvance(change())).toBe(false);
+    expect(blockers(change())[0]).toContain("Choose the folder to use instead");
+  });
+
+  it("refuses the folder already in use", () => {
+    const same = picked(change(), folder({ path: "/old/notes" }));
+    expect(canAdvance(same)).toBe(false);
+    expect(blockers(same)[0]).toContain("already your notes folder");
+    expect(canAdvance(picked(change(), folder({ path: "/new/notes" })))).toBe(true);
+  });
+
+  it("can be cancelled, where a repair and a first run cannot", () => {
+    // A repair has no working folder to go back to, and a first run has no
+    // config to go back to at all.
+    expect(canCancel(change())).toBe(true);
+    expect(canCancel(begin({ reason: "repair", notesPath: "/old/notes" }))).toBe(false);
+    expect(canCancel(begin())).toBe(false);
+  });
+
+  it("has nothing to undo until a preview has written the config", () => {
+    expect(restoreTo(picked(change(), folder({ path: "/new/notes" })))).toBeNull();
+  });
+
+  it("puts the original folder back once one has, even after picking again", () => {
+    // The config on disk now names the first folder previewed, and so does any
+    // proposal read after it — only `from` still knows what it was.
+    let s = wroteConfig(picked(change(), folder({ path: "/new/notes" })));
+    s = proposed(s, proposal({ replaces: existing({ notesPath: "/new/notes" }) }));
+    s = picked(s, folder({ path: "/third/notes" }));
+    expect(restoreTo(s)).toBe("/old/notes");
+  });
+
+  it("restores for a repair too, and never for a first run", () => {
+    const repair = wroteConfig(begin({ reason: "repair", notesPath: "/gone" }));
+    expect(restoreTo(repair)).toBe("/gone");
+    expect(restoreTo(wroteConfig(picked(begin(), folder())))).toBeNull();
   });
 });
 

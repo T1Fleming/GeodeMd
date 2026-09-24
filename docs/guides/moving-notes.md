@@ -36,9 +36,9 @@ Point GeodeMD at the folder, then **Rebuild** — it reads the notes and the log
 
 ## Moving the folder on one machine
 
-Point GeodeMD at the new location — it offers to replace the config and keeps your device name — then **Rebuild**.
+Point GeodeMD at the new location — **Change folder…** at the bottom of the Collection screen, which offers to replace the config and keeps your device name — then **Rebuild**.
 
-`--force` is needed because `init` refuses to overwrite an existing config — being re-runnable to fix a path should not double as a way to change the machine's identity. It **keeps your `device` name** and your `editor` setting, which is what you want: the device name is what your log file is called, and regenerating it would scatter one machine's history across two filenames.
+Replacing the config is an explicit choice, because fixing a path should not double as a way to change the machine's identity. It **keeps your `device` name** and your `editor` setting, which is what you want: the device name is what your log file is called, and regenerating it would scatter one machine's history across two filenames.
 
 ## If the same folder is on two machines
 
