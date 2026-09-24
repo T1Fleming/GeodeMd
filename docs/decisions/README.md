@@ -33,6 +33,7 @@ New decisions from here get an ADR when they are made, not in a later sweep — 
 | [0023](0023-honour-short-term-learning-steps.md) | Honour FSRS's short-term learning steps | Accepted |
 | [0024](0024-remeasure-the-main-process-stall.md) | The main-process stall at fifty times the measurement | Accepted |
 | [0025](0025-the-app-is-the-only-interface.md) | The app is the only interface; the CLI is removed | Accepted |
+| [0026](0026-config-in-application-support-on-macos.md) | On macOS the config lives in Application Support | Accepted |
 
 ## Writing one
 

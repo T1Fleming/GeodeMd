@@ -15,7 +15,7 @@ import { fileURLToPath } from "node:url";
 import { ConfigError } from "../../core/index.js";
 import type { Core } from "../../core/index.js";
 import type { Store } from "../../store/index.js";
-import { configPath, initConfig } from "../../host/config.js";
+import { configPath, initConfig, settleConfigPath } from "../../host/config.js";
 import type { FileConfig } from "../../host/config.js";
 import { inspectFolder, proposeConfig } from "../../host/setup.js";
 import { OpenedNotes, resolveEditor } from "../../host/editor.js";
@@ -62,13 +62,20 @@ let config: FileConfig | null = null;
 let opened: OpenedNotes | null = null;
 
 /**
+ * The config file for this session. Settled once at startup — which may move
+ * an old Mac config into place, or fall back to it — and read from here by
+ * every handler rather than recomputed, so they cannot disagree about it.
+ */
+let configFile = configPath();
+
+/**
  * Lazily, on the first command that needs it — never at startup. On a first run
  * there is no config and therefore no dbPath, and opening a database at a path
  * nobody chose is how a stray db.sqlite appears in someone's home directory.
  */
 async function ensureCore(): Promise<Core> {
   if (core) return core;
-  const c = await readAppConfig();
+  const c = await readAppConfig(configFile);
   if (!c) throw new NoConfig();
   config = c;
   opened = new OpenedNotes(c.notesPath);
@@ -126,7 +133,7 @@ async function guard<T>(fn: () => Promise<T> | T): Promise<Result<T>> {
 function register(): void {
   ipcMain.handle(CH.configRead, () =>
     guard<AppConfig | null>(async () => {
-      const c = await readAppConfig();
+      const c = await readAppConfig(configFile);
       // Null rather than an error: a first run is an ordinary state, and code
       // that decides "show setup" by catching an exception eventually shows
       // setup after a disk error.
@@ -258,7 +265,7 @@ function register(): void {
   );
 
   ipcMain.handle(CH.setupPropose, (_e, folder: string) =>
-    guard<ConfigProposal>(() => proposeConfig(configPath(), folder)),
+    guard<ConfigProposal>(() => proposeConfig(configFile, folder)),
   );
 
   /**
@@ -297,7 +304,7 @@ function register(): void {
 
   ipcMain.handle(CH.setupWrite, (_e, folder: string, replace: boolean) =>
     guard<AppConfig>(async () => {
-      const written = await initConfig(configPath(), folder, { force: replace });
+      const written = await initConfig(configFile, folder, { force: replace });
       // Anything opened against the old config is now wrong.
       resetCore();
       return { notesPath: written.notesPath, device: written.device, dbPath: written.dbPath };
@@ -446,6 +453,9 @@ protocol.registerSchemesAsPrivileged([
 
 void app.whenReady().then(async () => {
   serveRenderer();
+  // Before anything reads the config, or an existing Mac install would open to
+  // first-run setup after ADR 0026 moved it.
+  configFile = await settleConfigPath();
   register();
   await createWindow();
 });

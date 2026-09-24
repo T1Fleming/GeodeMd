@@ -57,7 +57,7 @@ The app carries its own documentation: the guides and the configuration referenc
 
 **1. Point it at your notes.** The first launch walks it: choose the folder, see how many Markdown files are in it, confirm that your notes will be edited, preview the sync, then run it.
 
-That writes `~/.config/geodemd/config.json` — `notesPath`, `device`, `dbPath`, and an optional `editor` you can add later. The database goes to `~/.local/share/geodemd/db.sqlite` — outside your notes, deliberately, because it is a cache and a live database file is the worst thing to put under a sync or backup tool.
+That writes `~/Library/Application Support/GeodeMD/config.json` on macOS (`~/.config/geodemd/config.json` elsewhere) — `notesPath`, `device`, `dbPath`, and an optional `editor` you can add later. The database goes to `~/.local/share/geodemd/db.sqlite` — outside your notes, deliberately, because it is a cache and a live database file is the worst thing to put under a sync or backup tool.
 
 **2. Look before it writes.** The **Preview** button, and it is the step worth not skipping — [the guide walks through it](./docs/guides/first-sync.md). **The first real sync stamps every line in your notes that parses as a card**, which on an existing collection is a diff across the whole tree. A preview writes nothing — not a stamp, not a database row — and tells you exactly how many files and cards it would touch. Read the number and check it against what you expect. If your notes already use `::` somewhere unexpected, this is where you find out, cheaply.
 

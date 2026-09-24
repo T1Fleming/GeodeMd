@@ -5,11 +5,14 @@ One JSON file, read in exactly one place — `src/host/config.ts`. `core` never 
 ## Location
 
 ```
-~/.config/geodemd/config.json      the config file
-~/.local/share/geodemd/db.sqlite   default database location, overridable
+~/Library/Application Support/GeodeMD/config.json   the config file, on macOS
+~/.config/geodemd/config.json                       the config file, elsewhere
+~/.local/share/geodemd/db.sqlite                    default database location, overridable
 ```
 
-XDG paths on **every** platform, macOS included. One less branch, and two string constants instead of an afternoon with `env-paths`.
+Setting `XDG_CONFIG_HOME` or `XDG_DATA_HOME` moves the config or the database default on every platform, macOS included. That is how to run the app against a scratch collection without touching your real one.
+
+A Mac config at the old `~/.config/geodemd/config.json` is moved to Application Support the first time the app starts after updating, keeping your device name. See [ADR 0026](../decisions/0026-config-in-application-support-on-macos.md).
 
 The database goes outside the notes directory deliberately: it is a cache, and a live database file is the worst thing to place under a sync or backup tool, since it drags its `-wal` and `-shm` siblings along with it.
 

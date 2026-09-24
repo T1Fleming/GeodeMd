@@ -11,14 +11,14 @@ app do*, and *where is that proven*. What it deliberately cannot tell you is wha
 app does **untested** — an area that looks thin here is thinly covered, and that is
 worth reading as a finding rather than a gap in the document.
 
-456 behaviours in 11 areas, which follow [the guides](../guides/) rather than the source tree.
+463 behaviours in 11 areas, which follow [the guides](../guides/) rather than the source tree.
 
 - [Reviewing](#reviewing) — 107
 - [Recognising a card](#recognising-a-card) — 57
 - [Syncing notes](#syncing-notes) — 73
 - [Recovery and the log](#recovery-and-the-log) — 26
 - [Moving between machines](#moving-between-machines) — 16
-- [Setting up this machine](#setting-up-this-machine) — 60
+- [Setting up this machine](#setting-up-this-machine) — 67
 - [The app's long runs](#the-apps-long-runs) — 31
 - [The database as a cache](#the-database-as-a-cache) — 7
 - [At scale](#at-scale) — 9
@@ -638,14 +638,26 @@ _2 · `electron/main/reads.test.ts`_
 
 _Config, XDG paths, the device name, and the first run._
 
-**60 behaviours.**
+**67 behaviours.**
 
-### XDG paths
+### where the config lives
 
-_2 · `host/host.test.ts`_
+_5 · `host/host.test.ts`_
 
 - uses the geodemd directory, while the command stays `geode`
-- falls back to ~/.config and ~/.local/share when XDG is unset
+- is Application Support on macOS (ADR 0026)
+- is ~/.config elsewhere
+- honours an explicit XDG_CONFIG_HOME on macOS too
+- leaves the database default where it was
+
+### moving an old Mac config into Application Support
+
+_4 · `host/host.test.ts`_
+
+- moves it, so an existing install does not open to first-run setup
+- never overwrites a config already at the new path
+- keeps using the old file when the move fails
+- does nothing on a first run, off macOS, or under XDG_CONFIG_HOME
 
 ### minting a card id
 
