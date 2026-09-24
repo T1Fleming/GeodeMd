@@ -6,6 +6,7 @@ import {
   canAdvance,
   canCancel,
   canSync,
+  leavesCollectionBehind,
   next,
   picked,
   previewReport,
@@ -230,6 +231,17 @@ describe("pointing a working config at a different folder", () => {
     s = proposed(s, proposal({ replaces: existing({ notesPath: "/new/notes" }) }));
     s = picked(s, folder({ path: "/third/notes" }));
     expect(restoreTo(s)).toBe("/old/notes");
+  });
+
+  it("says the old cards stay put when the new folder is empty", () => {
+    // A folder just made in the picker. Zero cards afterwards is correct, and
+    // reads as loss unless the screen says where the old ones still are.
+    expect(leavesCollectionBehind(picked(change(), folder({ path: "/new", markdownFiles: 0 })))).toBe(true);
+    expect(leavesCollectionBehind(picked(change(), folder({ path: "/new" })))).toBe(false);
+    expect(leavesCollectionBehind(change())).toBe(false);
+    expect(leavesCollectionBehind(picked(begin(), folder({ markdownFiles: 0 })))).toBe(false);
+    const repair = begin({ reason: "repair", notesPath: "/gone" });
+    expect(leavesCollectionBehind(picked(repair, folder({ markdownFiles: 0 })))).toBe(false);
   });
 
   it("restores for a repair too, and never for a first run", () => {

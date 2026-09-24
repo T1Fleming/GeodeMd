@@ -126,6 +126,15 @@ export function restoreTo(s: Setup): string | null {
   return s.wrote && s.from ? s.from.notesPath : null;
 }
 
+/**
+ * A change to a folder with no notes in it — typically one just made in the
+ * picker. Correct, and it empties the collection, which reads as loss unless
+ * the screen says the old cards are still where they were.
+ */
+export function leavesCollectionBehind(s: Setup): boolean {
+  return s.from?.reason === "change" && folderIsUsable(s.folder) && s.folder!.markdownFiles === 0;
+}
+
 /** Only a change can be cancelled: a repair has no working folder to go back to. */
 export function canCancel(s: Setup): boolean {
   return s.from?.reason === "change";
