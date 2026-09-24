@@ -13,6 +13,7 @@ import {
   InitRefused,
   newId,
   readConfig,
+  setEditor,
 } from "./config.js";
 import { classify, isBusy } from "./errors.js";
 import { ConfigError } from "../core/index.js";
@@ -198,6 +199,43 @@ describe("writing a config for the first time", () => {
     const bad = path.join(dir, "bad.json");
     await fs.writeFile(bad, "{ not json", "utf8");
     expect(await readConfig(bad)).toBeNull();
+  });
+});
+
+describe("choosing an editor from the app", () => {
+  it("sets the editor and keeps every other key", async () => {
+    const file = path.join(dir, "config.json");
+    const first = await initConfig(file, dir);
+    await setEditor(file, "code");
+    const after = await readConfig(file);
+    expect(after).toEqual({ ...first, editor: "code" });
+  });
+
+  it("removes the key for the system default", async () => {
+    const file = path.join(dir, "config.json");
+    await initConfig(file, dir);
+    await setEditor(file, "code");
+    await setEditor(file, null);
+    const raw = JSON.parse(await fs.readFile(file, "utf8")) as Record<string, unknown>;
+    expect("editor" in raw).toBe(false);
+  });
+
+  it("treats a blank value as the system default", async () => {
+    const file = path.join(dir, "config.json");
+    await initConfig(file, dir);
+    await setEditor(file, "   ");
+    expect((await readConfig(file))!.editor).toBeUndefined();
+  });
+
+  it("persists a device rather than minting a new one on every write", async () => {
+    const file = path.join(dir, "config.json");
+    await fs.writeFile(file, JSON.stringify({ notesPath: dir, dbPath: "db" }), "utf8");
+    const set = await setEditor(file, "code");
+    expect((await readConfig(file))!.device).toBe(set!.device);
+  });
+
+  it("is null when there is no config to set it in", async () => {
+    expect(await setEditor(path.join(dir, "nope.json"), "code")).toBeNull();
   });
 });
 

@@ -11,25 +11,25 @@ app do*, and *where is that proven*. What it deliberately cannot tell you is wha
 app does **untested** — an area that looks thin here is thinly covered, and that is
 worth reading as a finding rather than a gap in the document.
 
-463 behaviours in 11 areas, which follow [the guides](../guides/) rather than the source tree.
+491 behaviours in 11 areas, which follow [the guides](../guides/) rather than the source tree.
 
-- [Reviewing](#reviewing) — 107
+- [Reviewing](#reviewing) — 129
 - [Recognising a card](#recognising-a-card) — 57
 - [Syncing notes](#syncing-notes) — 73
 - [Recovery and the log](#recovery-and-the-log) — 26
 - [Moving between machines](#moving-between-machines) — 16
-- [Setting up this machine](#setting-up-this-machine) — 67
+- [Setting up this machine](#setting-up-this-machine) — 72
 - [The app's long runs](#the-apps-long-runs) — 31
 - [The database as a cache](#the-database-as-a-cache) — 7
 - [At scale](#at-scale) — 9
 - [Rules the project enforces on itself](#rules-the-project-enforces-on-itself) — 34
-- [The documentation tells the truth](#the-documentation-tells-the-truth) — 36
+- [The documentation tells the truth](#the-documentation-tells-the-truth) — 37
 
 ## Reviewing
 
 _A session: which card is next, what the keys mean, what a rating records, and what comes back before the sitting ends._
 
-**107 behaviours.**
+**129 behaviours.**
 
 ### the order cards are served in
 
@@ -157,6 +157,37 @@ _2 · `host/editor.test.ts`_
 - prefers the config key, then VISUAL, then EDITOR
 - is null when nothing names an editor
 
+### finding an editor that is not on the app's PATH
+
+_6 · `host/editor.test.ts`_
+
+- uses the command on PATH when it is there
+- finds a Mac app's launcher inside its bundle when PATH has none
+- looks in ~/Applications as well
+- does not look in app bundles off macOS
+- checks a full path rather than searching for it
+- is null when it is nowhere
+
+### listing the editors installed here
+
+_5 · `host/editor.test.ts`_
+
+- lists what is installed, found on PATH or only in a bundle
+- stores a plain name, not the path it was found at
+- is empty when nothing is installed
+- never offers a terminal editor, which would start with no TTY to type into
+- offers only editors that can be put on the card's line
+
+### what o runs
+
+_5 · `host/editor.test.ts`_
+
+- runs the resolved file, with the line flag chosen by name
+- still lands on the line when the launcher has another name
+- keeps the extra words of a typed command
+- is an error, not the OS opener, when a named editor is not installed
+- uses the OS opener, unlooked-up, when no editor is named
+
 ### how an editor is told which line
 
 _10 · `host/editor.test.ts`_
@@ -251,12 +282,23 @@ _11 · `electron/renderer/model/session.test.ts`_
 
 ### launching an editor without holding the app open
 
-_4 · `electron/main/open.test.ts`_
+_5 · `electron/main/open.test.ts`_
 
 - reports an editor that is not installed, rather than claiming success
+- reports a launcher that vanished between the lookup and the spawn
 - returns as soon as the process exists, not when it exits
 - does not keep the event loop alive waiting for the child
 - passes the line through the same table the CLI uses
+
+### the editor setting on the Collection screen
+
+_5 · `electron/renderer/model/editor.test.ts`_
+
+- offers the system default, what is installed, and a typed command, in that order
+- shows the system default when no editor is set
+- shows an installed editor as itself
+- shows an editor that is not installed as a typed command, not as the default
+- saves a choice at once, except a typed command, which waits to be typed
 
 ## Recognising a card
 
@@ -638,7 +680,7 @@ _2 · `electron/main/reads.test.ts`_
 
 _Config, XDG paths, the device name, and the first run._
 
-**67 behaviours.**
+**72 behaviours.**
 
 ### where the config lives
 
@@ -684,6 +726,16 @@ _6 · `host/host.test.ts`_
 - reads an editor when one is set, and nothing when it is not
 - preserves editor under --force, like device
 - returns null for a missing or malformed config
+
+### choosing an editor from the app
+
+_5 · `host/host.test.ts`_
+
+- sets the editor and keeps every other key
+- removes the key for the system default
+- treats a blank value as the system default
+- persists a device rather than minting a new one on every write
+- is null when there is no config to set it in
 
 ### reading a config, and healing a missing device
 
@@ -1026,7 +1078,7 @@ _5 · `behaviours/areas.test.ts`_
 
 _Documents that make checkable claims, checked._
 
-**36 behaviours.**
+**37 behaviours.**
 
 ### the demo collection
 
@@ -1070,11 +1122,12 @@ _2 · `journeys/first-sync.test.ts`_
 
 ### the guide's four ratings are the four the app honours
 
-_3 · `journeys/reviewing.test.ts`_
+_4 · `journeys/reviewing.test.ts`_
 
 - names the same keys, in the same order, with the same words
 - advertises no key that does nothing
 - puts `0` and `o` at the stages it says they are offered at
+- offers the editors it says `o` can put on a line, and no terminal ones
 
 ### the intervals the guide quotes are the ones FSRS produces
 

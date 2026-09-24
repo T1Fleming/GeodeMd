@@ -123,6 +123,20 @@ export interface ConfigProposal {
   preserved: Array<"device" | "editor">;
 }
 
+/**
+ * What `editors/list` answers: the GUI editors installed here, and what the
+ * config currently says.
+ *
+ * `current` is the config's own `editor` key, null for the system default.
+ * It may name something that is not in `detected` — a typed command, or an
+ * editor since uninstalled — and which option shows as chosen then is
+ * `renderer/model/editor.ts`'s to decide.
+ */
+export interface EditorChoices {
+  detected: Array<{ command: string; label: string }>;
+  current: string | null;
+}
+
 export interface RunStarted {
   runId: string;
   /** True when an identical run was already in flight and this joined it. */
@@ -191,6 +205,8 @@ export const CH = {
   setupPropose: "geode:setup/propose",
   setupWrite: "geode:setup/write",
   linkOpen: "geode:link/open",
+  editorsList: "geode:editors/list",
+  editorsSet: "geode:editors/set",
   // Events, main → renderer.
   runProgress: "geode:run/progress",
   runFinished: "geode:run/finished",
@@ -233,6 +249,12 @@ export interface GeodeApi {
    * would leave the user in a broken window with no way back.
    */
   linkOpen(href: string): Promise<Result<void>>;
+  editorsList(): Promise<Result<EditorChoices>>;
+  /**
+   * What `o` opens a note in. A plain command name, never a path — see
+   * `launchCommand` in `host/editor.ts`. Null is the system default.
+   */
+  editorsSet(editor: string | null): Promise<Result<EditorChoices>>;
   onRunProgress(fn: (p: RunProgress) => void): () => void;
   onRunFinished(fn: (f: RunFinished) => void): () => void;
 }

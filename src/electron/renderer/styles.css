@@ -299,6 +299,24 @@ button.quiet:hover { color: var(--ink); border-color: transparent; }
   gap: 0.75rem;
 }
 
+/* The editor `o` opens a note in. Inside `.folder`, below its button: both
+   are settings rather than things to glance at. */
+.editor-setting { display: flex; flex-direction: column; gap: 0.5rem; }
+.editor-setting label { display: flex; gap: 0.75rem; align-items: baseline; }
+.editor-setting .label { font-size: 0.875rem; color: var(--muted); }
+.editor-setting select,
+.editor-setting input {
+  font: inherit;
+  font-size: 0.875rem;
+  color: var(--ink);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 0.35rem 0.5rem;
+}
+.editor-setting input { font-family: ui-monospace, monospace; width: 16rem; user-select: text; }
+.editor-setting .other { display: flex; gap: 0.5rem; }
+
 /* --- first run ---------------------------------------------------------- */
 
 /* Centred vertically, unlike the other screens: there is no navigation yet

@@ -13,6 +13,9 @@
 
 const results: string[] = [];
 
+/** True when this run wrote the config it is using — see `runSelfTest`. */
+let ownsConfig = false;
+
 function check(name: string, pass: boolean, detail = ""): void {
   results.push(`${pass ? "  ok  " : "  FAIL"} ${name}${detail ? ` — ${detail}` : ""}`);
 }
@@ -71,6 +74,9 @@ export async function runSelfTest(): Promise<void> {
       if (exists(".setup") || exists(".question") || exists(".done")) break;
       await settle(50);
     }
+    // Only a first run's config is this harness's own to write to. A repair
+    // run, like a plain run, is reading a real one.
+    ownsConfig = exists(".setup") && !text(".setup h2").includes("Where did your notes go");
     if (exists(".setup")) await runSetupChecks();
 
     for (let i = 0; i < 100 && !exists(".question") && !exists(".done"); i++) await settle(50);
@@ -232,6 +238,7 @@ export async function runSelfTest(): Promise<void> {
     await runSyncChecks();
     await runStatsChecks();
     await runChangeFolderChecks();
+    await runEditorChecks();
     await runHelpChecks();
 
     const failed = results.some((r) => r.includes("FAIL"));
@@ -372,6 +379,73 @@ async function runChangeFolderChecks(): Promise<void> {
   await click(".tabs .tab", "Collection");
   await until(".folder .path");
   check("with the folder unchanged", text(".folder .path") === before, text(".folder .path"));
+}
+
+/**
+ * The editor `o` opens a note in (#47).
+ *
+ * Choosing is driven only when this run wrote its own config: a plain
+ * `GEODE_SELFTEST=1` run reads the user's real one, and choosing would write
+ * it. `o` itself is already substituted with `touch`, so no choice made here
+ * launches an editor either way.
+ */
+async function runEditorChecks(): Promise<void> {
+  await click(".tabs .tab", "Collection");
+  check("the collection screen offers an editor setting", await until(".editor-setting select"), "");
+  const options = all(".editor-setting option");
+  check("with the system default among its options", options.includes("System default"), options.join(" / "));
+  check("and a way to type a command", options.includes("Other…"), options.join(" / "));
+  check(
+    "and no terminal editor offered",
+    !options.some((o) => /^(vim?|nvim|nano|emacs|helix|hx)$/i.test(o)),
+    options.join(" / "),
+  );
+  check("it says what o will do", text(".editor-setting .blocker").length > 0, text(".editor-setting .blocker"));
+  await shot("editor-01-collection");
+  if (!ownsConfig) return;
+
+  await choose(".editor-setting select", "Other…");
+  check("choosing Other… asks for a command", exists(".editor-setting input"), "");
+  await type(".editor-setting input", "code -w");
+  await click(".editor-setting button", "Save");
+  const typed = await window.geode.editorsList();
+  check(
+    "saving a typed command writes it to the config",
+    typed.ok && typed.value.current === "code -w",
+    typed.ok ? String(typed.value.current) : typed.message,
+  );
+  await shot("editor-02-other");
+
+  await choose(".editor-setting select", "System default");
+  const back = await window.geode.editorsList();
+  check(
+    "choosing the system default removes it again",
+    back.ok && back.value.current === null,
+    back.ok ? String(back.value.current) : back.message,
+  );
+  check("and the command box goes away", !exists(".editor-setting input"), "");
+}
+
+/** Pick the option whose text matches, as a person does with a real select. */
+async function choose(sel: string, label: string): Promise<void> {
+  const select = document.querySelector(sel) as HTMLSelectElement | null;
+  const option = Array.from(select?.options ?? []).find((o) => o.textContent === label);
+  if (!select || !option) throw new Error(`no ${sel} option "${label}"`);
+  select.value = option.value;
+  select.dispatchEvent(new Event("change", { bubbles: true }));
+  await settle(250);
+}
+
+/**
+ * Type into a text box. Through the prototype's setter, because React tracks
+ * an input's value itself and ignores an event whose value it already saw.
+ */
+async function type(sel: string, value: string): Promise<void> {
+  const input = document.querySelector(sel) as HTMLInputElement | null;
+  if (!input) throw new Error(`no ${sel}`);
+  Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, value);
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+  await settle();
 }
 
 /**

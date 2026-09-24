@@ -32,7 +32,7 @@ The database goes outside the notes directory deliberately: it is a cache, and a
 | `notesPath` | yes | — | The notes root. Every path stored anywhere is relative to it. A config whose `notesPath` is not a string is treated as unreadable. |
 | `device` | no | slugified `os.hostname()` + a short random suffix | Fixed once at `init`. Names the log file and appears in each line; **never part of a review's identity**. |
 | `dbPath` | no | `~/.local/share/geodemd/db.sqlite` | Created on first run if its directory does not exist. |
-| `editor` | no | *(absent)* | What `o` opens a card's note in during review. |
+| `editor` | no | *(absent)* | What `o` opens a card's note in during review. Normally set from the app's Collection screen. |
 
 `--notes` overrides `notesPath` for a single run.
 
@@ -44,7 +44,9 @@ Only a config with **no** `device` mints one. `init --force` preserves it, becau
 
 ### `editor`
 
-The only optional key, and **`init` never writes one.** Absent means "fall through to `$VISUAL`, then `$EDITOR`, then the OS opener" — a better answer than any value `init` could invent on a machine it knows nothing about.
+The only optional key, and **first-run setup never writes one.** Absent means "fall through to `$VISUAL`, then `$EDITOR`, then the OS opener" — a better answer than any value setup could invent on a machine it knows nothing about.
+
+It is normally set from **Open notes in** on the Collection screen, which lists the editors installed here and writes their plain command name — `"code"`, not a path. The name is looked up each time `o` is pressed: on your `PATH` first, then, on macOS, inside the editor's app bundle in `/Applications` or `~/Applications`. That second step is what makes it work in an app opened from Finder, which does not get your shell's `PATH`. A named editor that is found nowhere is reported as not found; it does not fall back to the OS opener.
 
 The value is split on whitespace, so `"code -w"` works. It is deliberately **not** shell-parsed, and nothing spawned from it goes through a shell.
 

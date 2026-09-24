@@ -2,7 +2,15 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
-import { OpenedNotes, editorCommand, resolveEditor } from "./editor.js";
+import {
+  OpenedNotes,
+  detectEditors,
+  editorCommand,
+  launchCommand,
+  locateExecutable,
+  resolveEditor,
+} from "./editor.js";
+import type { Machine } from "./editor.js";
 
 const env = (o: Record<string, string>): NodeJS.ProcessEnv => o as NodeJS.ProcessEnv;
 const FILE = "/notes/algorithms/Sorting.md";
@@ -20,6 +28,137 @@ describe("which program opens a note", () => {
     // whatever app owns it.
     expect(resolveEditor(undefined, env({}))).toBeNull();
     expect(resolveEditor("  ", env({ EDITOR: "  " }))).toBeNull();
+  });
+});
+
+/** A machine where exactly `installed` can be run. */
+function machine(
+  installed: string[],
+  over: Partial<Omit<Machine, "isExecutable">> = {},
+): Machine {
+  const set = new Set(installed);
+  return {
+    env: env({ PATH: "/usr/bin:/bin" }),
+    platform: "darwin",
+    home: "/Users/me",
+    isExecutable: (f) => set.has(f),
+    ...over,
+  };
+}
+
+const CODE_BUNDLE = "/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code";
+
+describe("finding an editor that is not on the app's PATH", () => {
+  it("uses the command on PATH when it is there", () => {
+    const m = machine(["/usr/local/bin/code", CODE_BUNDLE], {
+      env: env({ PATH: "/usr/local/bin:/usr/bin" }),
+    });
+    expect(locateExecutable("code", m)).toBe("/usr/local/bin/code");
+  });
+
+  it("finds a Mac app's launcher inside its bundle when PATH has none", () => {
+    // Finder hands an app /usr/bin:/bin:/usr/sbin:/sbin — which is the whole
+    // reason this lookup exists.
+    expect(locateExecutable("code", machine([CODE_BUNDLE]))).toBe(CODE_BUNDLE);
+  });
+
+  it("looks in ~/Applications as well", () => {
+    const zed = "/Users/me/Applications/Zed.app/Contents/MacOS/cli";
+    expect(locateExecutable("zed", machine([zed]))).toBe(zed);
+  });
+
+  it("does not look in app bundles off macOS", () => {
+    expect(locateExecutable("code", machine([CODE_BUNDLE], { platform: "linux" }))).toBeNull();
+  });
+
+  it("checks a full path rather than searching for it", () => {
+    expect(locateExecutable("/opt/ed/bin/ed", machine(["/opt/ed/bin/ed"]))).toBe("/opt/ed/bin/ed");
+    expect(locateExecutable("/opt/ed/bin/ed", machine([]))).toBeNull();
+  });
+
+  it("is null when it is nowhere", () => {
+    expect(locateExecutable("cursor", machine([]))).toBeNull();
+  });
+});
+
+describe("listing the editors installed here", () => {
+  it("lists what is installed, found on PATH or only in a bundle", () => {
+    const m = machine(["/usr/bin/subl", CODE_BUNDLE]);
+    expect(detectEditors(m).map((e) => e.command)).toEqual(["code", "subl"]);
+  });
+
+  it("stores a plain name, not the path it was found at", () => {
+    // The path has spaces in it, and the editor value is split on whitespace.
+    expect(detectEditors(machine([CODE_BUNDLE]))[0]).toEqual({
+      command: "code",
+      label: "Visual Studio Code",
+    });
+  });
+
+  it("is empty when nothing is installed", () => {
+    expect(detectEditors(machine([]))).toEqual([]);
+  });
+
+  it("never offers a terminal editor, which would start with no TTY to type into", () => {
+    const everything = (f: string): boolean => f.startsWith("/usr/bin/");
+    const offered = detectEditors({ ...machine([]), isExecutable: everything }).map(
+      (e) => e.command,
+    );
+    expect(offered.length).toBeGreaterThan(0);
+    for (const terminal of ["vi", "vim", "nvim", "nano", "emacs", "hx", "helix", "micro", "kak"]) {
+      expect(offered).not.toContain(terminal);
+    }
+  });
+
+  it("offers only editors that can be put on the card's line", () => {
+    const everything = (f: string): boolean => f.startsWith("/usr/bin/");
+    for (const { command } of detectEditors({ ...machine([]), isExecutable: everything })) {
+      expect(editorCommand(command, FILE, 142).args.join(" "), command).toContain("142");
+    }
+  });
+});
+
+describe("what o runs", () => {
+  it("runs the resolved file, with the line flag chosen by name", () => {
+    expect(launchCommand("code", FILE, 142, machine([CODE_BUNDLE]))).toEqual({
+      ok: true,
+      cmd: CODE_BUNDLE,
+      args: ["--goto", `${FILE}:142`],
+    });
+  });
+
+  it("still lands on the line when the launcher has another name", () => {
+    // Zed's launcher is `cli`, which on its own would get the path and nothing else.
+    const zed = "/Applications/Zed.app/Contents/MacOS/cli";
+    expect(launchCommand("zed", FILE, 142, machine([zed]))).toEqual({
+      ok: true,
+      cmd: zed,
+      args: [`${FILE}:142`],
+    });
+  });
+
+  it("keeps the extra words of a typed command", () => {
+    expect(launchCommand("code -w", FILE, 7, machine([CODE_BUNDLE]))).toEqual({
+      ok: true,
+      cmd: CODE_BUNDLE,
+      args: ["-w", "--goto", `${FILE}:7`],
+    });
+  });
+
+  it("is an error, not the OS opener, when a named editor is not installed", () => {
+    // Falling back would open the note at the top, and nothing would say why
+    // the line jump had stopped working.
+    const r = launchCommand("cursor", FILE, 142, machine([]));
+    expect(r.ok).toBe(false);
+    expect(r.ok ? "" : r.message).toContain("cursor");
+  });
+
+  it("uses the OS opener, unlooked-up, when no editor is named", () => {
+    expect(launchCommand(null, FILE, 142, machine([]))).toEqual({
+      ok: true,
+      cmd: "open",
+      args: [FILE],
+    });
   });
 });
 
