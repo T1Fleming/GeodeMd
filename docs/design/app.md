@@ -37,7 +37,7 @@ What ADR 0024 changed, and what it left: every count that can grow without bound
 - a **rebuild** is refused while anything is running, because `dropAll` is destructive and a joiner would receive a summary for a database it did not expect
 - nothing may join a rebuild, for the same reason
 
-This guards *this process only*. A `geode sync` running in a terminal at the same time is fine and is designed for — WAL, the busy timeout, and the re-stat before each write. Do not add a lock file.
+This guards *this process only*. A second copy of the app running at the same time is fine and is designed for — WAL, the busy timeout, and the re-stat before each write. Do not add a lock file.
 
 ### Progress is recorded hot and emitted cold
 

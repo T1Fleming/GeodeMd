@@ -95,4 +95,4 @@ Pointing the app at a new folder does the same, and preserves the same two field
 ## See also
 
 - [When something looks wrong](recovery.md) — the database is a cache, and rebuilding it is safe
-- [`geode` commands and flags](../reference/configuration.md)
+- [Config file keys](../reference/configuration.md)

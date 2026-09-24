@@ -12,7 +12,7 @@ import {
   newId,
   readConfig,
 } from "./config.js";
-import { classify, exitCodeFor, isBusy } from "./errors.js";
+import { classify, isBusy } from "./errors.js";
 import { ConfigError } from "../core/index.js";
 import { ID_PATTERN } from "../parser/index.js";
 
@@ -200,20 +200,7 @@ describe("reading a config, and healing a missing device", () => {
   });
 });
 
-/**
- * The exit-code contract, which is the CLI's half of `ErrorKind`. Pinned as a
- * test because the mapping is "everything except `internal` is a 1" — so a new
- * kind gets the right code by default, and the one that would be WRONG by
- * default is a kind that should have been `internal`.
- */
-describe("exit codes", () => {
-  it("gives every user-fixable kind a 1, and only a bug a 2", () => {
-    for (const kind of ["no-config", "config", "init-refused", "editor"] as const) {
-      expect(exitCodeFor(kind), kind).toBe(1);
-    }
-    expect(exitCodeFor("internal")).toBe(2);
-  });
-
+describe("classifying an error", () => {
   it("classifies while the error still has its prototype", () => {
     // The whole reason this module exists: across IPC the class is gone, so
     // the tag has to be attached on the near side.

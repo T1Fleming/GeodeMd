@@ -8,7 +8,7 @@
  */
 
 import { useCallback, useEffect, useState } from "react";
-import { countText } from "../../host/present.js";
+import { backlogCapped, countText } from "../../host/present.js";
 import type { Stats as StatsData } from "../ipc.js";
 
 export function Stats(): React.JSX.Element {
@@ -47,7 +47,7 @@ export function Stats(): React.JSX.Element {
       </div>
       <p className="muted lead">
         {data.dueNow + data.newCards > 0
-          ? `${countText(data.dueNow + data.newCards, data.capped)} waiting for you.`
+          ? `${countText(data.dueNow + data.newCards, backlogCapped(data))} waiting for you.`
           : "Nothing waiting. New cards appear here after a sync."}
       </p>
     </main>

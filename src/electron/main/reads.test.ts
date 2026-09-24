@@ -8,7 +8,7 @@
  * log. `runs.test.ts`-style — a real `Core`, a real temp collection, no mocks.
  */
 
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
@@ -92,6 +92,24 @@ describe("reading the counts", () => {
     const after = await counts(core, T0, 100);
     expect(after.newCards).toBe(1);
     expect(after.total).toBe(2);
+  });
+});
+
+describe("concurrent reads", () => {
+  it("shares one ingest between dueCards and counts requested together", async () => {
+    // App.tsx requests both with Promise.all on every load. Each opens its own
+    // cursor before the other's transaction commits unless the ingest itself
+    // is shared, which would parse the same unread log bytes twice.
+    const [card] = await dueCards(core, T0, 10);
+    await answeredElsewhere(card!.id, T0);
+
+    const ingestLogs = vi.spyOn(core, "ingestLogs");
+
+    const [due, counted] = await Promise.all([dueCards(core, T0, 10), counts(core, T0, 100)]);
+
+    expect(ingestLogs).toHaveBeenCalledTimes(1);
+    expect(due).toHaveLength(1);
+    expect(counted.newCards).toBe(1);
   });
 });
 

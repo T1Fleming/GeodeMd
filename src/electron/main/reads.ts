@@ -41,13 +41,34 @@ import { isBusy } from "../../host/errors.js";
  * main process and will stall the window. It is accepted here because the
  * alternative is showing a card that another machine already answered, and
  * because it happens once per collection rather than once per session.
+ *
+ * `dueCards` and `stats` are always requested together (`App.tsx`'s
+ * `Promise.all`), and each opens its own cursor before the other's transaction
+ * commits — without sharing, both would read and parse the same unread log
+ * bytes, doubling exactly the cost the previous paragraph is about. A caller
+ * already mid-ingest is joined rather than duplicated; the entry is cleared
+ * once settled, so the next *unrelated* call still checks the cursor for real.
  */
+const inFlight = new WeakMap<Core, Promise<void>>();
+
 async function catchUp(core: Core, now: Date): Promise<void> {
-  try {
-    await core.ingestLogs(now);
-  } catch (err) {
-    if (!isBusy(err)) throw err;
+  let promise = inFlight.get(core);
+  if (!promise) {
+    promise = core.ingestLogs(now).then(
+      () => {},
+      (err: unknown) => {
+        if (!isBusy(err)) throw err;
+      },
+    );
+    inFlight.set(core, promise);
+    const clear = (): void => {
+      if (inFlight.get(core) === promise) inFlight.delete(core);
+    };
+    // Not `.finally`: it rethrows on rejection, and nothing would be there to
+    // catch it on this branch — the caller below is the one awaiting `promise`.
+    promise.then(clear, clear);
   }
+  return promise;
 }
 
 /** The queue for a session, after catching up on anything already answered. */

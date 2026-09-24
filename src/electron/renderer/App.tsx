@@ -17,6 +17,7 @@ import { Stats } from "./Stats.js";
 import { Sync } from "./Sync.js";
 import type { Session } from "./model/session.js";
 import type { Scheduled } from "../../host/queue.js";
+import { backlogCapped } from "../../host/present.js";
 
 declare global {
   interface Window {
@@ -174,7 +175,7 @@ function ReviewScreen({ onNote }: { onNote: (m: string) => void }): React.JSX.El
     // A floor when the due count stopped at the cap (ADR 0024); the chip says so.
     const backlog = stats.value.dueNow + stats.value.newCards;
     if (due.value.length === 0) return setScreen({ at: "empty", total: stats.value.total });
-    setScreen({ at: "review", queue: due.value, backlog, capped: stats.value.capped });
+    setScreen({ at: "review", queue: due.value, backlog, capped: backlogCapped(stats.value) });
   }, []);
 
   useEffect(() => {

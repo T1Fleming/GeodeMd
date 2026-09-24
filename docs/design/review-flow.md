@@ -39,7 +39,7 @@ Ordering is deterministic and testable. No randomization, no burying, no sibling
 
 ### Two consequences worth knowing in advance
 
-**Due cards are served ahead of new ones**, so a backlog larger than `limit` starves new cards completely until it clears. That is the intended trade — recovering what you already half-know beats piling on more — and the escape hatch is a larger `-n`, not a scheduling rule.
+**Due cards are served ahead of new ones**, so a backlog larger than `limit` starves new cards completely until it clears. That is the intended trade — recovering what you already half-know beats piling on more — and the escape hatch is another sitting (the "Review more" button, ADR 0025), not a scheduling rule.
 
 **Pruning happens in `sync`, and `review` does not run one.** A note deleted after the last sync leaves its cards in the queue until the next `sync`. Making `review` walk the tree first would charge every session a full walk — tolerable at twenty thousand files, not at a hundred thousand — to avoid being asked about a card you deleted. `sync` after editing is the contract.
 

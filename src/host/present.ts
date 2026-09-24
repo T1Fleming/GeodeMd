@@ -144,6 +144,19 @@ export function countText(n: number, capped: boolean = n >= COUNT_CAP): string {
   return capped ? `${n}+` : String(n);
 }
 
+/**
+ * Whether due-plus-new is a floor, for `countText`'s `capped` argument.
+ *
+ * `Counts.capped` is one flag OR'd across all three of `dueNow`,
+ * `dueBeforeMidnight` and `newCards` — right for deciding whether *anything*
+ * stopped early, wrong for a caller summing only two of the three. A backlog
+ * a thousand cards over the cap on `dueBeforeMidnight` alone must not turn an
+ * exact `dueNow + newCards` into a floor it never was.
+ */
+export function backlogCapped(counts: { dueNow: number; newCards: number }): boolean {
+  return counts.dueNow >= COUNT_CAP || counts.newCards >= COUNT_CAP;
+}
+
 /** Ratings given in a session, by rating. */
 export interface RatingCounts {
   1: number;

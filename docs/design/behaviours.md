@@ -17,8 +17,8 @@ worth reading as a finding rather than a gap in the document.
 - [Recognising a card](#recognising-a-card) — 57
 - [Syncing notes](#syncing-notes) — 73
 - [Recovery and the log](#recovery-and-the-log) — 26
-- [Moving between machines](#moving-between-machines) — 15
-- [Setting up this machine](#setting-up-this-machine) — 53
+- [Moving between machines](#moving-between-machines) — 16
+- [Setting up this machine](#setting-up-this-machine) — 52
 - [The app's long runs](#the-apps-long-runs) — 31
 - [The database as a cache](#the-database-as-a-cache) — 7
 - [At scale](#at-scale) — 9
@@ -586,7 +586,7 @@ _11 · `core/rebuild.test.ts`_
 
 _One notes directory, two devices, no built-in sync transport._
 
-**15 behaviours.**
+**16 behaviours.**
 
 ### two machines, one notes directory
 
@@ -621,6 +621,12 @@ _1 · `electron/main/reads.test.ts`_
 
 - counts a card answered elsewhere as reviewed, not as new
 
+### concurrent reads
+
+_1 · `electron/main/reads.test.ts`_
+
+- shares one ingest between dueCards and counts requested together
+
 ### a busy database
 
 _2 · `electron/main/reads.test.ts`_
@@ -632,7 +638,7 @@ _2 · `electron/main/reads.test.ts`_
 
 _Config, XDG paths, the device name, and the first run._
 
-**53 behaviours.**
+**52 behaviours.**
 
 ### XDG paths
 
@@ -678,11 +684,10 @@ _6 · `host/host.test.ts`_
 - does not leave temp files behind
 - is null for a missing config, like readConfig
 
-### exit codes
+### classifying an error
 
-_2 · `host/host.test.ts`_
+_1 · `host/host.test.ts`_
 
-- gives every user-fixable kind a 1, and only a bug a 2
 - classifies while the error still has its prototype
 
 ### recognising a busy database
