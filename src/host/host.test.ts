@@ -5,6 +5,8 @@ import * as path from "node:path";
 import {
   configPath,
   defaultDbPath,
+  legacyConfigPath,
+  settleConfigPath,
   defaultDevice,
   ensureConfig,
   initConfig,
@@ -25,23 +27,91 @@ afterEach(async () => {
   await fs.rm(dir, { recursive: true, force: true });
 });
 
-describe("XDG paths", () => {
+describe("where the config lives", () => {
+  const none = {} as NodeJS.ProcessEnv;
+
   it("uses the geodemd directory, while the command stays `geode`", () => {
     // The project is GeodeMD; the binary is deliberately the shorter `geode`.
     // These are two separate decisions and each is easy to change by accident.
     const env = { XDG_CONFIG_HOME: "/x/cfg", XDG_DATA_HOME: "/x/data" } as NodeJS.ProcessEnv;
-    expect(configPath(env)).toBe(path.join("/x/cfg", "geodemd", "config.json"));
+    expect(configPath(env, "linux")).toBe(path.join("/x/cfg", "geodemd", "config.json"));
     expect(defaultDbPath(env)).toBe(path.join("/x/data", "geodemd", "db.sqlite"));
   });
 
-  it("falls back to ~/.config and ~/.local/share when XDG is unset", () => {
-    const home = os.homedir();
-    expect(configPath({} as NodeJS.ProcessEnv)).toBe(
-      path.join(home, ".config", "geodemd", "config.json"),
+  it("is Application Support on macOS (ADR 0026)", () => {
+    expect(configPath(none, "darwin", "/Users/me")).toBe(
+      path.join("/Users/me", "Library", "Application Support", "GeodeMD", "config.json"),
     );
-    expect(defaultDbPath({} as NodeJS.ProcessEnv)).toBe(
-      path.join(home, ".local", "share", "geodemd", "db.sqlite"),
+  });
+
+  it("is ~/.config elsewhere", () => {
+    expect(configPath(none, "linux", "/home/me")).toBe(
+      path.join("/home/me", ".config", "geodemd", "config.json"),
     );
+  });
+
+  it("honours an explicit XDG_CONFIG_HOME on macOS too", () => {
+    // How the self-test and every demo keep off the config pointing at real
+    // notes. Losing this would make them quietly repoint a live collection.
+    const env = { XDG_CONFIG_HOME: "/x/cfg" } as NodeJS.ProcessEnv;
+    expect(configPath(env, "darwin", "/Users/me")).toBe(path.join("/x/cfg", "geodemd", "config.json"));
+    expect(legacyConfigPath(env, "darwin", "/Users/me")).toBeNull();
+  });
+
+  it("leaves the database default where it was", () => {
+    expect(defaultDbPath(none)).toBe(path.join(os.homedir(), ".local", "share", "geodemd", "db.sqlite"));
+  });
+});
+
+describe("moving an old Mac config into Application Support", () => {
+  const none = {} as NodeJS.ProcessEnv;
+  const oldFile = () => path.join(dir, ".config", "geodemd", "config.json");
+  const newFile = () => configPath(none, "darwin", dir);
+  const put = async (file: string, body: string) => {
+    await fs.mkdir(path.dirname(file), { recursive: true });
+    await fs.writeFile(file, body);
+  };
+
+  it("moves it, so an existing install does not open to first-run setup", async () => {
+    // Setup would mint a new device and split this machine's history in two.
+    await put(oldFile(), '{"notesPath":"/n","device":"mac-ab12"}\n');
+    expect(await settleConfigPath(none, "darwin", dir)).toBe(newFile());
+    expect((await readConfig(newFile()))?.device).toBe("mac-ab12");
+    await expect(fs.access(oldFile())).rejects.toThrow();
+    // The emptied directory goes too; ~/.config itself is not ours to remove.
+    await expect(fs.access(path.dirname(oldFile()))).rejects.toThrow();
+    await fs.access(path.join(dir, ".config"));
+  });
+
+  it("never overwrites a config already at the new path", async () => {
+    await put(oldFile(), '{"notesPath":"/old"}');
+    await put(newFile(), '{"notesPath":"/new"}');
+    expect(await settleConfigPath(none, "darwin", dir)).toBe(newFile());
+    expect((await readConfig(newFile()))?.notesPath).toBe("/new");
+    expect((await readConfig(oldFile()))?.notesPath).toBe("/old");
+  });
+
+  it("keeps using the old file when the move fails", async () => {
+    // Answering with an empty new path would show first-run setup while a
+    // config exists — the thing the move is for.
+    await put(oldFile(), '{"notesPath":"/n"}');
+    await fs.mkdir(path.join(dir, "Library"), { recursive: true });
+    await fs.chmod(path.join(dir, "Library"), 0o500);
+    try {
+      expect(await settleConfigPath(none, "darwin", dir)).toBe(oldFile());
+      expect((await readConfig(oldFile()))?.notesPath).toBe("/n");
+    } finally {
+      await fs.chmod(path.join(dir, "Library"), 0o700);
+    }
+  });
+
+  it("does nothing on a first run, off macOS, or under XDG_CONFIG_HOME", async () => {
+    expect(await settleConfigPath(none, "darwin", dir)).toBe(newFile());
+    await put(oldFile(), '{"notesPath":"/n"}');
+    expect(await settleConfigPath(none, "linux", dir)).toBe(oldFile());
+    const xdg = { XDG_CONFIG_HOME: path.join(dir, "x") } as NodeJS.ProcessEnv;
+    expect(await settleConfigPath(xdg, "darwin", dir)).toBe(configPath(xdg, "darwin", dir));
+    await fs.access(oldFile());
   });
 });
 

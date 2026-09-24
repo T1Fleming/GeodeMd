@@ -43,10 +43,97 @@ export const newId = (): string => `sr-${nanoid12()}`;
 
 const nanoid4 = customAlphabet("abcdefghijklmnopqrstuvwxyz0123456789", 4);
 
-/** XDG on every platform, macOS included. One less branch. */
-export function configPath(env: NodeJS.ProcessEnv = process.env): string {
-  const base = env["XDG_CONFIG_HOME"] ?? path.join(os.homedir(), ".config");
-  return path.join(base, "geodemd", "config.json");
+/**
+ * Where the config lives ([ADR 0026](../../docs/decisions/0026-config-in-application-support-on-macos.md)).
+ *
+ * `~/Library/Application Support/GeodeMD` on macOS, where a Mac app's settings
+ * are looked for; `~/.config/geodemd` elsewhere. An explicit `XDG_CONFIG_HOME`
+ * wins on every platform, macOS included — it is how the self-test, the
+ * release smoke test and every demo keep off the config pointing at real
+ * notes, and losing it would make those runs quietly repoint a live
+ * collection.
+ *
+ * `platform` and `home` are parameters for the same reason `env` is: so both
+ * branches are testable on whichever machine runs the suite.
+ */
+export function configPath(
+  env: NodeJS.ProcessEnv = process.env,
+  platform: NodeJS.Platform = process.platform,
+  home: string = os.homedir(),
+): string {
+  const xdg = env["XDG_CONFIG_HOME"];
+  if (xdg) return path.join(xdg, "geodemd", "config.json");
+  if (platform === "darwin") {
+    return path.join(home, "Library", "Application Support", "GeodeMD", "config.json");
+  }
+  return path.join(home, ".config", "geodemd", "config.json");
+}
+
+/**
+ * Where a Mac kept its config before ADR 0026, or null where nothing moved.
+ * Only the default location moved: an explicit `XDG_CONFIG_HOME` still means
+ * exactly what it did.
+ */
+export function legacyConfigPath(
+  env: NodeJS.ProcessEnv = process.env,
+  platform: NodeJS.Platform = process.platform,
+  home: string = os.homedir(),
+): string | null {
+  if (env["XDG_CONFIG_HOME"] || platform !== "darwin") return null;
+  return path.join(home, ".config", "geodemd", "config.json");
+}
+
+/** Unique per call, not merely per process — see `writeConfig`. */
+let tmpSeq = 0;
+
+/**
+ * The config file to use this session, moving an old Mac one into place first.
+ *
+ * Without the move, every existing Mac install would open to first-run setup
+ * after the update — and setup mints a new `device`, splitting this machine's
+ * review history across two log shards. Moving the file keeps `device` by
+ * keeping the file.
+ *
+ * The one rule: **never answer with an empty path while a config exists.** So
+ * a config already at the new path wins and the old one is left untouched;
+ * the copy goes through a temp file and a rename, so the new path never holds
+ * half a config; the old file is removed only once the new one is in place;
+ * and if any of it fails, the answer is the OLD path — still readable, and the
+ * move is tried again next launch. Copy rather than `rename` from the old path
+ * because `~/.config` and `~/Library` can sit on different volumes.
+ */
+export async function settleConfigPath(
+  env: NodeJS.ProcessEnv = process.env,
+  platform: NodeJS.Platform = process.platform,
+  home: string = os.homedir(),
+): Promise<string> {
+  const to = configPath(env, platform, home);
+  const from = legacyConfigPath(env, platform, home);
+  if (from === null || !(await exists(from)) || (await exists(to))) return to;
+
+  const tmp = `${to}.${process.pid}-${tmpSeq++}.tmp`;
+  try {
+    await fs.mkdir(path.dirname(to), { recursive: true });
+    await fs.copyFile(from, tmp);
+    await fs.rename(tmp, to);
+  } catch {
+    await fs.rm(tmp, { force: true }).catch(() => undefined);
+    return from;
+  }
+  // Moved. Tidying up after is best-effort: a leftover old file is ignored
+  // from now on, because the new path exists.
+  await fs.rm(from).catch(() => undefined);
+  await fs.rmdir(path.dirname(from)).catch(() => undefined);
+  return to;
+}
+
+async function exists(p: string): Promise<boolean> {
+  try {
+    await fs.access(p);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export function defaultDbPath(env: NodeJS.ProcessEnv = process.env): string {
@@ -139,9 +226,6 @@ export async function ensureConfig(file: string): Promise<FileConfig | null> {
   const after = await readRaw(file);
   return after ? fill(after as Partial<FileConfig> & { notesPath: string }) : healed;
 }
-
-/** Unique per call, not merely per process — see `writeConfig`. */
-let tmpSeq = 0;
 
 /**
  * Temp file plus rename, so a config is never observed half-written and two
