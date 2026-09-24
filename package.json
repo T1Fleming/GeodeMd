@@ -9,6 +9,7 @@
     "node": ">=20"
   },
   "scripts": {
+    "start": "npm run build:desktop && npm --prefix desktop start",
     "build": "rm -rf dist && tsc",
     "test": "vitest run",
     "test:watch": "vitest",

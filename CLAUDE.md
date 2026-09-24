@@ -32,6 +32,7 @@ Start at [`docs/design/README.md`](docs/design/README.md): it indexes the subsys
 ## Commands
 
 ```sh
+npm start           # build the app, then launch it
 npm run build       # tsc -> dist/
 npm test            # vitest run (full suite)
 npm run test:watch  # vitest watch mode

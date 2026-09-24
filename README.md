@@ -37,8 +37,7 @@ git clone https://github.com/T1Fleming/GeodeMd.git
 cd GeodeMd
 npm install
 npm install --prefix desktop     # Electron, and better-sqlite3 rebuilt for its ABI
-npm run build:desktop
-npm --prefix desktop start
+npm start                        # builds the app, then launches it
 ```
 
 To make a `.dmg` instead of running it from source:
