@@ -18,7 +18,8 @@
  */
 
 import { spawn } from "node:child_process";
-import { editorCommand } from "../../host/editor.js";
+import { launchCommand, thisMachine } from "../../host/editor.js";
+import type { Machine } from "../../host/editor.js";
 
 export interface Launched {
   launched: boolean;
@@ -50,9 +51,14 @@ export async function openDetached(
   file: string,
   line: number | null,
   editor: string | null,
-  platform: NodeJS.Platform = process.platform,
+  machine: Machine = thisMachine(),
 ): Promise<Launched> {
-  const { cmd, args } = editorCommand(editor, file, line, platform);
+  // Resolved against PATH and the app bundles first: a named editor that is
+  // not installed is reported here, before anything is spawned (see
+  // `launchCommand` for why it never falls back to the OS opener).
+  const launch = launchCommand(editor, file, line, machine);
+  if (!launch.ok) return { launched: false, message: launch.message };
+  const { cmd, args } = launch;
 
   return new Promise<Launched>((resolve) => {
     let settled = false;
@@ -91,6 +97,6 @@ export async function openDetached(
 function failure(cmd: string, err: unknown): string {
   const e = err as NodeJS.ErrnoException;
   return e?.code === "ENOENT"
-    ? `could not run \`${cmd}\` — set \`editor\` in your config, or $EDITOR`
+    ? `could not run \`${cmd}\` — choose another editor on the Collection screen`
     : `could not run \`${cmd}\`: ${e instanceof Error ? e.message : String(err)}`;
 }

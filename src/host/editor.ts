@@ -1,9 +1,9 @@
 /**
  * Which program opens a note, and how it is told about a line.
  *
- * All of this is pure and injectable — no spawn, no filesystem beyond an
- * `mtime` read — which is why it sits in `host` rather than in either
- * interface. Both need it byte-identically: the CLI's `o` and the app's open
+ * All of this is pure and injectable — no spawn, and no filesystem beyond an
+ * `mtime` read and the "is it installed?" check that `thisMachine` hands in —
+ * which is why it sits in `host` rather than in either interface. Both need it byte-identically: the CLI's `o` and the app's open
  * button are the same promise to the user, and an editor table copied into a
  * second place is how `code` starts landing on line 1 in one of them
  * (ADR 0013 — the two are peers, so what they share lives here).
@@ -13,7 +13,9 @@
  * different enough that each interface owns its own, over this one command.
  */
 
+import { accessSync, constants } from "node:fs";
 import { stat } from "node:fs/promises";
+import * as os from "node:os";
 import * as path from "node:path";
 
 /** `editor +142 <file>` — the classic Unix convention. */
@@ -105,6 +107,158 @@ export function editorCommand(
   // risks creating a file with that name, which is a worse outcome than
   // landing on line 1.
   return { cmd, args: [...extra, file] };
+}
+
+/**
+ * The machine an editor is looked for on. Injected whole so that detection
+ * and lookup are testable against a fake `PATH` and fake installs, and so
+ * both branches of the macOS app-bundle search run on any machine.
+ */
+export interface Machine {
+  env: NodeJS.ProcessEnv;
+  platform: NodeJS.Platform;
+  home: string;
+  /** Is there a file here that can be run? */
+  isExecutable: (file: string) => boolean;
+}
+
+export function thisMachine(): Machine {
+  return {
+    env: process.env,
+    platform: process.platform,
+    home: os.homedir(),
+    isExecutable: (file) => {
+      try {
+        accessSync(file, constants.X_OK);
+        return true;
+      } catch {
+        return false;
+      }
+    },
+  };
+}
+
+/**
+ * Where each editor's command-line launcher sits inside its macOS app bundle,
+ * relative to `/Applications` or `~/Applications`.
+ *
+ * This table exists because **a Mac app opened from Finder or the Dock does
+ * not get your shell's `PATH`**. It gets `/usr/bin:/bin:/usr/sbin:/sbin`, so
+ * `code` works under `npm start` from a terminal and is not found in a
+ * packaged build. Only the VS Code entry has been checked on a real install;
+ * the others follow each app's published layout.
+ *
+ * Zed's launcher is called `cli`, which is why this maps name to path rather
+ * than assuming the file is named after the command.
+ */
+const MAC_BUNDLES: Readonly<Record<string, string>> = {
+  code: "Visual Studio Code.app/Contents/Resources/app/bin/code",
+  "code-insiders":
+    "Visual Studio Code - Insiders.app/Contents/Resources/app/bin/code-insiders",
+  cursor: "Cursor.app/Contents/Resources/app/bin/cursor",
+  windsurf: "Windsurf.app/Contents/Resources/app/bin/windsurf",
+  codium: "VSCodium.app/Contents/Resources/app/bin/codium",
+  zed: "Zed.app/Contents/MacOS/cli",
+  subl: "Sublime Text.app/Contents/SharedSupport/bin/subl",
+};
+
+/**
+ * The editors the app offers to choose from, when installed.
+ *
+ * Only those `editorCommand` can put on the card's line, and **no terminal
+ * editors**: the app spawns detached with no TTY, so `vim` would start in a
+ * window nobody can type into. They stay reachable by typing a command, for
+ * anyone who wraps one in a terminal launcher.
+ */
+const GUI_EDITORS: ReadonlyArray<{ command: string; label: string }> = [
+  { command: "code", label: "Visual Studio Code" },
+  { command: "code-insiders", label: "Visual Studio Code - Insiders" },
+  { command: "cursor", label: "Cursor" },
+  { command: "windsurf", label: "Windsurf" },
+  { command: "codium", label: "VSCodium" },
+  { command: "zed", label: "Zed" },
+  { command: "subl", label: "Sublime Text" },
+  { command: "gedit", label: "gedit" },
+];
+
+export interface DetectedEditor {
+  /** What goes in the config's `editor` key: a plain name, never a path. */
+  command: string;
+  label: string;
+}
+
+/** The GUI editors installed here, in a fixed order. */
+export function detectEditors(machine: Machine): DetectedEditor[] {
+  return GUI_EDITORS.filter((e) => locateExecutable(e.command, machine) !== null).map(
+    (e) => ({ ...e }),
+  );
+}
+
+/**
+ * The file a command name runs, or null when it is not installed.
+ *
+ * `PATH` first, so a launcher the user put there wins; then, on macOS, the
+ * app bundles above. A name that already contains a separator is taken as a
+ * path and only checked.
+ */
+export function locateExecutable(name: string, machine: Machine): string | null {
+  const p = machine.platform === "win32" ? path.win32 : path.posix;
+  if (/[\\/]/.test(name)) return machine.isExecutable(name) ? name : null;
+
+  const exts = machine.platform === "win32" ? ["", ".exe", ".cmd", ".bat"] : [""];
+  for (const dir of (machine.env["PATH"] ?? "").split(p.delimiter)) {
+    if (dir === "") continue;
+    for (const ext of exts) {
+      const candidate = p.join(dir, name + ext);
+      if (machine.isExecutable(candidate)) return candidate;
+    }
+  }
+
+  const bundled = machine.platform === "darwin" ? MAC_BUNDLES[name] : undefined;
+  if (bundled !== undefined) {
+    for (const root of ["/Applications", p.join(machine.home, "Applications")]) {
+      const candidate = p.join(root, bundled);
+      if (machine.isExecutable(candidate)) return candidate;
+    }
+  }
+  return null;
+}
+
+export type Launch =
+  | { ok: true; cmd: string; args: string[] }
+  | { ok: false; message: string };
+
+/**
+ * What to spawn for `o`: `editorCommand`, with the command resolved to a file.
+ *
+ * The config keeps a plain name (`"code"`) and it is resolved here, at open
+ * time, rather than a path being stored — `editorCommand` splits the value on
+ * whitespace, and `/Applications/Visual Studio Code.app/…` would split at its
+ * spaces. The line flag is chosen from the NAME, before resolving, which is
+ * what lets Zed's `cli` still land on the line.
+ *
+ * An editor that is named and cannot be found is a failure, **not** a quiet
+ * fall back to the OS opener: that would open the note at the top, and the
+ * user would have no way to tell why the line jump had stopped working.
+ */
+export function launchCommand(
+  editor: string | null,
+  file: string,
+  line: number | null,
+  machine: Machine,
+): Launch {
+  const { cmd, args } = editorCommand(editor, file, line, machine.platform);
+  // The OS opener is a system command and needs no lookup.
+  if (editor === null || editor.trim() === "") return { ok: true, cmd, args };
+
+  const found = locateExecutable(cmd, machine);
+  if (found === null) {
+    return {
+      ok: false,
+      message: `the editor \`${cmd}\` was not found — choose another on the Collection screen`,
+    };
+  }
+  return { ok: true, cmd: found, args };
 }
 
 /** Null when the file cannot be read — an unreadable note is not an error here. */

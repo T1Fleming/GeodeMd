@@ -100,7 +100,7 @@ A decision lives in `host`, not in the component that wanted it first. With two 
 | In `host` | Why it cannot be per-interface |
 |---|---|
 | `RATING_KEYS`, `interpretKey` | what `3` does, and whether `escape` quits |
-| `resolveEditor`, `editorCommand` | which program `o` opens, and how it is told a line |
+| `resolveEditor`, `editorCommand`, `launchCommand`, `detectEditors` | which program `o` opens, how it is told a line, where it is installed, and which editors the Collection screen offers |
 | `OpenedNotes` | the mtime-at-open record behind "this note changed" |
 | `summaryFields` | which counts a sync reports, and in what order |
 | `deferralReason` | why a freshly-edited file was left alone |
@@ -111,6 +111,18 @@ A decision lives in `host`, not in the component that wanted it first. With two 
 What stays here is *drawing*, and one thing that is not drawing: the **spawn**. `electron/main/open.ts` detaches and returns at once, because a GUI has no TTY to hand over and must not block for as long as a note stays open. `host` spawns nothing, which is what keeps it usable from an interface that has not been written yet. See [module-map.md](module-map.md).
 
 `boundaries.test.ts` enforces every row of that table by scanning source text.
+
+## Opening a note: a Mac app does not get your shell's `PATH`
+
+A `.app` opened from Finder or the Dock starts with `PATH=/usr/bin:/bin:/usr/sbin:/sbin`. So `"editor": "code"` works under `npm start`, which inherits the terminal's `PATH`, and fails in a packaged build. The failure is an `ENOENT`, reported rather than hung on, but `o` still does nothing useful, and **only a Finder launch shows it**. `GEODE_SELFTEST` runs from a terminal and cannot catch it.
+
+The config therefore keeps a **plain name**, and `launchCommand` in `host/editor.ts` resolves it each time `o` is pressed: `PATH` first, then the launcher inside the editor's app bundle (`MAC_BUNDLES`, under `/Applications` and `~/Applications`). The resolved file is what gets spawned. Storing the resolved path instead would not work: `editorCommand` splits the value on whitespace, deliberately and with no shell, so `/Applications/Visual Studio Code.app/…` would split at its spaces. Resolving at open time also means an editor moved or reinstalled after it was chosen is still found.
+
+The line flag is chosen from the name *before* it is resolved. That is why Zed, whose launcher is a file called `cli`, still lands on the line.
+
+A named editor that is found nowhere is an `editor` error, **not** a fallback to the OS opener. A fallback would open the note at the top, and nothing would tell the user why the line jump had stopped working.
+
+The Collection screen lists only GUI editors that `editorCommand` can put on a line, and no terminal editors: the spawn is detached with no TTY, so `vim` would start in a window nobody can type into. **Other…** takes any command for the rest.
 
 ## The two traps
 

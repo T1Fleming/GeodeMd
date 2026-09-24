@@ -16,6 +16,8 @@ import { afterEach, describe, expect, it } from "vitest";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { ACTION_KEYS, RATING_KEYS, actionsAt, interpretKey } from "../host/present.js";
+import { detectEditors, editorCommand, launchCommand } from "../host/editor.js";
+import type { Machine } from "../host/editor.js";
 import { FsrsScheduler } from "../scheduler/index.js";
 import { codeSpans, guide, plain, tableAfter } from "./guide.js";
 import { newCollection } from "./collection.js";
@@ -68,6 +70,42 @@ describe("the guide's four ratings are the four the app honours", () => {
     expect(actionsAt("answer").map((a) => a.key)).not.toContain("0");
     // And `q` at both, which the guide's "from the question or the answer" says.
     expect(ACTION_KEYS.find((a) => a.key === "q")?.stage).toBe("both");
+  });
+
+  it("offers the editors it says `o` can put on a line, and no terminal ones", async () => {
+    const text = plain(await reviewing());
+    expect(text).toContain("Choose an editor on the Collection screen if you want the line jump.");
+    expect(text).toContain("Open notes in");
+
+    // Every editor installed, so the list is everything the screen could offer.
+    const everything: Machine = {
+      env: { PATH: "/bin" },
+      platform: "darwin",
+      home: "/Users/me",
+      isExecutable: (f) => f.startsWith("/bin/"),
+    };
+    const offered = detectEditors(everything);
+    // "VS Code, Cursor, Zed, Sublime Text and their relatives" — each named
+    // one is offered, and each offered one lands on the card.
+    for (const named of ["Visual Studio Code", "Cursor", "Zed", "Sublime Text"]) {
+      expect(offered.map((e) => e.label), named).toContain(named);
+    }
+    for (const { command } of offered) {
+      expect(editorCommand(command, "/n/a.md", 142).args.join(" "), command).toContain("142");
+    }
+    // "That is why none are listed" — the terminal editor it names.
+    expect(text).toContain("a terminal editor like vim starts in a window you cannot type into");
+    expect(offered.map((e) => e.command)).not.toContain("vim");
+
+    // "Other… takes a command … such as code -w", which still lands on the line.
+    expect(text).toContain("Other… takes a command for anything not listed, such as code -w");
+    const typed = launchCommand("code -w", "/n/a.md", 142, everything);
+    expect(typed.ok && typed.args).toEqual(["-w", "--goto", "/n/a.md:142"]);
+
+    // "o says it was not found rather than quietly opening the note at the top".
+    expect(text).toContain("says it was not found rather than quietly opening the note at the top");
+    const gone = launchCommand("cursor", "/n/a.md", 142, { ...everything, isExecutable: () => false });
+    expect(gone.ok).toBe(false);
   });
 });
 

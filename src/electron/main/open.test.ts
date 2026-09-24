@@ -13,8 +13,21 @@ describe("launching an editor without holding the app open", () => {
     // would report `launched: true` for an editor nobody has.
     const r = await openDetached("/notes/a.md", 1, "geode-no-such-editor-xyz");
     expect(r.launched).toBe(false);
+    expect(r.message).toContain("geode-no-such-editor-xyz");
+    expect(r.message).toContain("Collection screen");
+  });
+
+  it("reports a launcher that vanished between the lookup and the spawn", async () => {
+    // The lookup says yes and the spawn says ENOENT: still reported, not
+    // claimed as a success.
+    const r = await openDetached("/notes/a.md", 1, "/nowhere/geode-gone", {
+      env: {},
+      platform: process.platform,
+      home: "/nowhere",
+      isExecutable: () => true,
+    });
+    expect(r.launched).toBe(false);
     expect(r.message).toContain("could not run");
-    expect(r.message).toContain("$EDITOR");
   });
 
   it("returns as soon as the process exists, not when it exits", async () => {

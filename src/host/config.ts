@@ -243,6 +243,25 @@ export async function writeConfig(file: string, config: FileConfig): Promise<voi
   await fs.rename(tmp, file);
 }
 
+/**
+ * Set or clear `editor`, keeping every other key as it was.
+ *
+ * Through `ensureConfig`, so a config with no `device` has one persisted
+ * rather than minted afresh and lost. `null` — or a blank value — removes the
+ * key, which means "the system default". Null when there is no config to set
+ * it in: the editor is chosen after setup, never instead of it.
+ */
+export async function setEditor(file: string, editor: string | null): Promise<FileConfig | null> {
+  const current = await ensureConfig(file);
+  if (!current) return null;
+  const next: FileConfig = { ...current };
+  delete next.editor;
+  const value = editor?.trim() ?? "";
+  if (value !== "") next.editor = value;
+  await writeConfig(file, next);
+  return next;
+}
+
 export class InitRefused extends Error {}
 
 /**

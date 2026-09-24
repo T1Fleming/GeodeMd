@@ -15,10 +15,10 @@ import { fileURLToPath } from "node:url";
 import { ConfigError } from "../../core/index.js";
 import type { Core } from "../../core/index.js";
 import type { Store } from "../../store/index.js";
-import { configPath, initConfig, settleConfigPath } from "../../host/config.js";
+import { configPath, initConfig, setEditor, settleConfigPath } from "../../host/config.js";
 import type { FileConfig } from "../../host/config.js";
 import { inspectFolder, proposeConfig } from "../../host/setup.js";
-import { OpenedNotes, resolveEditor } from "../../host/editor.js";
+import { OpenedNotes, detectEditors, resolveEditor, thisMachine } from "../../host/editor.js";
 import { classify, isBusy } from "../../host/errors.js";
 import { COUNT_CAP } from "../../host/present.js";
 import { openCore, readAppConfig } from "../../host/open.js";
@@ -26,6 +26,7 @@ import { CH } from "../ipc.js";
 import type {
   AppConfig,
   ConfigProposal,
+  EditorChoices,
   FolderReport,
   NoteOpened,
   Rated,
@@ -299,6 +300,37 @@ function register(): void {
         throw new ConfigError(`refusing to open ${url.protocol}`);
       }
       await shell.openExternal(url.toString());
+    }),
+  );
+
+  /**
+   * The editors installed here, and the one chosen. Detected on every ask
+   * rather than once at startup: installing an editor while the app is open
+   * should not need a restart to show up.
+   */
+  ipcMain.handle(CH.editorsList, () =>
+    guard<EditorChoices>(async () => {
+      const c = await readAppConfig(configFile);
+      if (!c) throw new NoConfig();
+      return { detected: detectEditors(thisMachine()), current: c.editor ?? null };
+    }),
+  );
+
+  /**
+   * Choose it. Written to the config file — `o` reads it from the memoized
+   * config, so that copy is updated too rather than the Core being reset: the
+   * editor has nothing to do with the collection, and closing the Store to
+   * change it would be all cost.
+   */
+  ipcMain.handle(CH.editorsSet, (_e, editor: string | null) =>
+    guard<EditorChoices>(async () => {
+      const written = await setEditor(configFile, editor);
+      if (!written) throw new NoConfig();
+      if (config) {
+        if (written.editor === undefined) delete config.editor;
+        else config.editor = written.editor;
+      }
+      return { detected: detectEditors(thisMachine()), current: written.editor ?? null };
     }),
   );
 
