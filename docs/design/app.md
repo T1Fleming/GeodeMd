@@ -1,6 +1,6 @@
 # The Electron app
 
-The second interface. A peer of the CLI, not a replacement for it, and not a wrapper around it — both sit on one `core` and neither imports the other ([ADR 0013](../decisions/0013-cli-and-electron-are-peers.md)).
+The interface. It sits on one `core` and reaches nothing below `host` ([ADR 0025](../decisions/0025-the-app-is-the-only-interface.md) removed the CLI, which had been its peer; the boundaries it left behind are why that removal touched nothing under `src/electron/`).
 
 This document covers what is not obvious from reading the files: where the process boundary is, what crosses it, and the handful of rules that keep a GUI honest about work that takes minutes.
 
@@ -59,7 +59,7 @@ A five-file sync finishes in milliseconds. A component that mounts and *then* st
 
 ## First run
 
-The CLI's `init` writes a config, prints two sentences of advice, and exits. A GUI cannot print-and-exit, and the stakes are specific: **the first real sync writes an id comment into every note that contains a card.** On an existing collection that is a diff across the whole tree. `init` can only warn about it; a window can make the number visible before it happens.
+A command line could write a config, print two sentences of advice, and exit. A window cannot print-and-exit, and the stakes are specific: **the first real sync writes an id comment into every note that contains a card.** On an existing collection that is a diff across the whole tree. `init` can only warn about it; a window can make the number visible before it happens.
 
 The sequence is welcome → confirm the folder → preview the settings → version control → preview the sync → run it, and `renderer/model/setup.ts` holds it as a pure state machine. Three things in there are load-bearing:
 
@@ -87,9 +87,9 @@ Links are intercepted at the container rather than rewritten in the HTML. A link
 
 `dangerouslySetInnerHTML` is safe here **because the input is ours**. The moment a note's text is rendered this way that stops being true.
 
-## What the screens share with the CLI
+## What the screens take from `host`
 
-Anything both interfaces would want lives in `host`, not in whichever one asked for it first — the failure mode is two interfaces that each stay self-consistent while disagreeing, which no test catches:
+A decision lives in `host`, not in the component that wanted it first. With two interfaces the failure mode was each staying self-consistent while disagreeing with the other; with one it is a decision arriving inside a component with a layout attached, where it stops looking like a decision ([ADR 0025](../decisions/0025-the-app-is-the-only-interface.md)):
 
 | In `host` | Why it cannot be per-interface |
 |---|---|
@@ -99,8 +99,10 @@ Anything both interfaces would want lives in `host`, not in whichever one asked 
 | `summaryFields` | which counts a sync reports, and in what order |
 | `deferralReason` | why a freshly-edited file was left alone |
 | `PHASE_LABEL` | what `scan` / `prune` / `ingest` are called |
+| `queue.ts` | which card is next, and when a rated card comes back |
+| `countText`, `COUNT_CAP` | how far a backlog is counted, and how a capped count reads |
 
-What stays per-interface is *drawing*, and one thing that is not drawing: the **spawn**. `cli/` inherits the TTY and awaits the child because a terminal editor holds it; `electron/` detaches and returns at once because a GUI has none to hand over. See [module-map.md](module-map.md).
+What stays here is *drawing*, and one thing that is not drawing: the **spawn**. `electron/main/open.ts` detaches and returns at once, because a GUI has no TTY to hand over and must not block for as long as a note stays open. `host` spawns nothing, which is what keeps it usable from an interface that has not been written yet. See [module-map.md](module-map.md).
 
 `boundaries.test.ts` enforces every row of that table by scanning source text.
 
@@ -130,13 +132,12 @@ mkdir -p $DEMO/{notes,config,data} && cp -r demo/* $DEMO/notes/
 (cd $DEMO/notes && git init -q . && git add -A && git commit -qm before)
 
 export XDG_CONFIG_HOME=$DEMO/config XDG_DATA_HOME=$DEMO/data
-npm run build && node dist/cli/index.js init $DEMO/notes && node dist/cli/index.js sync
-npm run build:desktop && npm --prefix desktop start
+npm run build:desktop && npm --prefix desktop start   # then point it at $DEMO/notes
 ```
 
-The `XDG_*` variables are the load-bearing part. Without them this writes over the config pointing at your real notes, and `init` preserves `device` — so you would not even get a refusal, you would get your live collection repointed at the demo.
+The `XDG_*` variables are the load-bearing part. Without them this writes over the config pointing at your real notes, and a replace preserves `device` — so you would not even get a refusal, you would get your live collection repointed at the demo.
 
-Two seconds of care with mtimes: a freshly copied file is inside the deferral window, so the first sync stamps nothing and reports `0 new`. Either run `sync` twice or backdate with `find $DEMO/notes -name '*.md' -exec touch -A -001000 {} \;`.
+Two seconds of care with mtimes: a freshly copied file is inside the deferral window, so the first sync stamps nothing and reports `0 new`. Either sync twice or backdate with `find $DEMO/notes -name '*.md' -exec touch -A -001000 {} \;`.
 
 `git -C $DEMO/notes diff` afterwards shows exactly what a first sync does to someone's notes, which is the other thing worth seeing once.
 

@@ -39,7 +39,7 @@ export APPLE_TEAM_ID=…
 
 Then add `"notarize": true` to the `mac` block. Without any of that, `electron-builder` prints `skipped macOS application code signing` and still produces a working unsigned `.dmg` — which Gatekeeper will refuse on another machine until the user right-clicks → Open.
 
-The app is **not sandboxed**, and that is a decision rather than an omission: GeodeMD reads and writes a directory of the user's own notes, chosen at runtime, shared with the CLI. The App Sandbox would require security-scoped bookmarks and would break that sharing. Direct distribution allows it; the Mac App Store would not.
+The app is **not sandboxed**, and that is a decision rather than an omission: GeodeMD reads and writes a directory of the user's own notes, chosen at runtime, and possibly synced between machines by something else. The App Sandbox would require security-scoped bookmarks and would break that. Direct distribution allows it; the Mac App Store would not.
 
 ## Before a release goes out
 
@@ -73,9 +73,9 @@ With no config present and `GEODE_SELFTEST_FOLDER` set, that drives first-run, s
 - [ ] Sync screen: a second sync reports `0 new`, and rebuild asks before running
 - [ ] Help: the guides render, and a link to something unbundled opens a browser
 - [ ] Quit and relaunch — it goes straight to review, not to onboarding
-- [ ] The CLI still works against the same collection while the app is open
+- [ ] A second window, or a second copy of the app, against the same collection
 
-The last one is not a formality. Two interfaces over one database is the design ([ADR 0013](../decisions/0013-cli-and-electron-are-peers.md)), and a concurrent write is what `SQLITE_BUSY` handling exists for.
+The last one is not a formality. `SQLITE_BUSY` handling exists because two writers over one database is a state the design tolerates rather than prevents — it was written for the CLI-and-app case ([ADR 0025](../decisions/0025-the-app-is-the-only-interface.md) removed the CLI, not the handling), and two copies of the app reach it just as well.
 
 ## Before shipping to a large collection
 

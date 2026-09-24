@@ -11,26 +11,25 @@ app do*, and *where is that proven*. What it deliberately cannot tell you is wha
 app does **untested** — an area that looks thin here is thinly covered, and that is
 worth reading as a finding rather than a gap in the document.
 
-490 behaviours in 12 areas, which follow [the guides](../guides/) rather than the source tree.
+442 behaviours in 11 areas, which follow [the guides](../guides/) rather than the source tree.
 
-- [Reviewing](#reviewing) — 129
+- [Reviewing](#reviewing) — 107
 - [Recognising a card](#recognising-a-card) — 57
-- [Syncing notes](#syncing-notes) — 79
+- [Syncing notes](#syncing-notes) — 73
 - [Recovery and the log](#recovery-and-the-log) — 26
 - [Moving between machines](#moving-between-machines) — 9
 - [Setting up this machine](#setting-up-this-machine) — 53
 - [The app's long runs](#the-apps-long-runs) — 31
-- [The terminal](#the-terminal) — 19
 - [The database as a cache](#the-database-as-a-cache) — 7
 - [At scale](#at-scale) — 9
-- [Rules the project enforces on itself](#rules-the-project-enforces-on-itself) — 35
+- [Rules the project enforces on itself](#rules-the-project-enforces-on-itself) — 34
 - [The documentation tells the truth](#the-documentation-tells-the-truth) — 36
 
 ## Reviewing
 
 _A session: which card is next, what the keys mean, what a rating records, and what comes back before the sitting ends._
 
-**129 behaviours.**
+**107 behaviours.**
 
 ### the order cards are served in
 
@@ -183,47 +182,6 @@ _5 · `host/editor.test.ts`_
 - counts a note that disappeared, and one that appeared
 - narrows to the paths asked about
 
-### what a question looks like
-
-_2 · `cli/render.test.ts`_
-
-- repeats where you are in the session, and where the card came from
-- wraps the question to the width instead of the terminal edge
-
-### what an answer looks like
-
-_1 · `cli/render.test.ts`_
-
-- shows the answer and the legend together
-
-### what the legend says
-
-_2 · `cli/render.test.ts`_
-
-- names every key the loop actually accepts
-- is plain text, so a pipe gets no escape sequences
-
-### the tally at the end of a session
-
-_3 · `cli/render.test.ts`_
-
-- counts the session and breaks it down by rating
-- stays quiet about ratings you never gave
-- says something honest about a session with no answers in it
-
-### naming the notes you edited while reviewing
-
-_2 · `cli/render.test.ts`_
-
-- says nothing when nothing changed
-- names the one note that changed, and counts several
-
-### how much is due, said once at the top
-
-_1 · `cli/render.test.ts`_
-
-- reports the queue against the backlog it came from
-
 ### revealing
 
 _3 · `electron/renderer/model/session.test.ts`_
@@ -299,27 +257,6 @@ _4 · `electron/main/open.test.ts`_
 - returns as soon as the process exists, not when it exits
 - does not keep the event loop alive waiting for the child
 - passes the line through the same table the CLI uses
-
-### the keys the loop honours
-
-_6 · `cli/cli.test.ts`_
-
-- maps 1-4 to ratings
-- quits on q, Q, escape and Ctrl-C
-- opens the source note on o
-- ignores anything else rather than recording a wrong rating
-- names all four FSRS ratings in the legend
-- offers the source note in the legend, since nothing else advertises it
-
-### what a terminal keypress means
-
-_5 · `cli/cli.test.ts`_
-
-- passes a printable key through as typed
-- uses the NAME for escape, not the escape byte readline also reports
-- reads Ctrl-C as a quit, where the name alone would read as `c`
-- survives readline reporting one half or neither
-- names only keys that `host` does something with
 
 ## Recognising a card
 
@@ -438,7 +375,7 @@ _2 · `parser/parser.test.ts`_
 
 _Finding what changed, stamping it, pruning what is gone, and saying what happened._
 
-**79 behaviours.**
+**73 behaviours.**
 
 ### which counts a sync summary shows
 
@@ -592,22 +529,6 @@ _4 · `files/files.test.ts`_
 - catches Dropbox and Nextcloud, with or without an owner's name
 - leaves ordinary filenames alone, including the ambiguous ones
 - judges the filename, not the folder it sits in
-
-### what a sync reports in the terminal
-
-_3 · `cli/cli.test.ts`_
-
-- always reports the core counts
-- surfaces skipped files, which the exit code deliberately does not
-- stays quiet about zero-valued incidentals
-
-### explaining a file that was left alone
-
-_3 · `cli/cli.test.ts`_
-
-- says nothing when nothing was deferred
-- explains a deferral and says what to do about it
-- agrees with itself about plurals
 
 ## Recovery and the log
 
@@ -917,61 +838,6 @@ _1 · `electron/renderer/model/run.test.ts`_
 
 - is true only in flight, because rebuild is refused while anything runs
 
-## The terminal
-
-_Argument parsing, colour, and wrapping — the parts that are the CLI's alone._
-
-**19 behaviours.**
-
-### reading the command line
-
-_4 · `cli/cli.test.ts`_
-
-- reads a command and positionals
-- reads flags in any position
-- reads -n and --limit
-- ignores a nonsense limit rather than crashing
-
-### telling a run apart from an import
-
-_2 · `cli/cli.test.ts`_
-
-- recognises the module when invoked through a symlink
-- is false for an unrelated entry, or none at all
-
-### when colour is used, and when it is not
-
-_4 · `cli/style.test.ts`_
-
-- follows the terminal when nothing says otherwise
-- lets NO_COLOR win over everything, FORCE_COLOR included
-- colours a pipe when FORCE_COLOR asks
-- says no to a dumb terminal
-
-### styling text, or leaving it plain
-
-_2 · `cli/style.test.ts`_
-
-- is the identity when disabled, not a stripped escape
-- wraps and closes the sequence when enabled
-
-### how wide the terminal is
-
-_2 · `cli/style.test.ts`_
-
-- defaults when the stream has no width
-- clamps both ends, because prose is not the window
-
-### wrapping text to a width
-
-_5 · `cli/style.test.ts`_
-
-- leaves short text alone
-- breaks on words at the width
-- hard-breaks a word longer than the width
-- keeps every line within the width
-- keeps explicit newlines as their own lines
-
 ## The database as a cache
 
 _Schema decisions the rest of the system leans on, and what they cost._
@@ -1034,14 +900,14 @@ _2 · `files/enumerate.bench.test.ts`_
 
 _Module boundaries, and the completeness of this document — both checked by scanning source text rather than trusted._
 
-**35 behaviours.**
+**34 behaviours.**
 
 ### section 6 hard rules
 
 _6 · `boundaries.test.ts`_
 
-- rule 1: core never imports cli
-- rule 1: no module below cli imports cli
+- rule 1: core never imports the interface
+- rule 1: nothing below the interface imports it
 - rule 2: core never writes to the terminal, exits, or prompts
 - rule 3: core reads no ambient config
 - rule 4: parser opens no file
@@ -1056,13 +922,13 @@ _4 · `boundaries.test.ts`_
 - the log lives under files/, not store/
 - scheduler pins its parameters rather than inheriting them
 
-### host, shared by both interfaces
+### host, which the interface draws from
 
 _10 · `boundaries.test.ts`_
 
 - never writes to the terminal
 - is where ambient machine state is read, so core does not have to
-- owns the review vocabulary, so the two interfaces cannot disagree
+- owns the review vocabulary, so the renderer cannot quietly redecide it
 - owns which keys are offered at which point in a card
 - owns when a rated card comes back, so a session means the same in both
 - owns which program opens a note, and how it is told a line
@@ -1080,11 +946,10 @@ _4 · `boundaries.test.ts`_
 - names every group as a sentence rather than after a function
 - asserts something in every single test
 
-### electron, the second interface
+### electron, the interface
 
-_3 · `boundaries.test.ts`_
+_2 · `boundaries.test.ts`_
 
-- does not import cli, and cli does not import it
 - nothing below the interfaces imports electron
 - keeps onProgress out of the wire types
 
@@ -1201,7 +1066,7 @@ _2 · `journeys/recovery.test.ts`_
 _2 · `journeys/recovery.test.ts`_
 
 - leaves a deleted card out of the queue, but keeps its history
-- is what `geode rebuild` means, and the guide spells the command the same way
+- warns in the same words the app's own dialog does
 
 ### what the guide says two machines need in order to agree
 

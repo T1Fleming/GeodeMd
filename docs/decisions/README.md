@@ -20,7 +20,7 @@ New decisions from here get an ADR when they are made, not in a later sweep — 
 | [0010](0010-absence-is-not-deletion.md) | Absence is not deletion: no tombstones | Accepted |
 | [0011](0011-enumeration-is-a-seam.md) | Enumeration is a seam: walk now, snapshot later | Accepted |
 | [0012](0012-open-the-note-from-review.md) | Review can open the note, and detects edits by an end-of-session sweep | Accepted |
-| [0013](0013-cli-and-electron-are-peers.md) | The CLI and the Electron app are peer interfaces, permanently | Accepted |
+| [0013](0013-cli-and-electron-are-peers.md) | The CLI and the Electron app are peer interfaces, permanently | Superseded by [0025](0025-the-app-is-the-only-interface.md) |
 | [0014](0014-cross-device-sync-transport.md) | Cross-device sync transport | Superseded by [0021](0021-no-built-in-sync-transport.md) |
 | [0015](0015-accept-clock-skew.md) | Accept clock skew; do not build vector clocks | Accepted |
 | [0016](0016-config-lives-in-host.md) | Configuration lives in `host/`, below both interfaces | Accepted |
@@ -32,6 +32,7 @@ New decisions from here get an ADR when they are made, not in a later sweep — 
 | [0022](0022-defer-a-card-without-rating-it.md) | Defer a card without rating it | Accepted |
 | [0023](0023-honour-short-term-learning-steps.md) | Honour FSRS's short-term learning steps | Accepted |
 | [0024](0024-remeasure-the-main-process-stall.md) | The main-process stall at fifty times the measurement | Accepted |
+| [0025](0025-the-app-is-the-only-interface.md) | The app is the only interface; the CLI is removed | Accepted |
 
 ## Writing one
 

@@ -12,7 +12,7 @@ The situations the [README](../../README.md) can only warn about in a sentence. 
 
 - **[Reviewing](reviewing.md)** — what the four ratings mean, when `hard` is the honest key rather than `again`, why a card comes back in the same session, and what `0 later` does that no rating can.
 - **[Your first sync on an existing collection](first-sync.md)** — the one with real stakes. The first real sync stamps every line in your notes that parses as a card, which on an existing tree is a diff across the whole thing.
-- **[When something looks wrong](recovery.md)** — the database is a cache and `geode rebuild` reconstructs it from your notes and logs. Worth saying plainly, because "delete it and rebuild" reads like data loss until you know the database holds nothing that is not derivable.
+- **[When something looks wrong](recovery.md)** — the database is a cache and **Rebuild** reconstructs it from your notes and logs. Worth saying plainly, because "delete it and rebuild" reads like data loss until you know the database holds nothing that is not derivable.
 - **[Moving your notes between machines](moving-notes.md)** — what to copy, what not to, and the conflict-copy problem that nothing filters for you.
 
 ## Something to try them on

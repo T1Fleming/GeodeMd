@@ -89,6 +89,6 @@ entitlements. The root `.gitignore` ignores `build/` at any depth, so there is
 an explicit un-ignore for this one — without it the icon and entitlements are
 silently untracked and the next clone builds an app with neither.
 
-## The output directory is cleaned first
+## Both output directories are cleaned first
 
-`npm run build:desktop` deletes `desktop/dist/` before `tsc` runs, and that is not tidiness. `tsc` never removes output for a source file that no longer exists, and `electron-builder` packages `dist/**/*` — so a renamed or deleted module keeps shipping inside the `.app` until something clears it. It was caught doing exactly that: a measurement harness that had moved out of `src/electron/` was still in a packaged bundle at its old path.
+`npm run build:desktop` deletes `desktop/dist/` before `tsc` runs, and `npm run build` does the same to `dist/`. That is not tidiness. `tsc` never removes output for a source file that no longer exists, and `electron-builder` packages `dist/**/*` — so a renamed or deleted module keeps shipping inside the `.app` until something clears it. It was caught doing exactly that twice: a measurement harness that had moved out of `src/electron/` was still in a packaged bundle at its old path, and `dist/cli/` outlived the interface it was compiled from by one commit.

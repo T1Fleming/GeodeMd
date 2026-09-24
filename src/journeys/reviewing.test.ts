@@ -176,7 +176,7 @@ describe("the session's own claims about what you get", () => {
   it("does not walk the notes, so a deleted card can still turn up", async () => {
     // "`review` deliberately does not walk your notes … so a note you deleted
     // since the last sync leaves its cards in the queue until you run `geode sync`."
-    expect(await reviewing()).toContain("leaves its cards in the queue until you run `geode sync`");
+    expect(await reviewing()).toContain("leaves its cards in the queue until you sync");
 
     open = await newCollection();
     await open.write("a.md", "Q1 :: A1\n");

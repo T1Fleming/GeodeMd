@@ -28,7 +28,7 @@ This is where the idea in `demo.test.ts` goes next. That test exists because `de
 
 The tier earns being separate only while it stays small and user-shaped, so four rules in `boundaries.test.ts` hold it there. A journey must read its guide, must name every group as a sentence rather than after a function, must assert something in every test, and must never reach into the store to prove a claim. Those are the guarantees a Gherkin layer would have given by grammar; here they are the same source scan as every other boundary, with no second runner and no step definitions. Each was checked by breaking it on purpose.
 
-**What is deliberately not here.** The mechanisms: `host/queue.test.ts` covers the queue, `sync.test.ts` covers stamping, `rebuild.test.ts` covers the identity of a rebuild. A journey that re-proved those would be a slow second copy of the suite. And the CLI's interactive loop is still not covered by anything, because it needs a TTY — see below.
+**What is deliberately not here.** The mechanisms: `host/queue.test.ts` covers the queue, `sync.test.ts` covers stamping, `rebuild.test.ts` covers the identity of a rebuild. A journey that re-proved those would be a slow second copy of the suite.
 
 ## The behaviour index
 
@@ -74,14 +74,8 @@ GEODE_BENCH=1 GEODE_BENCH_TREE=/path/to/a/real/vault npx vitest run src/files/en
 
 It runs every strategy in **one process against one tree**, because the figures that turned out to be wrong came from a different machine on a different day. It uses two tree shapes — 100 files per directory and 4 — because the narrow one is what a vault of topic folders looks like and is where per-directory concurrency collapses; reporting only the wide shape would be the flattering version of the benchmark. Median of five runs after a discarded warm-up, since one page-cache miss skews a mean.
 
-**The CLI's interactive loop is not automated, and that is a known hole rather than a decision.** It requires a TTY — `review` refuses without one — so nothing in the suite enters it, and the [behaviour index](behaviours.md) shows `src/cli/` covering argument parsing, rendering and styling with nothing about the loop itself. That gap is where the `escape` bug lived for months: `host` said escape quits, the app quit, and the CLI silently revealed the answer instead, because the one line translating readline's `(str, key)` pair into what `host` speaks was unreachable by any test.
+**One untestable surface was removed rather than tested**, and it is worth recording which way that went. The CLI's review loop needed a TTY, so nothing in the suite could enter it, and that is where the `escape` bug lived for months: `host` said escape quits, the app quit, and the terminal silently revealed the answer instead, because the one line translating readline's `(str, key)` pair into what `host` speaks was unreachable by any test. The fix was priced — a pseudo-terminal harness and a native dependency — and then the interface it protected was deleted instead ([ADR 0025](../decisions/0025-the-app-is-the-only-interface.md)). The coverage hole closed by subtraction.
 
-The cheap half of that is now closed: the translation is `src/cli/keys.ts`, pure and covered, with a rule asserting that every key name it passes through is one `interpretKey` honours. What is still not covered is the loop's *sequence* — reveal, rate, defer, open, quit — and the way to close it would be a pseudo-terminal harness, the CLI's equivalent of the app's renderer self-test. Until then, driving it by hand is the evidence:
-
-```sh
-printf ' 3 3 0 4 q' | ...   # one key at a time; the loop attaches a handler per key
-```
-
-A whole sequence delivered in one chunk is read by nobody, which is its own small trap: the loop waits for a keypress that has already been and gone.
+What remains of that lesson: the app's equivalent surface — real keypresses against a real window — **is** covered, by the renderer self-test below, and that is the only reason the equivalent bug cannot hide there.
 
 **The file-descriptor question is deliberately not a test.** A bounded pool cannot exhaust descriptors by construction, a suite that must stay around a second cannot prove it honestly, and mocking `fs` would contradict a repo that has no mocks anywhere. Run the suite under `ulimit -n 128` by hand instead — that is the available evidence, and it passes.

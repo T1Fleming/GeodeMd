@@ -64,10 +64,6 @@ export const AREAS: readonly Area[] = [
     blurb: "Single-flight, progress, and how a window that missed an event catches up.",
   },
   {
-    name: "The terminal",
-    blurb: "Argument parsing, colour, and wrapping — the parts that are the CLI's alone.",
-  },
-  {
     name: "The database as a cache",
     blurb: "Schema decisions the rest of the system leans on, and what they cost.",
   },
@@ -93,7 +89,6 @@ export const BY_FILE: Readonly<Record<string, string>> = {
   "host/queue.test.ts": "Reviewing",
   "host/present.test.ts": "Reviewing",
   "host/editor.test.ts": "Reviewing",
-  "cli/render.test.ts": "Reviewing",
   "electron/renderer/model/session.test.ts": "Reviewing",
   "electron/main/open.test.ts": "Reviewing",
 
@@ -109,9 +104,6 @@ export const BY_FILE: Readonly<Record<string, string>> = {
 
   "electron/main/runs.test.ts": "The app's long runs",
   "electron/renderer/model/run.test.ts": "The app's long runs",
-
-  "cli/cli.test.ts": "The terminal",
-  "cli/style.test.ts": "The terminal",
 
   "store/store.test.ts": "The database as a cache",
 
@@ -143,11 +135,6 @@ export const BY_GROUP: Readonly<Record<string, string>> = {
 
   "files/files.test.ts:the review log": "Recovery and the log",
   "files/files.test.ts:reading a log shard from where it left off": "Recovery and the log",
-
-  "cli/cli.test.ts:what a sync reports in the terminal": "Syncing notes",
-  "cli/cli.test.ts:explaining a file that was left alone": "Syncing notes",
-  "cli/cli.test.ts:the keys the loop honours": "Reviewing",
-  "cli/cli.test.ts:what a terminal keypress means": "Reviewing",
 };
 
 /**

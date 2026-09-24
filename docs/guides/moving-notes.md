@@ -28,10 +28,7 @@ Copy the **notes directory**. That is everything: your cards are lines in your n
 
 Then on the new machine:
 
-```sh
-geode init /path/to/notes
-geode rebuild
-```
+Point GeodeMD at the folder, then **Rebuild** — it reads the notes and the logs and needs nothing else.
 
 `rebuild` reconstructs the database from the notes and the logs you just copied. Scheduling comes back exactly as it was, because it was never in the database in the first place — it is replayed from the log.
 
@@ -39,10 +36,7 @@ geode rebuild
 
 ## Moving the folder on one machine
 
-```sh
-geode init /new/path --force
-geode rebuild
-```
+Point GeodeMD at the new location — it offers to replace the config and keeps your device name — then **Rebuild**.
 
 `--force` is needed because `init` refuses to overwrite an existing config — being re-runnable to fix a path should not double as a way to change the machine's identity. It **keeps your `device` name** and your `editor` setting, which is what you want: the device name is what your log file is called, and regenerating it would scatter one machine's history across two filenames.
 
@@ -70,7 +64,7 @@ So the copy is still there, still holding your other version, and still yours to
 
 - Sync when GeodeMD is not running on either side.
 - When a sync reports conflicts left alone, deal with them: merge whichever changes you want into the real note and delete the copy.
-- **If duplicates predate this** — a conflict copy that was synced before GeodeMD started skipping them — delete the copy and run `geode sync` again. The duplicate cards disappear with the file. Their history stays in the log, harmlessly, referring to IDs nothing points at any more. GeodeMD will not clean these up for you: telling which of two cards holding the same question is the real one is not a judgement it can make.
+- **If duplicates predate this** — a conflict copy that was synced before GeodeMD started skipping them — delete the copy and sync again. The duplicate cards disappear with the file. Their history stays in the log, harmlessly, referring to IDs nothing points at any more. GeodeMD will not clean these up for you: telling which of two cards holding the same question is the real one is not a judgement it can make.
 
 ## What about reviewing on both machines?
 

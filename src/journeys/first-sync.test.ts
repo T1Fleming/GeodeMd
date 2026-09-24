@@ -105,7 +105,7 @@ describe("the examples the guide shows a reader", () => {
 describe("looking before it writes", () => {
   it("writes nothing on a dry run — not a stamp, not a database row", async () => {
     // The guide's exact promise, and the reason anyone trusts the preview.
-    expect(await firstSync()).toContain("This writes nothing — not a stamp, not a database row");
+    expect(await firstSync()).toContain("A preview writes nothing — not a stamp, not a database row");
 
     open = await newCollection();
     await open.write("a.md", "Q1 :: A1\nQ2 :: A2\n");

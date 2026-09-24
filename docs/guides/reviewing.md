@@ -2,12 +2,7 @@
 
 A session is one question at a time. Recall the answer, reveal it, and say how it went — and how it went is the only thing you are ever asked, because the schedule is derived from it.
 
-```sh
-geode review          # 50 cards
-geode review -n 200   # a bigger session
-```
-
-In the app it is the **Review** tab. **The keys are identical in both**, by construction rather than by convention: one table in the code says what each key means, and the terminal and the window both read it. Anything below that says "press `3`" is true of the button marked `3 good` as well.
+It is the **Review** tab. Every key below is also a button, and they cannot disagree: one table in the code says what each key means, and the window draws from it rather than restating it. Anything here that says "press `3`" is true of the button marked `3 good` as well.
 
 ## The four ratings
 
@@ -73,9 +68,9 @@ So `0` is not "show me this again for practice". It is "I have not answered this
 
 Offered once the answer is showing. It opens the note the card lives in, at the card's line, so you can fix a typo, split a card that is doing two jobs, or read the paragraph around it.
 
-**Set `editor` in your config if you want the line jump.** With no editor configured, GeodeMD hands the file to whatever your system opens `.md` with, and none of those can be told a line number — so you get the note, from the top. With a recognised editor it lands on the card: `vim +142`, `code --goto file:142`, `hx file:142`. See [`editor` in the configuration reference](../reference/configuration.md) for the list, and one trap worth knowing: `"editor": "vim"` is right in the terminal and wrong in the app, which has no terminal to type into.
+**Set `editor` in your config if you want the line jump.** With no editor configured, GeodeMD hands the file to whatever your system opens `.md` with, and none of those can be told a line number — so you get the note, from the top. With a recognised editor it lands on the card: `vim +142`, `code --goto file:142`, `hx file:142`. See [`editor` in the configuration reference](../reference/configuration.md) for the list, and one trap worth knowing: set a **GUI** editor. GeodeMD launches it and carries on rather than waiting, so `"editor": "vim"` starts a `vim` in a window you cannot type into.
 
-The terminal and the app differ in one visible way here. The CLI **waits** for the editor to close, because a terminal editor has taken over the window; the app launches it and carries on. Both then tell you, at the end of the session, which notes changed while you were reviewing — because the cards on screen came from the last sync, so **an edited note needs a `geode sync`** before the change reaches your queue.
+GeodeMD does not wait for the editor to close — it launches it and carries on, so you can keep reviewing with the note open beside you. At the end of the session it names the notes that changed while you were reviewing, because the cards on screen came from the last sync: **an edited note needs a sync** before the change reaches your queue.
 
 ## Quitting, and what is saved
 
@@ -93,6 +88,6 @@ If a session says `database busy` and keeps going, that is the same mechanism sh
 
 **No daily limit, and no "done for today".** A session is as long as you ask for. Nothing is being withheld, and nothing is being counted against you.
 
-**A deleted card can still turn up.** `review` deliberately does not walk your notes — that is what keeps a session instant on a large collection — so a note you deleted since the last sync leaves its cards in the queue until you run `geode sync`.
+**A deleted card can still turn up.** `review` deliberately does not walk your notes — that is what keeps a session instant on a large collection — so a note you deleted since the last sync leaves its cards in the queue until you sync.
 
 The counter on each card (`3/24`) and the count of what the session was drawn from (`12 of 400 due`) are the whole of the progress reporting. At the end you get a tally of the ratings you gave, and the names of any notes you edited.

@@ -10,11 +10,13 @@
 import { afterEach, describe, expect, it } from "vitest";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
+import { fileURLToPath } from "node:url";
 import { LOG_DIR, shardName } from "../files/index.js";
-import { codeSpans, guide, plain, tableAfter } from "./guide.js";
+import { guide, plain, tableAfter } from "./guide.js";
 import { newCollection } from "./collection.js";
 import type { Collection } from "./collection.js";
 
+const SRC = path.join(path.dirname(fileURLToPath(import.meta.url)), "..");
 const T0 = new Date("2026-09-22T12:00:00.000Z");
 let open: Collection | null = null;
 
@@ -141,8 +143,18 @@ describe("what rebuilding does not fix", () => {
     expect(open.core.stats(muchLater, 100)).toMatchObject({ total: 2, newCards: 0 });
   });
 
-  it("is what `geode rebuild` means, and the guide spells the command the same way", async () => {
-    // Cheap, and it catches a renamed command in a document nobody re-reads.
-    expect(codeSpans(await recovery())).toContain("geode rebuild");
+  it("warns in the same words the app's own dialog does", async () => {
+    // There is no command to spell any more (ADR 0025), so the checkable thing is
+    // that the sentence in the guide and the sentence in the confirmation dialog
+    // agree. Two places telling a frightened user different things about an
+    // irreversible, minutes-long operation is the drift worth catching.
+    const dialog = await fs.readFile(
+      path.join(SRC, "electron", "renderer", "Sync.tsx"),
+      "utf8",
+    );
+    for (const claim of ["takes minutes", "cannot be stopped once started"]) {
+      expect(await recovery(), `the guide no longer says it ${claim}`).toContain(claim);
+      expect(dialog, `the app no longer says it ${claim}`).toContain(claim);
+    }
   });
 });
