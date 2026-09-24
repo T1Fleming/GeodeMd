@@ -5,13 +5,22 @@
  * screen is not one number: `due` is an instant, so "due today" is ambiguous.
  * **Due now** is the actionable count and gets the emphasis; *before midnight*
  * is a forecast and is deliberately quieter.
+ *
+ * It also says which folder those numbers are about, and is where that folder
+ * is changed (#43) — the one screen that is about the collection as a whole.
  */
 
 import { useCallback, useEffect, useState } from "react";
 import { backlogCapped, countText } from "../../host/present.js";
 import type { Stats as StatsData } from "../ipc.js";
 
-export function Stats(): React.JSX.Element {
+export function Stats({
+  notesPath,
+  onChangeFolder,
+}: {
+  notesPath: string;
+  onChangeFolder: () => void;
+}): React.JSX.Element {
   const [data, setData] = useState<StatsData | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -50,6 +59,10 @@ export function Stats(): React.JSX.Element {
           ? `${countText(data.dueNow + data.newCards, backlogCapped(data))} waiting for you.`
           : "Nothing waiting. New cards appear here after a sync."}
       </p>
+      <div className="folder">
+        <p className="path">{notesPath}</p>
+        <button onClick={onChangeFolder}>Change folder…</button>
+      </div>
     </main>
   );
 }

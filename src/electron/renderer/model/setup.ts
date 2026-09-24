@@ -21,8 +21,22 @@ export type Step = "welcome" | "confirm" | "config" | "vcs" | "preview";
 /** In order. `back` and `next` walk this rather than hard-coding neighbours. */
 export const STEPS: readonly Step[] = ["welcome", "confirm", "config", "vcs", "preview"];
 
+/**
+ * Where the sequence was entered from, when it was not a first run.
+ *
+ * `repair` is a config whose folder has gone; `change` is the user asking to
+ * point a working config somewhere else (#43). Both carry the folder the
+ * config held on the way in, because both can end with that folder being
+ * wanted back — and by then the config on disk may no longer say what it was.
+ */
+export interface From {
+  reason: "repair" | "change";
+  notesPath: string;
+}
+
 export interface Setup {
   step: Step;
+  from: From | null;
   folder: FolderReport | null;
   proposal: ConfigProposal | null;
   /**
@@ -40,16 +54,28 @@ export interface Setup {
    * changing the folder clears it, which is the whole point.
    */
   preview: SyncSummary | null;
+  /**
+   * Whether this sequence has written the config yet. The preview writes it
+   * before its dry run, because the run reads it — so from then on, leaving
+   * without finishing has to put the old folder back. See `restoreTo`.
+   */
+  wrote: boolean;
 }
 
-export function begin(): Setup {
+/**
+ * A first run opens at the welcome; a repair or a change opens at the folder
+ * step, because the user already knows what this is.
+ */
+export function begin(from: From | null = null): Setup {
   return {
-    step: "welcome",
+    step: from ? "confirm" : "welcome",
+    from,
     folder: null,
     proposal: null,
     replace: null,
     acknowledged: false,
     preview: null,
+    wrote: false,
   };
 }
 
@@ -83,6 +109,28 @@ export function previewed(s: Setup, summary: SyncSummary): Setup {
   return { ...s, preview: summary };
 }
 
+export function wroteConfig(s: Setup): Setup {
+  return { ...s, wrote: true };
+}
+
+/**
+ * The folder to write back when leaving without finishing, or null when
+ * nothing needs undoing.
+ *
+ * Taken from `from`, never from the proposal. A proposal is read from the
+ * config on disk, so after one preview it describes the folder *just
+ * written* — restoring from it would restore the wrong thing. A first run has
+ * nothing to restore: there was no config before it.
+ */
+export function restoreTo(s: Setup): string | null {
+  return s.wrote && s.from ? s.from.notesPath : null;
+}
+
+/** Only a change can be cancelled: a repair has no working folder to go back to. */
+export function canCancel(s: Setup): boolean {
+  return s.from?.reason === "change";
+}
+
 /** A usable place to keep notes. Empty is fine; missing or a file is not. */
 export function folderIsUsable(f: FolderReport | null): boolean {
   return f !== null && f.exists && f.isDirectory;
@@ -100,7 +148,15 @@ export function blockers(s: Setup): string[] {
     case "welcome":
       return folderIsUsable(s.folder) ? [] : ["Choose the folder your notes live in."];
     case "confirm":
+      if (s.from?.reason === "change" && s.folder === null) {
+        return ["Choose the folder to use instead."];
+      }
       if (!folderIsUsable(s.folder)) return ["That folder is not there any more."];
+      // Not for a repair: reconnecting the drive and picking the same path is
+      // exactly how a repair is meant to end.
+      if (s.from?.reason === "change" && s.folder!.path === s.from.notesPath) {
+        return ["That is already your notes folder."];
+      }
       return [];
     case "config":
       if (!s.proposal) return ["Still reading your existing settings."];
@@ -143,7 +199,10 @@ export function next(s: Setup): Setup {
 export function back(s: Setup): Setup {
   const at = STEPS.indexOf(s.step);
   const to = STEPS[at - 1];
-  return to ? { ...s, step: to } : s;
+  // A repair or a change starts at the folder step; the welcome before it is
+  // a first run's, and walking back into it would greet a returning user.
+  if (!to || (s.from && to === "welcome")) return s;
+  return { ...s, step: to };
 }
 
 /**

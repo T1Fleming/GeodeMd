@@ -9,37 +9,42 @@
  * is routine on a desktop (the folder moved, or a drive is unmounted) and is
  * *not* a first run, so it opens at the folder step and says so, rather than
  * greeting someone who has been using the app for a year.
+ *
+ * And it serves choosing a different folder on purpose (#43), which is the
+ * same walk with a way back out — see `cancel`.
  */
 
 import { useCallback, useEffect, useState } from "react";
-import type { AppConfig, ConfigProposal, FolderReport, SyncSummary } from "../ipc.js";
+import type { ConfigProposal, FolderReport, SyncSummary } from "../ipc.js";
 import {
   back,
   begin,
   blockers,
   canAdvance,
+  canCancel,
   canSync,
   next,
   picked,
   previewReport,
   previewed,
   proposed,
+  restoreTo,
   setAcknowledged,
   setReplace,
+  wroteConfig,
 } from "./model/setup.js";
-import type { Setup as SetupState } from "./model/setup.js";
+import type { From, Setup as SetupState } from "./model/setup.js";
 
 interface Props {
-  /** The config being repaired, or null on a genuine first run. */
-  repairing: AppConfig | null;
+  /** A repair or a change of folder, or null on a genuine first run. */
+  from: From | null;
   onReady: () => void;
+  /** Leave without changing anything. Only offered for a change. */
+  onCancel: () => void;
 }
 
-export function Setup({ repairing, onReady }: Props): React.JSX.Element {
-  const [s, setS] = useState<SetupState>(() =>
-    // A repair skips the welcome: the user knows what this is.
-    repairing ? { ...begin(), step: "confirm" } : begin(),
-  );
+export function Setup({ from, onReady, onCancel }: Props): React.JSX.Element {
+  const [s, setS] = useState<SetupState>(() => begin(from));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -82,6 +87,7 @@ export function Setup({ repairing, onReady }: Props): React.JSX.Element {
       // because the first one succeeded.
       const written = await window.geode.setupWrite(s.folder.path, true);
       if (!written.ok) return setError(written.message);
+      setS(wroteConfig);
       const summary = await runToCompletion(true);
       if (typeof summary === "string") return setError(summary);
       setS((prev) => previewed(prev, summary));
@@ -103,6 +109,34 @@ export function Setup({ repairing, onReady }: Props): React.JSX.Element {
   }, [onReady]);
 
   /**
+   * Put back the folder this sequence started from, if it has overwritten it.
+   *
+   * True when the config on disk is what it was on the way in. A failed
+   * restore is shown and leaves the user here, not sent on to a collection
+   * the config no longer points at.
+   */
+  const restore = useCallback(async (): Promise<boolean> => {
+    const target = restoreTo(s);
+    if (target === null) return true;
+    const r = await window.geode.setupWrite(target, true);
+    if (!r.ok) {
+      setError(r.message);
+      return false;
+    }
+    return true;
+  }, [s]);
+
+  const cancel = useCallback(async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      if (await restore()) onCancel();
+    } finally {
+      setBusy(false);
+    }
+  }, [restore, onCancel]);
+
+  /**
    * Keep the settings that are already there.
    *
    * A way out of this sequence rather than a step through it: the sequence
@@ -113,18 +147,18 @@ export function Setup({ repairing, onReady }: Props): React.JSX.Element {
    * this same screen.
    */
   const keepExisting = useCallback(async () => {
-    const old = s.proposal?.replaces;
+    // `from` before the proposal: once a preview has written the config, the
+    // proposal describes the folder just written, not the one being kept.
+    const old = s.from?.notesPath ?? s.proposal?.replaces?.notesPath;
     if (!old) return;
     setError(null);
-    const report = await window.geode.setupInspect(old.notesPath);
+    const report = await window.geode.setupInspect(old);
     if (!report.ok) return setError(report.message);
     if (!report.value.exists || !report.value.isDirectory) {
-      return setError(
-        `${old.notesPath} is still not there. Reconnect it, or choose the new folder.`,
-      );
+      return setError(`${old} is still not there. Reconnect it, or choose the new folder.`);
     }
-    onReady();
-  }, [s.proposal, onReady]);
+    if (await restore()) onReady();
+  }, [s.from, s.proposal, restore, onReady]);
 
   const stop = blockers(s);
 
@@ -133,11 +167,7 @@ export function Setup({ repairing, onReady }: Props): React.JSX.Element {
       {s.step === "welcome" && <Welcome onPick={() => void pick()} />}
 
       {s.step === "confirm" && (
-        <ConfirmFolder
-          report={s.folder}
-          repairing={repairing}
-          onPick={() => void pick()}
-        />
+        <ConfirmFolder report={s.folder} from={s.from} onPick={() => void pick()} />
       )}
 
       {s.step === "config" && (
@@ -170,7 +200,12 @@ export function Setup({ repairing, onReady }: Props): React.JSX.Element {
       {stop.length > 0 && s.step !== "welcome" && <p className="blocker">{stop[0]}</p>}
 
       <div className="controls wizard">
-        {s.step !== "welcome" && (
+        {canCancel(s) && (
+          <button disabled={busy} onClick={() => void cancel()}>
+            Cancel
+          </button>
+        )}
+        {back(s) !== s && (
           <button disabled={busy} onClick={() => setS(back)}>
             Back
           </button>
@@ -235,24 +270,37 @@ function Welcome({ onPick }: { onPick: () => void }): React.JSX.Element {
  * mistake is pointing at a Downloads folder or at the parent of the notes. It
  * is a **soft** warning: an empty folder is a fine place to start.
  */
+const CONFIRM_HEADING = {
+  repair: "Where did your notes go?",
+  change: "Change your notes folder",
+  first: "Is this the right folder?",
+} as const;
+
 function ConfirmFolder({
   report,
-  repairing,
+  from,
   onPick,
 }: {
   report: FolderReport | null;
-  repairing: AppConfig | null;
+  from: From | null;
   onPick: () => void;
 }): React.JSX.Element {
   return (
     <>
-      <h2>{repairing ? "Where did your notes go?" : "Is this the right folder?"}</h2>
-      {repairing && !report && (
+      <h2>{CONFIRM_HEADING[from?.reason ?? "first"]}</h2>
+      {from?.reason === "repair" && !report && (
         <p className="lead">
-          Your notes were at <code>{repairing.notesPath}</code>, which is not there any
+          Your notes were at <code>{from.notesPath}</code>, which is not there any
           more. If the folder moved — or lives on a drive that is not plugged in — point
           GeodeMD at it again. Nothing has been lost: your review history lives beside
           your notes.
+        </p>
+      )}
+      {from?.reason === "change" && !report && (
+        <p className="lead">
+          Your notes are at <code>{from.notesPath}</code>. Choose the folder to use
+          instead. Nothing changes until you have previewed it, and you can cancel at any
+          point.
         </p>
       )}
       {report && (
@@ -276,7 +324,7 @@ function ConfirmFolder({
           )}
         </>
       )}
-      <button onClick={onPick}>Choose a different folder…</button>
+      <button onClick={onPick}>{report ? "Choose a different folder…" : "Choose folder…"}</button>
     </>
   );
 }
