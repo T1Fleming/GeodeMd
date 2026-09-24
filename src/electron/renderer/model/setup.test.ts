@@ -186,7 +186,7 @@ describe("walking the steps", () => {
   });
 });
 
-describe("previewReport", () => {
+describe("what the preview says would change", () => {
   it("reports notes edited from filesStamped, not from cardsNew", () => {
     // One file can hold fifty cards. `cardsNew` does not answer "how many of
     // my notes does this rewrite", which is the question being asked here.

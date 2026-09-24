@@ -19,7 +19,7 @@ const write = async (rel: string, text = "q :: a\n"): Promise<void> => {
   await fs.writeFile(path.join(dir, rel), text);
 };
 
-describe("inspectFolder", () => {
+describe("what the folder you chose contains", () => {
   it("counts the markdown files a sync would actually read", async () => {
     await write("aws/lambda.md");
     await write("sqlite/wal.md");
@@ -69,7 +69,7 @@ describe("inspectFolder", () => {
   });
 });
 
-describe("proposeConfig", () => {
+describe("what writing a config would change", () => {
   const configFile = (): string => path.join(dir, "config.json");
 
   it("proposes a fresh device and the default db path on a first run", async () => {

@@ -86,6 +86,23 @@ export interface SyncSummary {
   elapsedMs: number;
 }
 
+/** What `stats` answers. */
+export interface Counts {
+  total: number;
+  dueNow: number;
+  dueBeforeMidnight: number;
+  newCards: number;
+  /**
+   * True when *any* capped count stopped at `COUNT_CAP`.
+   *
+   * For a single figure this is redundant — a capped count is exactly equal to
+   * the limit, which is what `host`'s `countText` checks against `COUNT_CAP`. It exists for the SUMS
+   * both interfaces show: due-plus-new is a floor if either half is, and it can
+   * sit far above the cap while neither did.
+   */
+  capped: boolean;
+}
+
 export interface DueCard {
   id: string;
   question: string;
@@ -279,6 +296,18 @@ export class Core {
       summary.reviewsIngested = ingest.reviewsIngested;
       summary.logLinesSkipped = ingest.linesSkipped;
     }
+
+    /**
+     * Fold the write-ahead log back in before handing the process back.
+     *
+     * A sync of a large collection leaves a large WAL, and SQLite folds it in on
+     * whichever write comes next — which, in a review session, is the user's
+     * first rating. ADR 0024 measured that as a 115–299 ms stall landing on a
+     * keypress. Paying it here puts the cost inside the operation that earned
+     * it, where a progress bar is already on screen, and it is best-effort:
+     * `checkpoint` never blocks on a reader.
+     */
+    if (!dryRun) this.store.checkpoint();
 
     summary.elapsedMs = Date.now() - started;
     return summary;
@@ -581,16 +610,29 @@ export class Core {
     return out;
   }
 
-  countDue(now: Date): number {
-    return this.store.countDue(now.toISOString());
+  /**
+   * How many cards are due, counting no further than `limit`.
+   *
+   * The limit is the caller's because it is a presentation decision — `host`'s
+   * `COUNT_CAP` — and because the cost of counting is proportional to the size
+   * of the due set, not the collection (ADR 0024). `core` reads no policy of
+   * its own, here as everywhere.
+   */
+  countDue(now: Date, limit: number): number {
+    return this.store.countDue(now.toISOString(), limit);
   }
 
   /**
    * Append to the log, fsync, THEN update SQLite. A crash between the two
    * leaves the DB behind by one review, which the next ingest repairs; the
    * reverse order loses the review outright.
+   *
+   * **Returns the resulting state**, which is the only way a caller can learn
+   * that the scheduler wants this card again in ten minutes. Recomputing it
+   * outside would mean a second copy of the fold, and the two would disagree
+   * the first time either changed (ADR 0023).
    */
-  async reviewCard(cardId: string, rating: 1 | 2 | 3 | 4, now: Date): Promise<void> {
+  async reviewCard(cardId: string, rating: 1 | 2 | 3 | 4, now: Date): Promise<CardState> {
     const previous = this.store.getState(cardId) ?? null;
     const at = files.formatAt(now);
 
@@ -610,22 +652,45 @@ export class Core {
       this.store.insertReview(cardId, at, rating);
       this.store.putState(cardId, next);
     });
+    return next;
   }
 
-  stats(now: Date): {
-    total: number;
-    dueNow: number;
-    dueBeforeMidnight: number;
-    newCards: number;
-  } {
+  /**
+   * The four counts, with every unbounded one stopping at `limit`.
+   *
+   * `limit` is an argument for the same reason `now` is: it is policy, and
+   * `core` takes its policy from the caller. Both interfaces pass `host`'s
+   * `COUNT_CAP` (ADR 0024).
+   *
+   * `total` is the one count not capped: it is a fact about the collection
+   * rather than about a backlog, and every other figure here counts a set the
+   * user's own habits can make arbitrarily large.
+   */
+  stats(now: Date, limit: number): Counts {
     const midnight = new Date(now);
     midnight.setHours(24, 0, 0, 0);
+    const dueNow = this.store.countDue(now.toISOString(), limit);
+    const dueBeforeMidnight = this.store.countDueBefore(midnight.toISOString(), limit);
+    const newCards = this.store.countNew(limit);
     return {
       total: this.store.countCards(),
-      dueNow: this.store.countDue(now.toISOString()),
-      dueBeforeMidnight: this.store.countDueBefore(midnight.toISOString()),
-      newCards: this.store.countNew(),
+      dueNow,
+      dueBeforeMidnight,
+      newCards,
+      capped: dueNow >= limit || dueBeforeMidnight >= limit || newCards >= limit,
     };
+  }
+
+  /**
+   * Fold the write-ahead log back into the database.
+   *
+   * `sync` already does this before it returns (ADR 0024); this is for a caller
+   * that wants the same guarantee without running one — the scale harness
+   * measures each operation from a database that owes nothing, because
+   * otherwise the first write pays for the previous run's pages.
+   */
+  checkpoint(): void {
+    this.store.checkpoint();
   }
 
   /**

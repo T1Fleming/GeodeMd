@@ -12,7 +12,7 @@ import {
 } from "./present.js";
 import type { SyncSummary } from "../core/index.js";
 
-describe("interpretKey", () => {
+describe("what a keypress means", () => {
   it("maps 1-4 to ratings", () => {
     expect(interpretKey("1")).toEqual({ kind: "rate", rating: 1 });
     expect(interpretKey("4")).toEqual({ kind: "rate", rating: 4 });
@@ -81,7 +81,7 @@ describe("the shared vocabulary", () => {
   });
 });
 
-describe("ratingBreakdown", () => {
+describe("which ratings a session summary mentions", () => {
   it("stays quiet about ratings that were never given", () => {
     const counts = { ...emptyCounts(), 3: 5 };
     expect(ratingBreakdown(counts)).toEqual([{ label: "good", count: 5 }]);
@@ -121,7 +121,7 @@ const summary = (over: Partial<SyncSummary> = {}): SyncSummary => ({
 
 const keys = (s: SyncSummary): string[] => summaryFields(s).map((f) => f.key);
 
-describe("summaryFields", () => {
+describe("which counts a sync summary shows", () => {
   it("always reports the core counts, even at zero", () => {
     // `0 updated` earns its place: it is how you tell a run that found nothing
     // to do from one that did not look.
@@ -171,7 +171,7 @@ describe("summaryFields", () => {
   });
 });
 
-describe("deferralReason", () => {
+describe("why a freshly-edited file was left alone", () => {
   it("says nothing when nothing was deferred", () => {
     expect(deferralReason(summary())).toBeNull();
   });
@@ -187,13 +187,13 @@ describe("deferralReason", () => {
   });
 
   it("leaves what to do about it to the interface", () => {
-    // The CLI appends "run `geode sync` again"; a window with a Sync button
+    // A terminal would append "run it again"; a window with a Sync button
     // must not say that, which is the whole reason this stops short.
     expect(deferralReason(summary({ filesDeferred: 1 }))!).not.toContain("geode");
   });
 });
 
-describe("PHASE_LABEL", () => {
+describe("what each sync phase is called", () => {
   it("names every phase core can report", () => {
     // A missing one renders as `undefined` in a progress bar, which is how a
     // new phase would announce itself.

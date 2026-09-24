@@ -28,7 +28,7 @@ async function write(rel: string, content: string): Promise<void> {
   await fs.writeFile(abs, content, "utf8");
 }
 
-describe("enumerate", () => {
+describe("walking the notes tree", () => {
   it("returns .md files with paths relative to the root", async () => {
     await write("a.md", "x");
     await write("sub/b.md", "y");
@@ -117,7 +117,7 @@ describe("enumerate", () => {
   });
 });
 
-describe("writeIfUnchanged", () => {
+describe("refusing to write over someone else's edit", () => {
   it("writes and returns the POST-write stat", async () => {
     await write("a.md", "old");
     const before = (await statFile(root, "a.md"))!;
@@ -222,7 +222,7 @@ describe("the review log", () => {
   });
 });
 
-describe("readShardFrom", () => {
+describe("reading a log shard from where it left off", () => {
   it("reads from an offset only", async () => {
     await write(".sr/log/a.jsonl", "one\ntwo\nthree\n");
     const { text, consumed } = await readShardFrom(root, "a.jsonl", 4);
@@ -261,7 +261,7 @@ describe("readShardFrom", () => {
  * note someone meant to keep. Those are not symmetric, which is why the
  * patterns are narrow and the result is reported rather than skipped quietly.
  */
-describe("isSyncConflict", () => {
+describe("recognising a syncer's conflict copy", () => {
   it("catches Syncthing's shape", () => {
     expect(isSyncConflict("aws/lambda.sync-conflict-20260101-120000-ABCDEFG.md")).toBe(true);
     expect(isSyncConflict("lambda.sync-conflict-20260101-120000-7k2x9qz.md")).toBe(true);

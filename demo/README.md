@@ -14,10 +14,6 @@ archive/old-notes.md a note with no cards at all
 
 ```sh
 cp -r demo ~/geode-demo
-geode init ~/geode-demo
-geode sync --dry-run    # look first: this is the habit worth having
-geode sync
-geode review
 ```
 
 **Copy rather than syncing in place.** A sync writes a stamp into every card

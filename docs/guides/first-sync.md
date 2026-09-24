@@ -2,11 +2,11 @@
 
 If your notes already exist — a vault you have been writing in for years, a folder of technical notes, anything — the first real sync **edits every file that contains a card**. This guide is how to see what that means before it happens.
 
-If you are starting from an empty folder, none of this applies. Write a card, run `geode sync`, carry on.
+If you are starting from an empty folder, none of this applies. Write a card, sync, carry on.
 
 To rehearse it on something harmless, copy [`demo/`](../../demo/) and point GeodeMD at that — it is a real collection with 23 cards and the same stakes at a smaller scale.
 
-**If you are using the app rather than the CLI, it walks you through all of this on first launch** — it counts the Markdown files in the folder you pick, shows you the settings before writing them, asks you to acknowledge that your notes will be edited, and makes the real sync unreachable until you have run a preview. The rest of this guide is the same sequence at the command line, and is worth reading either way: the app can show you the numbers, but only you know whether they are the ones you expected.
+**The app walks you through all of this on first launch** — it counts the Markdown files in the folder you pick, shows you the settings before writing them, asks you to acknowledge that your notes will be edited, and makes the real sync unreachable until you have run a preview. This guide is what those steps mean, and is worth reading anyway: the app can show you the numbers, but only you know whether they are the ones you expected.
 
 ## What the first sync does
 
@@ -22,13 +22,9 @@ On a collection with a few hundred cards spread over a hundred notes, that is a 
 
 ## Look before it writes
 
-In the app this is the **Preview** button on the last step of first-run setup, and on the Sync screen afterwards. At the command line:
+The **Preview** button, on the last step of first-run setup and on the Sync screen afterwards.
 
-```sh
-geode sync --dry-run
-```
-
-This writes nothing — not a stamp, not a database row — and reports exactly what the real run would do:
+A preview writes nothing — not a stamp, not a database row — and reports exactly what the real run would do:
 
 ```
 dry run — nothing was written
@@ -63,7 +59,7 @@ That list is longer than it looks like it needs to be, for exactly the reason th
 Nothing has been written yet, so you have options:
 
 - **Move the notes you do not want synced** out of the directory, or into a dotted folder — anything under a `.` directory is skipped entirely.
-- **Point GeodeMD at a subdirectory** instead: `geode init ~/notes/flashcards`.
+- **Point GeodeMD at a subdirectory** instead — `~/notes/flashcards` rather than `~/notes`.
 - **Change the lines**, if a handful of notes use ` :: ` for something else.
 
 ## Commit first
@@ -74,9 +70,7 @@ If they are not in version control, take a copy of the folder.
 
 ## Then run it
 
-```sh
-geode sync
-```
+**Sync**, on the Sync screen.
 
 The counts should match the dry run. Now check one file:
 
@@ -88,7 +82,7 @@ Every changed line should differ only by a trailing `<!-- sr-... -->`. Nothing e
 
 ## What happens afterwards
 
-Sync again after you edit notes — that is the contract. `geode review` deliberately does not walk your notes, so a review session stays fast no matter how large the collection gets, which means it shows you the text from your last sync.
+Sync again after you edit notes — that is the contract. Reviewing deliberately does not walk your notes, so a review session stays fast no matter how large the collection gets, which means it shows you the text from your last sync.
 
 From here the first sync never repeats. Later syncs only read what changed, and a sync that finds nothing changed writes nothing at all.
 
@@ -96,9 +90,9 @@ From here the first sync never repeats. Later syncs only read what changed, and 
 
 Nothing breaks. The app notices on launch that the folder it was pointed at is gone — a moved directory, an external drive that is not plugged in — and offers to repoint it rather than treating you as a new user. Your device name and editor setting are kept, which matters more than it sounds: regenerating the device name would start a second review log and split this machine's history across two files.
 
-At the command line the equivalent is `geode init <new-path> --force`, which preserves the same two fields for the same reason.
+Pointing the app at a new folder does the same, and preserves the same two fields for the same reason.
 
 ## See also
 
 - [When something looks wrong](recovery.md) — the database is a cache, and rebuilding it is safe
-- [`geode` commands and flags](../reference/configuration.md)
+- [Config file keys](../reference/configuration.md)

@@ -8,6 +8,7 @@
  */
 
 import { useCallback, useEffect, useState } from "react";
+import { backlogCapped, countText } from "../../host/present.js";
 import type { Stats as StatsData } from "../ipc.js";
 
 export function Stats(): React.JSX.Element {
@@ -36,14 +37,17 @@ export function Stats(): React.JSX.Element {
     <main className="screen">
       <h2>Collection</h2>
       <div className="tiles">
-        <Tile value={data.dueNow} label="due now" strong />
-        <Tile value={data.newCards} label="new" strong />
-        <Tile value={data.dueBeforeMidnight} label="due before midnight" />
-        <Tile value={data.total} label="cards in total" />
+        {/* `10000+` when a count stopped at the cap (ADR 0024) — `countText` is
+            host's, so a capped count reads the same wherever it is shown. The
+            total is the one figure that is never capped. */}
+        <Tile value={countText(data.dueNow)} label="due now" strong />
+        <Tile value={countText(data.newCards)} label="new" strong />
+        <Tile value={countText(data.dueBeforeMidnight)} label="due before midnight" />
+        <Tile value={String(data.total)} label="cards in total" />
       </div>
       <p className="muted lead">
         {data.dueNow + data.newCards > 0
-          ? `${data.dueNow + data.newCards} waiting for you.`
+          ? `${countText(data.dueNow + data.newCards, backlogCapped(data))} waiting for you.`
           : "Nothing waiting. New cards appear here after a sync."}
       </p>
     </main>
@@ -55,7 +59,8 @@ function Tile({
   label,
   strong = false,
 }: {
-  value: number;
+  /** Text, not a number: a capped count reads `10000+`. */
+  value: string;
   label: string;
   strong?: boolean;
 }): React.JSX.Element {

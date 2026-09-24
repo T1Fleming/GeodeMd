@@ -4,7 +4,7 @@
  * `core` runs here rather than in a utility process — measured, not assumed;
  * see ADR 0017. The decision rests on `core`'s long operations being chunked,
  * so a change that introduces one long synchronous span invalidates it and the
- * bench in `measure.bench.ts` is how you find out.
+ * bench in `src/measure/bench.ts` is how you find out.
  */
 
 import { app, BrowserWindow, dialog, ipcMain, net, protocol, shell } from "electron";
@@ -20,6 +20,7 @@ import type { FileConfig } from "../../host/config.js";
 import { inspectFolder, proposeConfig } from "../../host/setup.js";
 import { OpenedNotes, resolveEditor } from "../../host/editor.js";
 import { classify, isBusy } from "../../host/errors.js";
+import { COUNT_CAP } from "../../host/present.js";
 import { openCore, readAppConfig } from "../../host/open.js";
 import { CH } from "../ipc.js";
 import type {
@@ -34,6 +35,7 @@ import type {
 } from "../ipc.js";
 import { openDetached } from "./open.js";
 import { Runner } from "./runs.js";
+import { counts, dueCards } from "./reads.js";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
@@ -132,17 +134,20 @@ function register(): void {
     }),
   );
 
+  // Both reads ingest the log first — see `reads.ts`. Without it the app never
+  // notices a review answered on another machine, and never repairs the
+  // one-review gap a crash leaves behind.
   ipcMain.handle(CH.statsRead, () =>
     guard<Stats>(async () => {
       const c = await ensureCore();
-      return c.stats(new Date());
+      return counts(c, new Date(), COUNT_CAP);
     }),
   );
 
   ipcMain.handle(CH.cardsDue, (_e, limit: number) =>
     guard(async () => {
       const c = await ensureCore();
-      return c.getDueCards(new Date(), limit);
+      return dueCards(c, new Date(), limit);
     }),
   );
 
@@ -150,13 +155,16 @@ function register(): void {
     guard<Rated>(async () => {
       const c = await ensureCore();
       try {
-        await c.reviewCard(cardId, rating, new Date());
-        return { applied: "db" };
+        const next = await c.reviewCard(cardId, rating, new Date());
+        // Only what a session needs. `CardState` carries stability, difficulty
+        // and the rest, and none of it belongs on a wire type that exists to
+        // answer "when do I show this again?".
+        return { applied: "db", next: { due: next.due, state: next.state } };
       } catch (err) {
         // The rating is already fsynced to the log, so a busy database is not a
         // failure — the next ingest reconciles it. Reported as success with a
         // qualifier so the UI can say so quietly and move on.
-        if (isBusy(err)) return { applied: "log-only" };
+        if (isBusy(err)) return { applied: "log-only", next: null };
         throw err;
       }
     }),

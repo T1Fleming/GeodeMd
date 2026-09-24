@@ -7,7 +7,7 @@ import { openDetached } from "./open.js";
  * swallowed, that the call returns before the child exits, and that the app is
  * not held open by it — are all properties of the actual spawn.
  */
-describe("openDetached", () => {
+describe("launching an editor without holding the app open", () => {
   it("reports an editor that is not installed, rather than claiming success", async () => {
     // ENOENT arrives asynchronously, so a version that resolved immediately
     // would report `launched: true` for an editor nobody has.

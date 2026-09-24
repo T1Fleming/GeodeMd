@@ -103,6 +103,60 @@ export function interpretKey(key: string): KeyAction {
   return { kind: "ignore" };
 }
 
+/**
+ * How far a count of a backlog goes before it stops and says "at least".
+ *
+ * A count of what is due costs a row probe per due card, and a count of what is
+ * new costs an index entry each: at a million cards with a large backlog `stats`
+ * measured 632 ms, which is two thirds of a second of frozen main process for
+ * four numbers on a screen ([ADR 0024](../../docs/decisions/0024-remeasure-the-main-process-stall.md)).
+ * Both counts are over sets whose size the user's own habits set, so the bound
+ * is not an optimisation — it is the only thing that makes the cost knowable.
+ *
+ * Ten thousand because the exact size of a backlog stops being actionable long
+ * before it: "10000+ due" and "38661 due" ask for the same thing, and the first
+ * costs about 5 ms.
+ *
+ * It lives **here** rather than in `core` for two reasons that happen to agree.
+ * It is a decision about what to show, which is what this module is for; and
+ * `core` takes its policy as arguments — `stats(now, limit)` — which is what
+ * keeps this file free of any runtime import from `core`. That matters more
+ * than it looks: the renderer imports this module, and a value import from
+ * `core` would pull `better-sqlite3` into a browser bundle. It did, once.
+ */
+export const COUNT_CAP = 10_000;
+
+/**
+ * A count that may have stopped early, as text.
+ *
+ * `stats` stops counting what is due at `COUNT_CAP` rather than freezing the
+ * main process over a backlog (ADR 0024), which means a number that needs a
+ * qualifier — and a qualifier is exactly the kind of thing two interfaces would
+ * each invent for themselves. One of them would say `10000+`, the other
+ * `over 10000`, and a screenshot from either would look right.
+ *
+ * A single count needs no flag: one that stopped early is exactly equal to the
+ * cap, which is the default below. The flag is for the SUMS both interfaces
+ * show — due-plus-new is a floor if either half is, and it can sit far above the
+ * cap while neither of them did.
+ */
+export function countText(n: number, capped: boolean = n >= COUNT_CAP): string {
+  return capped ? `${n}+` : String(n);
+}
+
+/**
+ * Whether due-plus-new is a floor, for `countText`'s `capped` argument.
+ *
+ * `Counts.capped` is one flag OR'd across all three of `dueNow`,
+ * `dueBeforeMidnight` and `newCards` — right for deciding whether *anything*
+ * stopped early, wrong for a caller summing only two of the three. A backlog
+ * a thousand cards over the cap on `dueBeforeMidnight` alone must not turn an
+ * exact `dueNow + newCards` into a floor it never was.
+ */
+export function backlogCapped(counts: { dueNow: number; newCards: number }): boolean {
+  return counts.dueNow >= COUNT_CAP || counts.newCards >= COUNT_CAP;
+}
+
 /** Ratings given in a session, by rating. */
 export interface RatingCounts {
   1: number;
@@ -201,7 +255,8 @@ export function summaryFields(s: SyncSummary): SummaryField[] {
  * be open in an editor and nothing is minted into it.
  *
  * The explanation is here; **what to do about it is not**, because that is the
- * one part that genuinely differs — the CLI says to run `geode sync` again,
+ * one part that genuinely differs — a terminal would say to run the command
+ * again,
  * and a window with a Sync button in it should not be telling anyone to open a
  * terminal.
  */

@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "rebuild": "electron-rebuild -f -w better-sqlite3",
-    "measure": "electron dist/electron/measure.bench.js",
+    "measure": "electron dist/measure/bench.js",
     "start": "electron dist/electron/main/index.js",
     "postinstall": "electron-rebuild -f -w better-sqlite3",
     "build:renderer": "vite build",
@@ -40,6 +40,7 @@
     "files": [
       "dist/**/*",
       "!dist/shots${/*}",
+      "!dist/measure${/*}",
       "package.json"
     ],
     "asarUnpack": [

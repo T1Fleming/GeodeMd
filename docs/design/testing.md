@@ -20,6 +20,28 @@ That total assertion is what removing the tombstone columns bought ([ADR 0010](.
 
 It rests on the pinned scheduler parameters: **read a failure here as scheduler nondeterminism before assuming it is an ingest bug.**
 
+## The journeys
+
+`src/journeys/` is the outer tier: **one file per guide in `docs/guides/`**, and every test in it is anchored to a claim that guide makes. They read the guide — its tables, its fenced examples, its sentences — and check what they find against real behaviour on a real temp collection with a file-backed database.
+
+This is where the idea in `demo.test.ts` goes next. That test exists because `demo/geodemd/syntax.md` claims a set of shapes are skipped and something had to keep the claim honest; the journeys point the same idea at the documentation users actually read. The reviewing guide's key table is checked against `host`'s tables, its interval table against the real scheduler, the recovery guide's log path against `files`, and the two conflict-copy filenames the moving-notes guide promises to recognise — plus the two it promises *not* to — against `isSyncConflict`.
+
+The tier earns being separate only while it stays small and user-shaped, so four rules in `boundaries.test.ts` hold it there. A journey must read its guide, must name every group as a sentence rather than after a function, must assert something in every test, and must never reach into the store to prove a claim. Those are the guarantees a Gherkin layer would have given by grammar; here they are the same source scan as every other boundary, with no second runner and no step definitions. Each was checked by breaking it on purpose.
+
+**What is deliberately not here.** The mechanisms: `host/queue.test.ts` covers the queue, `sync.test.ts` covers stamping, `rebuild.test.ts` covers the identity of a rebuild. A journey that re-proved those would be a slow second copy of the suite.
+
+## The behaviour index
+
+`npm test` writes [behaviours.md](behaviours.md) — every `describe` and `it` in the suite, assembled into twelve areas that follow [the guides](../guides/) rather than the source tree. It exists because the suite is organised by module, which is right for the code and useless for the question *what does this app do*: `0 later` is asserted in six files.
+
+Three things make it worth having rather than a curiosity:
+
+- **It is written by the test run**, not by a script someone remembers to run. A behaviour change lands in the diff next to the code that caused it, and a stale copy shows up as an uncommitted change.
+- **An unclassified group fails the suite.** `src/behaviours/areas.test.ts` asserts that every test file and every top-level `describe` maps to an area, that overrides still name files and groups that exist, and that its own source scan finds something in every file. That last one immediately caught the scan missing `describe.skipIf(...)`.
+- **Group names are behaviour, not functions.** `describe("the order cards are served in")`, not `describe("getDueCards")` — the index is only as readable as the names in it, and about half of them were function names before this existed.
+
+Two limits worth stating. It lists what is **tested**, so a thin area is thinly covered rather than simple — read it as a coverage lens as much as a catalogue. And it writes nothing when the run is filtered to a subset, because otherwise `vitest run one.test.ts` would replace the index with one file's behaviours.
+
 ## The boundaries test
 
 `src/boundaries.test.ts` asserts the module rules by scanning source text — see [module-map.md](module-map.md). It is a test, not a compile step; `npm run build` will happily compile a violation.
@@ -51,5 +73,9 @@ GEODE_BENCH=1 GEODE_BENCH_TREE=/path/to/a/real/vault npx vitest run src/files/en
 ```
 
 It runs every strategy in **one process against one tree**, because the figures that turned out to be wrong came from a different machine on a different day. It uses two tree shapes — 100 files per directory and 4 — because the narrow one is what a vault of topic folders looks like and is where per-directory concurrency collapses; reporting only the wide shape would be the flattering version of the benchmark. Median of five runs after a discarded warm-up, since one page-cache miss skews a mean.
+
+**One untestable surface was removed rather than tested**, and it is worth recording which way that went. The CLI's review loop needed a TTY, so nothing in the suite could enter it, and that is where the `escape` bug lived for months: `host` said escape quits, the app quit, and the terminal silently revealed the answer instead, because the one line translating readline's `(str, key)` pair into what `host` speaks was unreachable by any test. The fix was priced — a pseudo-terminal harness and a native dependency — and then the interface it protected was deleted instead ([ADR 0025](../decisions/0025-the-app-is-the-only-interface.md)). The coverage hole closed by subtraction.
+
+What remains of that lesson: the app's equivalent surface — real keypresses against a real window — **is** covered, by the renderer self-test below, and that is the only reason the equivalent bug cannot hide there.
 
 **The file-descriptor question is deliberately not a test.** A bounded pool cannot exhaust descriptors by construction, a suite that must stay around a second cannot prove it honestly, and mocking `fs` would contradict a repo that has no mocks anywhere. Run the suite under `ulimit -n 128` by hand instead — that is the available evidence, and it passes.

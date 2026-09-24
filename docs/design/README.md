@@ -13,11 +13,14 @@ For *why* a decision went the way it did, and what it beat, see [`docs/decisions
 | [data-model.md](data-model.md) | The review log, the five tables, connection settings, rebuild |
 | [sync.md](sync.md) | The seven sync steps, invariants, failure handling, `--dry-run` / `--full` |
 | [review-flow.md](review-flow.md) | Queue construction, recording a review, the loop, stats |
-| [app.md](app.md) | The Electron app: the IPC contract, long runs, what it shares with the CLI |
+| [app.md](app.md) | The Electron app — the only interface: the IPC contract, long runs, what it takes from `host` |
 | [testing.md](testing.md) | The five expensive places, the boundaries test, the scale harness |
+| [behaviours.md](behaviours.md) | **Generated** — every behaviour the suite checks, by area. What this app does, and where that is proven |
 | [releasing.md](releasing.md) | Packaging, signing, and the checklist before a build goes out |
 
 Configuration is documented in [`docs/reference/configuration.md`](../reference/configuration.md).
+
+**One of these is generated.** [behaviours.md](behaviours.md) is written by `npm test` and must not be edited by hand — see [testing.md](testing.md#the-behaviour-index). Every other document here is written and maintained like prose.
 
 ## Reading source citations
 

@@ -18,23 +18,21 @@ The database holds **no column that does not come from one of those two**. Card 
 
 ## Rebuilding
 
-```sh
-geode rebuild
-```
+**Sync → Rebuild.** It asks first, because on a large collection it takes minutes and cannot be stopped once started.
 
-Drops every table and reconstructs the database from your notes and your logs. The test suite asserts this by comparing every table before and after, with no exceptions — that assertion is the reason the claim above is safe to make.
+It drops every table and reconstructs the database from your notes and your logs. The test suite asserts this by comparing every table before and after, with no exceptions — that assertion is the reason the claim above is safe to make.
 
 It is slower than a normal sync, because it re-reads everything and replays every review you have ever given. On a large collection, minutes rather than milliseconds. It is the recovery path, not a routine one.
 
 ## When to reach for it
 
-**Counts look wrong.** `geode stats` disagrees with what you expect, or a card you know you have is not appearing.
+**Counts look wrong.** The Collection tab disagrees with what you expect, or a card you know you have is not appearing.
 
 **The database file is gone, or you deleted it.** Nothing is lost. Rebuild.
 
 **You restored an old backup of the database.** Rebuild rather than trusting it — the log has the truth about what you reviewed, and the backup does not.
 
-**After moving your notes directory.** Run `geode init <new path> --force`, then `geode rebuild`.
+**After moving your notes directory.** Point GeodeMD at the new folder — it offers to replace the config and keeps your device name — then Rebuild.
 
 **You are not sure.** Rebuilding cannot lose review history, because it reads that history from the log rather than from the database. The worst case is that it takes a few minutes.
 

@@ -46,6 +46,15 @@ async function click(sel: string, label: string): Promise<void> {
   await settle();
 }
 
+/**
+ * The counter's denominator: answers this sitting still owes.
+ *
+ * Worth reading rather than just the position, because it is the only visible
+ * evidence that a rated card was re-queued — the re-show itself is ten minutes
+ * of wall clock away and cannot be driven from here (ADR 0023).
+ */
+const owedNow = (): number => Number(text(".meta span").split("/")[1]?.trim());
+
 /** Wait for something to appear rather than for a timer. */
 async function until(sel: string, tries = 60): Promise<boolean> {
   for (let i = 0; i < tries && !exists(sel); i++) await settle(50);
@@ -144,11 +153,25 @@ export async function runSelfTest(): Promise<void> {
       text(".toast"),
     );
 
+    // Whether the collection holds more than this sitting serves. The backlog
+    // chip is the app's own answer to that, so the check below can hold the
+    // finished screen to it rather than to a number hard-coded here.
+    const biggerThanOneSitting = exists(".backlog");
+    const owedBefore = owedNow();
     await key("3");
     await settle(200);
     check("rating advances to the next card", text(".question") !== first, text(".question"));
     check("and hides the answer again", !exists(".answer"));
     check("the counter advanced", text(".meta").startsWith("2 /"), text(".meta"));
+    // A new card rated `good` is due again in ten minutes, so the sitting owes
+    // one more answer than it did. The second sighting cannot be driven from
+    // here; the total growing is the evidence that it was queued rather than
+    // computed and thrown away, which is what this used to do.
+    check(
+      "a card rated good is owed a second answer in the same sitting",
+      owedNow() === owedBefore + 1,
+      `${owedBefore} -> ${owedNow()}`,
+    );
 
     // A digit before the reveal must not record a rating for an answer the
     // user has not seen.
@@ -161,6 +184,18 @@ export async function runSelfTest(): Promise<void> {
     check("q ends the session", exists(".done"), text(".done h2"));
     check("the tally counts only answered cards", text(".done h2").startsWith("1 reviewed"), text(".done h2"));
 
+    // What replaced the CLI's `-n 200` (ADR 0025): another sitting, offered only
+    // when there is more than this one served. Checked in both directions,
+    // because "the button is missing" and "the button is always there" are both
+    // wrong and only one of them is visible in a screenshot.
+    check(
+      biggerThanOneSitting
+        ? "a collection bigger than one sitting offers another"
+        : "a finished collection offers no more sittings",
+      exists(".done .more") === biggerThanOneSitting,
+      `backlog chip: ${biggerThanOneSitting}, button: ${exists(".done .more")}`,
+    );
+
     // The end-of-session check is an IPC round trip that stats every opened
     // note, so the screen renders before the answer arrives. Wait for it
     // rather than for a timer — and note this only has anything to report
@@ -168,10 +203,31 @@ export async function runSelfTest(): Promise<void> {
     for (let i = 0; i < 40 && !exists(".stale"); i++) await settle(50);
     check(
       "a note edited during the session is named at the end",
-      text(".stale").includes(".md") && text(".stale").includes("geode sync"),
+      text(".stale").includes(".md") && text(".stale").includes("sync"),
       text(".stale"),
     );
     await shot("review-03-done");
+
+    // And clicking it really starts a new sitting. The risky part is not the
+    // button, it is that `Review` holds its session in a `useState` initialiser
+    // — so without the `key` that resets the component, a second sitting would
+    // draw the new queue against the old session and the counter would not
+    // return to 1.
+    if (biggerThanOneSitting) {
+      await click(".done .more", "Review more");
+      const back = await until(".question");
+      check("clicking it starts a new sitting", back, text(".question"));
+      check(
+        "and the counter starts over rather than continuing the last one",
+        text(".meta").startsWith("1 /"),
+        text(".meta"),
+      );
+      await shot("review-04-another-sitting");
+      // Leave the screen as the rest of this run expects: finished, not mid-card.
+      await key("q");
+      await settle(200);
+    }
+
 
     await runSyncChecks();
     await runStatsChecks();
@@ -259,9 +315,12 @@ async function runStatsChecks(): Promise<void> {
     labels.includes("due now") && labels.includes("due before midnight"),
     labels.join(" / "),
   );
+  // A trailing `+` is allowed and is not a formatting slip: a count that
+  // stopped at `COUNT_CAP` reads `10000+` (ADR 0024). Nothing caps on a
+  // 23-card collection, so this run should see plain digits.
   check(
     "the numbers are numbers",
-    all(".tile .value").every((v) => /^\d+$/.test(v)),
+    all(".tile .value").every((v) => /^\d+\+?$/.test(v)),
     all(".tile .value").join(" / "),
   );
   await shot("stats-01");
@@ -398,6 +457,13 @@ async function runHelpChecks(): Promise<void> {
   check(
     "including the one about the first sync, which is the one that matters",
     titles.some((x) => x.toLowerCase().includes("first sync")),
+    titles.join(" / "),
+  );
+  // Nothing in this window explains `1 2 3 4` or `0` on its own, and a user who
+  // installed a .dmg has no README to fall back on (ADR 0020).
+  check(
+    "and the one that explains the review keys",
+    titles.some((x) => x.toLowerCase() === "reviewing"),
     titles.join(" / "),
   );
 

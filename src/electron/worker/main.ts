@@ -6,6 +6,7 @@
  * Milestone 1 scope: enough to measure, not enough to ship. Two commands.
  */
 
+import { COUNT_CAP } from "../../host/present.js";
 import { openCore, readAppConfig } from "../../host/open.js";
 import type { Core } from "../../core/index.js";
 import type { Store } from "../../store/index.js";
@@ -34,7 +35,7 @@ async function handle(cmd: WorkerCommand): Promise<WorkerReply> {
   switch (cmd.t) {
     case "stats": {
       const { core: c } = await ensureOpen(cmd.configFile);
-      return { t: "stats", id: cmd.id, value: c.stats(new Date()) };
+      return { t: "stats", id: cmd.id, value: c.stats(new Date(), COUNT_CAP) };
     }
     case "sync": {
       const { core: c } = await ensureOpen(cmd.configFile);

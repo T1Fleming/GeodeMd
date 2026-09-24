@@ -518,7 +518,7 @@ describe("prune", () => {
     // The assertion that `reviewed` was restored from card_state, not defaulted.
     expect(card.reviewed).toBe(1);
     expect(store.getState(id)).toEqual(state);
-    expect(store.countNew()).toBe(0);
+    expect(store.countNew(1000)).toBe(0);
   });
 });
 

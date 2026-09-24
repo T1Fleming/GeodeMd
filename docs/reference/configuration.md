@@ -1,6 +1,6 @@
 # Configuration
 
-One JSON file, read in exactly one place — `src/cli/config.ts`. `core` never reads the filesystem for config and never touches `process.env`.
+One JSON file, read in exactly one place — `src/host/config.ts`. `core` never reads the filesystem for config and never touches `process.env`.
 
 ## Location
 
@@ -49,24 +49,9 @@ The value is split on whitespace, so `"code -w"` works. It is deliberately **not
 
 Line-jumping is applied only for editors that are recognised — `vim +142`, `code --goto file:142`, `hx file:142` and similar. An unrecognised editor is handed the file alone, because passing an unknown program `+142` risks creating a file by that name.
 
-**The same key is used by both interfaces.** `o` in `geode review` and the app's **open** button run the same program with the same arguments. They differ in one respect you may notice: the CLI waits for the editor to exit, because a terminal editor has taken over the window, while the app launches it and carries on. So `"editor": "vim"` works in the terminal and, in the app, starts a `vim` you have no terminal to type into — set a GUI editor if you review in the app.
+**Set a GUI editor.** GeodeMD launches it and carries on rather than waiting for it to close, so you can keep reviewing with the note open beside you — but `"editor": "vim"` therefore starts a `vim` in a window you have no terminal to type into.
 
-## `geode init`
+## Where the config comes from
 
-```
-geode init <notesPath> [--force]
-```
+There is no command to write it: the app's **first run** does, after showing you the folder it counted, the settings it proposes, and a preview of what the sync would change. Pointing GeodeMD at a different folder later offers to replace the config, and **preserves `device` and `editor`** when it does — re-pointing it should not silently discard a setting it never asked about.
 
-Writes the config file, so a first run is not "hand-author some JSON". It **refuses to overwrite an existing config unless `--force`**, and preserves `device` and `editor` even then.
-
-It prints two lines of advice before exiting: commit the notes directory first if it is under version control, then run `geode sync --dry-run`. The first real sync stamps every file holding a card, and that is much better learned from a dry run than from a diff.
-
-## Exit codes
-
-| Code | Meaning |
-|---|---|
-| `0` | Success — **including** a run that skipped unreadable files. A skip is a reported outcome, not a failure; making it non-zero would break every script the first time one note has bad permissions. |
-| `1` | Configuration or usage error: no config, a `notesPath` that is missing or not a directory, `review` without a TTY. |
-| `2` | Unexpected internal error. |
-
-Partial failure is communicated in the run summary, not in the exit status.

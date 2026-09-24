@@ -16,6 +16,8 @@ import { Setup } from "./Setup.js";
 import { Stats } from "./Stats.js";
 import { Sync } from "./Sync.js";
 import type { Session } from "./model/session.js";
+import type { Scheduled } from "../../host/queue.js";
+import { backlogCapped } from "../../host/present.js";
 
 declare global {
   interface Window {
@@ -132,17 +134,37 @@ type Screen =
   | { at: "loading" }
   | { at: "error"; message: string }
   | { at: "empty"; total: number }
-  | { at: "review"; queue: DueCard[]; backlog: number };
+  | { at: "review"; queue: DueCard[]; backlog: number; capped: boolean };
 
+/**
+ * How many cards one sitting materialises.
+ *
+ * A cap rather than a preference: the queue is fetched in full, and at a million
+ * cards materialising the backlog would be the expensive part of the session
+ * (see [review-flow](../../../docs/design/review-flow.md)). The CLI let you ask
+ * for more with `-n 200`; what replaced it is the "review more" button on the
+ * finished screen, which fetches the next batch instead of a bigger one.
+ */
 const LIMIT = 50;
 
 function ReviewScreen({ onNote }: { onNote: (m: string) => void }): React.JSX.Element {
   const [screen, setScreen] = useState<Screen>({ at: "loading" });
   /** Notes edited during the session. Null until the session ends. */
   const [stale, setStale] = useState<string[] | null>(null);
+  /**
+   * Bumped for each sitting, and used as the `Review` component's `key`.
+   *
+   * Without it a second sitting would draw against the first session's state:
+   * `begin(queue)` runs in a `useState` initialiser, which React does not re-run
+   * for a component it is reusing. The key is what makes "review more" a new
+   * session rather than a new queue inside an old one.
+   */
+  const [sitting, setSitting] = useState(0);
 
   const load = useCallback(async () => {
     setScreen({ at: "loading" });
+    setStale(null);
+    setSitting((n) => n + 1);
     const [due, stats] = await Promise.all([
       window.geode.cardsDue(LIMIT),
       window.geode.statsRead(),
@@ -150,25 +172,38 @@ function ReviewScreen({ onNote }: { onNote: (m: string) => void }): React.JSX.El
     if (!due.ok) return setScreen({ at: "error", message: due.message });
     if (!stats.ok) return setScreen({ at: "error", message: stats.message });
 
+    // A floor when the due count stopped at the cap (ADR 0024); the chip says so.
     const backlog = stats.value.dueNow + stats.value.newCards;
     if (due.value.length === 0) return setScreen({ at: "empty", total: stats.value.total });
-    setScreen({ at: "review", queue: due.value, backlog });
+    setScreen({ at: "review", queue: due.value, backlog, capped: backlogCapped(stats.value) });
   }, []);
 
   useEffect(() => {
     void load();
   }, [load]);
 
+  /**
+   * Record a rating, and hand back what the scheduler decided.
+   *
+   * The return value is what lets the session honour FSRS's short-term steps
+   * (ADR 0023): a new card rated anything but *easy* is due again in minutes
+   * and comes back in this sitting. Null means the new state is not known —
+   * the write failed, or the database was busy — and the card simply does not
+   * return today. The rating itself is safe in the log either way.
+   */
   const onRate = useCallback(
-    async (cardId: string, rating: 1 | 2 | 3 | 4) => {
+    async (cardId: string, rating: 1 | 2 | 3 | 4): Promise<Scheduled | null> => {
       const r = await window.geode.cardsReview(cardId, rating);
-      if (r.ok && r.value.applied === "log-only") {
+      if (!r.ok) {
+        onNote(r.message);
+        return null;
+      }
+      if (r.value.applied === "log-only") {
         // Not a failure: the rating is already fsynced to the log and the next
         // ingest reconciles the row. A dialog here would be a lie.
         onNote("saved — the database was busy and will catch up");
-      } else if (!r.ok) {
-        onNote(r.message);
       }
+      return r.value.next;
     },
     [onNote],
   );
@@ -217,12 +252,18 @@ function ReviewScreen({ onNote }: { onNote: (m: string) => void }): React.JSX.El
 
   return (
     <Review
+      key={sitting}
       queue={screen.queue}
       backlog={screen.backlog}
+      backlogCapped={screen.capped}
       stale={stale}
       onRate={onRate}
       onOpen={onOpen}
       onDone={onDone}
+      // Offered only when the collection holds more than this sitting served —
+      // the same condition as the backlog chip, and the replacement for the
+      // CLI's `-n` (ADR 0025).
+      onMore={screen.backlog > screen.queue.length ? () => void load() : undefined}
     />
   );
 }

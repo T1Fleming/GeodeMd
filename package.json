@@ -3,20 +3,17 @@
   "version": "0.1.0",
   "description": "Spaced repetition over an ordinary directory of Markdown files",
   "type": "module",
-  "bin": {
-    "geode": "dist/cli/index.js"
-  },
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "engines": {
     "node": ">=20"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "rm -rf dist && tsc",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
-    "build:desktop": "tsc -p tsconfig.desktop.json && npm --prefix desktop run build:renderer",
+    "build:desktop": "rm -rf desktop/dist && tsc -p tsconfig.desktop.json && npm --prefix desktop run build:renderer",
     "typecheck:renderer": "tsc -p src/electron/renderer/tsconfig.json"
   },
   "dependencies": {

@@ -47,7 +47,7 @@ Measured in one process against one tree, `enumerate()` only — **not extrapola
 
 The narrow shape is the realistic one for a vault of topic folders, and it is both slower per file and helped less — at four files per directory the serial `readdir` is a fifth of the syscalls rather than a hundredth.
 
-`statSync` measures faster still (2.69 and 5.91 µs/file) and is rejected anyway: it blocks the event loop for the length of the walk, and [ADR 0013](../decisions/0013-cli-and-electron-are-peers.md) makes the Electron app a peer interface over this same `core`, where that is a frozen UI rather than an invisible pause in a process about to exit.
+`statSync` measures faster still (2.69 and 5.91 µs/file) and is rejected anyway: it blocks the event loop for the length of the walk, and the interface over this `core` is a window ([ADR 0025](../decisions/0025-the-app-is-the-only-interface.md)), where that is a frozen UI rather than an invisible pause in a process about to exit.
 
 #### Cold cache
 

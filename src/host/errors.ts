@@ -7,9 +7,10 @@
  * become false on the far side. Classification therefore happens on the near
  * side, while the error is still itself, and what crosses is a plain tag.
  *
- * The CLI uses the same tags for its exit codes, which means it exercises this
- * classifier on every run — one table instead of two `instanceof` chains that
- * drift.
+ * The CLI used to drive its exit codes off the same tags ([ADR
+ * 0025](../../docs/decisions/0025-the-app-is-the-only-interface.md) removed
+ * it), which is why classification is one table rather than an `instanceof`
+ * chain per interface.
  */
 
 import { ConfigError } from "../core/index.js";
@@ -60,14 +61,4 @@ export function classify(err: unknown): ErrorKind {
   if (err instanceof ConfigError) return "config";
   if (err instanceof InitRefused) return "init-refused";
   return "internal";
-}
-
-/**
- * The CLI's exit-code contract, derived from the same tags rather than
- * restated: `1` for anything the user can fix by configuring, `2` for a bug.
- * A skipped unreadable file is neither — it is reported in the summary and
- * still exits `0`.
- */
-export function exitCodeFor(kind: ErrorKind): 1 | 2 {
-  return kind === "internal" ? 2 : 1;
 }

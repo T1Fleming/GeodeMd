@@ -21,7 +21,7 @@ flowchart LR
 
     notes -->|"sync steps 1-6: walk, stamp, reconcile"| db
     log -->|"sync step 7: ingest, then replay"| db
-    review["a review<br/>cli or app"] -->|"1 - append, then fsync"| log
+    review["a review"] -->|"1 - append, then fsync"| log
     review -->|"2 - insert and upsert"| db
 ```
 

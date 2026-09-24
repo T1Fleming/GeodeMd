@@ -111,3 +111,22 @@ export function fold(
   }
   return state;
 }
+
+/**
+ * Is the scheduler still walking this card through its short-term steps?
+ *
+ * The one FSRS fact a review session needs that is not a due date: a card in
+ * `Learning` or `Relearning` has been given an interval measured in minutes
+ * and is meant to be seen again in the same sitting, where a graduated card
+ * has been given days and is not. It lives here because it is knowledge about
+ * ts-fsrs's state machine — `host/queue.ts` decides what a session *does*
+ * with the answer (ADR 0023), which is a different question.
+ *
+ * Deliberately a state test rather than "is `due` less than N minutes away":
+ * the states are the scheduler's own instruction, where a minute threshold
+ * would be ours. `queue.test.ts` pins the assumption that the two agree under
+ * the parameters above.
+ */
+export function inShortTermSteps(state: Pick<CardState, "state">): boolean {
+  return state.state === State.Learning || state.state === State.Relearning;
+}

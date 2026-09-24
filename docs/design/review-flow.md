@@ -2,10 +2,12 @@
 
 ```ts
 getDueCards(now: Date, limit = 50): DueCard[]
-countDue(now: Date): number
-reviewCard(cardId: string, rating: 1|2|3|4, now: Date): Promise<void>
-stats(now: Date)
+countDue(now: Date, limit: number): number
+reviewCard(cardId: string, rating: 1|2|3|4, now: Date): Promise<CardState>
+stats(now: Date, limit: number)
 ```
+
+`reviewCard` returns the state it computed. A caller needs it to know that the scheduler wants this card again in ten minutes ([ADR 0023](../decisions/0023-honour-short-term-learning-steps.md)); recomputing it outside would mean a second copy of the fold.
 
 ## Building the queue
 
@@ -33,13 +35,15 @@ Ordering is deterministic and testable. No randomization, no burying, no sibling
 
 `countDue` joins `card_state` to `cards` rather than counting state rows alone. `card_state` deliberately outlives the card it belongs to, so counting state alone reports cards that no longer exist and `stats` could print due + new greater than total.
 
+**That join is also why the count is capped.** It probes `cards` once per due row, so the cost is proportional to the size of the *due set* — a number the user's habits set, not the collection's size. Measured at a million cards with 389,000 due, it was 205 ms, and `stats` asks for two of these plus a count of the new cards: 632 ms of frozen main process for four numbers ([ADR 0024](../decisions/0024-remeasure-the-main-process-stall.md)). Every count that can grow without bound now stops at a limit and reports a floor, which `host`'s `countText` renders as `10000+`. The limit is `host`'s `COUNT_CAP` and `stats(now, limit)` takes it as an argument — the same rule as `now`: `core` reads no policy of its own. `countCards` is the exception: a total is a fact about the collection rather than about a backlog.
+
 ### Two consequences worth knowing in advance
 
-**Due cards are served ahead of new ones**, so a backlog larger than `limit` starves new cards completely until it clears. That is the intended trade — recovering what you already half-know beats piling on more — and the escape hatch is a larger `-n`, not a scheduling rule.
+**Due cards are served ahead of new ones**, so a backlog larger than `limit` starves new cards completely until it clears. That is the intended trade — recovering what you already half-know beats piling on more — and the escape hatch is another sitting (the "Review more" button, ADR 0025), not a scheduling rule.
 
 **Pruning happens in `sync`, and `review` does not run one.** A note deleted after the last sync leaves its cards in the queue until the next `sync`. Making `review` walk the tree first would charge every session a full walk — tolerable at twenty thousand files, not at a hundred thousand — to avoid being asked about a card you deleted. `sync` after editing is the contract.
 
-The `50 of 1240 due` header comes from a separate `COUNT(*)` against the same index, not from the length of a fetched list: at a million cards the count is the cheap part and materializing the queue would not be. There is deliberately no *persistent* daily-limit state, which would be durable state living outside the notes and the logs.
+The `50 of 1240 due` header comes from a separate `COUNT(*)` against the same index, not from the length of a fetched list — materializing the queue to count it would be far worse. The brief called the count "the cheap part", and at a large backlog it is not: see the cap above, and `10000+` in place of a number nobody needed exactly. There is deliberately no *persistent* daily-limit state, which would be durable state living outside the notes and the logs.
 
 ## Recording a review
 
@@ -65,13 +69,9 @@ Print question → any key → print answer → read `1`–`4` → record → ne
 - **Legend:** `1 again  2 hard  3 good  4 easy   o open · q quit` under the answer, and `0 later · q quit` under the question. FSRS's four ratings are not guessable from their numbers, and neither is `o`. Which keys belong to which stage is `ACTION_KEYS`'s `stage` field in `host` — both interfaces map it rather than deciding, and `boundaries.test.ts` enforces that.
 - **`0` defers the card**, and is offered *only* before the answer is showing ([ADR 0022](../decisions/0022-defer-a-card-without-rating-it.md)). It records nothing — no log line, no FSRS fold, no write — and moves the card to the back of the queue. It is unavailable once the answer is on screen on purpose: deferring a card you have read the answer to would make the next sighting a sham test, and a card you could not recall is a lapse that `1` already describes honestly.
 - **`o` opens the card's note at its line**, offered only once the answer is showing. See [ADR 0012](../decisions/0012-open-the-note-from-review.md).
-- **Both interfaces open it the same way.** Which program to run, and how it is told a line, come from `host/editor.ts` — one table, so `o` cannot mean `code --goto` in the terminal and "whatever owns `.md`" in the app. What differs is the spawn: the CLI inherits the TTY and waits, the app detaches and returns at once. See [the module map](module-map.md).
+- **Which program opens it comes from `host/editor.ts`**, not from the renderer — one table for `resolveEditor`, `editorCommand` and the line flags. The spawn is the app's, and it detaches rather than waiting: a GUI must not block for as long as a note stays open. See [the module map](module-map.md).
 - **At the end of the session, notes that changed are named.** Every note opened is recorded with the mtime it had at the time, and the comparison happens once, when the session ends — not when the editor returns. Only a terminal editor holds the process until you quit it; `code`, `subl` and every OS opener return in milliseconds, so checking around the spawn would report nothing in exactly the setup where the user is most likely to still be typing. The queue is a snapshot, so a note edited mid-session is stale on screen, and this line is the only thing that says so.
-- **A card rated `1` is not re-shown in the same session.** The queue is materialized once, and FSRS puts a lapsed card a minute or so out, so it returns on the next `geode review`. Re-queueing inside the session is learning-steps logic, which is out of scope.
-
-**The queue is a working copy.** `0` reorders it, so the loop is index-driven in both interfaces rather than iterating the snapshot; the length never changes, and a deferred card is still owed an answer, so the session ends only when every card has one or the user quits.
-
-**Not yet honoured: FSRS's learning steps.** Our pinned parameters have `enable_short_term` on, so a new card rated `1` is due in 1 minute, `2` in 5, `3` in 10 — every new card answered anything but *easy* is already scheduled to return in the same sitting. The queue is a snapshot, so those due dates are computed and then discarded until the next session. Honouring them is Anki's behaviour and remains open; [ADR 0022](../decisions/0022-defer-a-card-without-rating-it.md) explains why `0` is complementary to that rather than a substitute for it.
+- **A card on a learning step comes back in the same session.** Our pinned parameters have `enable_short_term` on, so a new card rated `1` is due in 1 minute, `2` in 5, `3` in 10, and only `4` graduates; a Review card rated `1` goes to Relearning 5 minutes out. Those due dates are honoured rather than discarded — see [the queue](#the-queue) below and [ADR 0023](../decisions/0023-honour-short-term-learning-steps.md).
 
 ### Raw mode
 
@@ -88,6 +88,30 @@ Single keypresses mean raw mode, and three things follow:
 Card text is wrapped to a column rather than to the window, the locator and legend are dimmed, and the counter (`2/12`) repeats on every card — the `50 of 1240 due` line printed once at the top is no help by card thirty. Colour is off when `NO_COLOR` is set, when `TERM` is `dumb`, and when stdout is not a TTY.
 
 None of this is a redraw. The output stays append-only, so the session's scrollback survives it.
+
+## The queue
+
+**It lives in `host/queue.ts`, not in either interface.** When a rated card comes back, whether it jumps ahead of an unseen one, and what happens when the only card left is due in forty seconds are decisions, and two interfaces answering them apart would each stay self-consistent while disagreeing about what a session is. `boundaries.test.ts` greps for `inShortTermSteps` outside `host`.
+
+A card is in one of three places: **fresh** (not yet answered, in the snapshot's order), **waiting** (answered, owed again inside this sitting, earliest due first), or **in flight** (answered, with the scheduler's answer not back yet — the renderer learns a new due time from an IPC round trip that resolves after the keypress).
+
+What to show, at the instant a key is pressed:
+
+1. **A waiting card whose time has come**, ahead of anything unseen.
+2. Otherwise **the next fresh card**.
+3. Otherwise **the earliest waiting card, early** — nothing else is left, so showing it beats idling.
+
+Three properties follow, and each is load-bearing:
+
+- **The session never waits.** No timer fires; rule 3 is what makes that true.
+- **The clock is read on a keypress, never while drawing.** A card that ripened mid-read must not replace the one being read, or the next rating lands on a card nobody looked at.
+- **The session is over when nothing is owed**, which is not the same as "nothing to show right now". A card in flight is still owed, so rating the last card cannot end the session before its answer arrives — it may be "show it again in a minute".
+
+Which cards come back is a **state** test — `Learning` or `Relearning`, the scheduler's own instruction — rather than "due within N minutes", which would be ours. `host/queue.test.ts` asserts that the pinned parameters keep those states minutes away, so the two cannot drift apart silently.
+
+**`0` reorders it and records nothing.** A deferred card goes behind the fresh ones wherever it came from; a waiting card deferred that way loses its step, which is correct because it had already ripened or it would not have been on screen. Deferring the only unseen card hands it straight back rather than pulling a waiting card early — the back of the unseen cards is somewhere a card can always be served from, where "behind the waiting cards too" would let a card that keeps failing starve it for the rest of the session.
+
+**The counter counts answers, not cards.** `3 / 24` after `3 / 23` is a second look being earned, not a bug: the denominator is answers given plus answers owed, and a card on a learning step owes one.
 
 ## Stats
 

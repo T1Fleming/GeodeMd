@@ -1,6 +1,6 @@
 /**
  * Public API. Section 6: `index.ts` re-exports `core`, which is what the
- * Electron phase imports. Nothing here reaches into `cli`.
+ * Electron phase imports. The app is the only interface (ADR 0025).
  */
 export { Core, ConfigError } from "./core/index.js";
 export type { Config, DueCard, SyncOptions, SyncSummary } from "./core/index.js";

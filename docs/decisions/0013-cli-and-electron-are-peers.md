@@ -1,7 +1,8 @@
 # 0013 — The CLI and the Electron app are peer interfaces, permanently
 
-- **Status:** Accepted
+- **Status:** Superseded
 - **Date:** 2026-09-19
+- **Superseded by:** [0025](0025-the-app-is-the-only-interface.md) — the CLI is removed; the app is the only interface. The claim that survives is the one about structure: `core` and `host` made a second interface a renderer-sized job, which is why removing one cost nothing below the interface line.
 
 ## Context
 

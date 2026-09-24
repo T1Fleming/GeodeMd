@@ -5,7 +5,7 @@
  * A GUI cannot print-and-exit — it has to carry the user through, and the
  * stakes are specific: **the first real sync writes an id comment into every
  * note that contains a card.** On an existing collection that is a diff across
- * the whole tree, and `geode init` can only warn about it in a sentence.
+ * the whole tree, and a written config can only warn about it in a sentence.
  *
  * So the one rule this file exists to enforce is that the irreversible step is
  * unreachable without having just seen what it would do. That is not a layout

@@ -77,13 +77,19 @@ async function readAll(dir: string): Promise<string> {
 }
 
 describe("section 6 hard rules", () => {
-  it("rule 1: core never imports cli", async () => {
-    expect(await readAll("core")).not.toMatch(importsModule("cli"));
+  it("rule 1: core never imports the interface", async () => {
+    // One interface now (ADR 0025), so this rule has one direction to check
+    // rather than two — and it matters MORE, not less: with nothing to compare
+    // against, a dependency pointing the wrong way has no second implementation
+    // to reveal it.
+    expect(await readAll("core")).not.toMatch(importsModule("electron"));
   });
 
-  it("rule 1: no module below cli imports cli", async () => {
+  it("rule 1: nothing below the interface imports it", async () => {
     for (const dir of ["core", "store", "files", "parser", "scheduler", "host"]) {
-      expect(await readAll(dir), `${dir} imports cli`).not.toMatch(importsModule("cli"));
+      expect(await readAll(dir), `${dir} imports electron`).not.toMatch(
+        importsModule("electron"),
+      );
     }
   });
 
@@ -112,7 +118,7 @@ describe("section 6 hard rules", () => {
 
 describe("one module per external resource", () => {
   it("only store/ imports better-sqlite3", async () => {
-    for (const dir of ["core", "files", "parser", "scheduler", "cli", "host"]) {
+    for (const dir of ["core", "files", "parser", "scheduler", "host"]) {
       expect(await readAll(dir), `${dir} imports better-sqlite3`).not.toMatch(
         /from\s+["']better-sqlite3["']/,
       );
@@ -147,11 +153,19 @@ describe("one module per external resource", () => {
 });
 
 /**
- * ADR 0013: the CLI and the Electron app are peers over one `core`, forever.
- * `host` is what they share — the code that knows about this machine. These
- * rules are what stop "shared" from quietly becoming "whatever cli exported".
+ * `host` is the code that knows about this machine, and the vocabulary an
+ * interface draws from — config, paths, error kinds, the review keys, the queue,
+ * what a sync summary says.
+ *
+ * It was extracted because there were two interfaces and they disagreed. There is
+ * one now (ADR 0025), which changes what these rules are FOR rather than whether
+ * they are worth keeping: they no longer prevent two implementations drifting
+ * apart, they keep the decisions out of the renderer, where a decision arrives
+ * with a layout attached and stops being visible as a decision. The weaker form
+ * is admitted in ADR 0025 — a rule with one consumer is discipline, where the
+ * same rule with two was arithmetic.
  */
-describe("host, shared by both interfaces", () => {
+describe("host, which the interface draws from", () => {
   it("never writes to the terminal", async () => {
     // The distinction from `core`: host MAY read process.env — that is its
     // whole job. What it may not do is assume a terminal is listening.
@@ -166,7 +180,7 @@ describe("host, shared by both interfaces", () => {
     expect(host).toMatch(/os\.homedir|os\.hostname/);
   });
 
-  it("owns the review vocabulary, so the two interfaces cannot disagree", async () => {
+  it("owns the review vocabulary, so the renderer cannot quietly redecide it", async () => {
     // What a key MEANS and what a rating is CALLED are shared; drawing them is
     // not. If either interface grew its own table, the two would drift and
     // each would stay self-consistent — a usability bug no test would catch.
@@ -174,7 +188,7 @@ describe("host, shared by both interfaces", () => {
     expect(host).toMatch(/RATING_KEYS/);
     expect(host).toMatch(/interpretKey/);
 
-    for (const dir of ["cli", "electron"]) {
+    for (const dir of ["electron"]) {
       expect(await readAll(dir), `${dir} defines its own rating table`).not.toMatch(
         /\["1",\s*"again"\]/,
       );
@@ -191,10 +205,33 @@ describe("host, shared by both interfaces", () => {
     expect(host).toMatch(/actionsAt/);
     expect(host).toMatch(/stage:\s*"question"/);
 
-    for (const dir of ["cli", "electron"]) {
+    for (const dir of ["electron"]) {
       expect(await readAll(dir), `${dir} decides stages for itself`).not.toMatch(
         /stage:\s*"(question|answer|both)"/,
       );
+    }
+  });
+
+  it("owns when a rated card comes back, so a session means the same in both", async () => {
+    // FSRS wants a new card again in one to ten minutes (ADR 0023), and what a
+    // session DOES about that is a set of decisions rather than a rendering:
+    // whether the card jumps ahead of one not yet seen, what happens when the
+    // only card left is due in forty seconds, whether the counter's total may
+    // grow. Two interfaces answering those differently would each stay
+    // self-consistent while disagreeing about what a session is — the same
+    // failure mode as two rating tables, and just as invisible.
+    //
+    // `inShortTermSteps` is the marker: it is the scheduler's own state test,
+    // it is what the policy is built on, and it has no business anywhere else.
+    const host = await readAll("host");
+    expect(host).toMatch(/openQueue/);
+    expect(host).toMatch(/inShortTermSteps/);
+
+    for (const dir of ["electron"]) {
+      expect(
+        await readAll(dir),
+        `${dir} decides for itself when a card comes back`,
+      ).not.toMatch(/inShortTermSteps/);
     }
   });
 
@@ -207,7 +244,7 @@ describe("host, shared by both interfaces", () => {
     expect(host).toMatch(/resolveEditor/);
     expect(host).toMatch(/--goto/);
 
-    for (const dir of ["cli", "electron"]) {
+    for (const dir of ["electron"]) {
       expect(await readAll(dir), `${dir} has its own editor table`).not.toMatch(/--goto/);
     }
   });
@@ -222,7 +259,7 @@ describe("host, shared by both interfaces", () => {
     expect(host).toMatch(/reading review history/);
     expect(host).toMatch(/duplicate ids re-minted/);
 
-    for (const dir of ["cli", "electron"]) {
+    for (const dir of ["electron"]) {
       expect(await readAll(dir), `${dir} restates the summary list`).not.toMatch(
         /duplicate ids re-minted/,
       );
@@ -238,7 +275,6 @@ describe("host, shared by both interfaces", () => {
     // right for vim; a GUI has no TTY and must detach. host does neither — it
     // spawns nothing at all, which is what keeps it usable from both.
     expect(await readAll("host")).not.toMatch(/from\s+["']node:child_process["']/);
-    expect(await readAll("cli")).toMatch(/stdio:\s*"inherit"/);
     expect(await readAll("electron")).toMatch(/detached:\s*true/);
   });
 
@@ -250,7 +286,7 @@ describe("host, shared by both interfaces", () => {
     // the sync will not agree with — and a count that disagrees with what
     // then happens is worse than no count.
     expect(await readAll("host")).toMatch(importsModule("files"));
-    for (const dir of ["cli", "electron"]) {
+    for (const dir of ["electron"]) {
       expect(await readAll(dir), `${dir} walks the tree itself`).not.toMatch(
         importsModule("files"),
       );
@@ -267,16 +303,97 @@ describe("host, shared by both interfaces", () => {
 });
 
 /**
- * ADR 0013 again: two peers, one core. A peer that reaches into the other is
- * no longer a peer, and the drift starts the day one of them needs "just one"
- * helper from the other.
+ * The journeys: the outer tier of the suite.
+ *
+ * `src/journeys/` holds one file per guide in `docs/guides/`, and each test there
+ * is anchored to a claim the guide makes. The tier is only useful while it stays
+ * *that* — a tier that drifts into unit tests becomes a slower second copy of the
+ * suite, and the drift is invisible one convenient assertion at a time.
+ *
+ * So the rules below are what a Gherkin layer would have enforced by grammar,
+ * done with the same text scan as everything else in this file: journeys read a
+ * guide, name behaviours in sentences, assert something, and never reach into the
+ * cache. See `docs/design/testing.md`.
  */
-describe("electron, the second interface", () => {
-  it("does not import cli, and cli does not import it", async () => {
-    expect(await readAll("electron"), "electron imports cli").not.toMatch(importsModule("cli"));
-    expect(await readAll("cli"), "cli imports electron").not.toMatch(importsModule("electron"));
+describe("the journeys stay journeys", () => {
+  const JOURNEYS = path.join(SRC, "journeys");
+
+  async function journeyTests(): Promise<Array<{ name: string; text: string }>> {
+    const out: Array<{ name: string; text: string }> = [];
+    for (const entry of await fs.readdir(JOURNEYS, { withFileTypes: true })) {
+      if (!entry.isFile() || !entry.name.endsWith(".test.ts")) continue;
+      out.push({
+        name: entry.name,
+        text: await fs.readFile(path.join(JOURNEYS, entry.name), "utf8"),
+      });
+    }
+    return out;
+  }
+
+  it("has one per guide, and every one of them reads its guide", async () => {
+    const guides = (await fs.readdir(path.join(SRC, "..", "docs", "guides")))
+      .filter((n) => n.endsWith(".md") && n !== "README.md")
+      .sort();
+    const journeys = (await journeyTests()).map((f) => f.name).sort();
+    expect(journeys).toEqual(guides.map((g) => g.replace(/\.md$/, ".test.ts")));
+
+    for (const file of await journeyTests()) {
+      // Reading the guide is the whole point: a journey that asserts from memory
+      // is an ordinary test that has wandered into the wrong directory.
+      expect(stripComments(file.text), `${file.name} never reads its guide`).toMatch(
+        /from\s+["']\.\/guide\.js["']/,
+      );
+    }
   });
 
+  it("never reads the cache to prove a claim", async () => {
+    // A journey goes through `core` and `host`, as a user does. Reaching into the
+    // store to check a row is how a journey becomes a unit test with extra setup —
+    // and `collection.ts`, which is not a test, is the one place that may hold one.
+    for (const file of await journeyTests()) {
+      expect(stripComments(file.text), `${file.name} reaches into the store`).not.toMatch(
+        /\bstore\./,
+      );
+      expect(stripComments(file.text), `${file.name} imports the store`).not.toMatch(
+        importsModule("store"),
+      );
+    }
+  });
+
+  it("names every group as a sentence rather than after a function", async () => {
+    // The index is built from these names, so `describe("getDueCards")` here would
+    // put an export in a document about what the app does. A space is a crude
+    // test for a sentence and it is the one that has never been wrong yet.
+    for (const file of await journeyTests()) {
+      for (const [, , name] of file.text.matchAll(/^describe[^"\'`\n]*(["\'`])(.+?)\1/gm)) {
+        expect(name, `${file.name}: "${name}" is not a sentence`).toContain(" ");
+      }
+    }
+  });
+
+  it("asserts something in every single test", async () => {
+    // Cucumber fails a scenario whose sentence has no step behind it; vitest will
+    // happily pass `it("comes back in ten minutes", () => {})` forever. This is
+    // that guarantee, for the tier where the sentences are the deliverable.
+    for (const file of await journeyTests()) {
+      const bodies = file.text.split(/\n  it\(/).slice(1);
+      expect(bodies.length, `${file.name} has no tests`).toBeGreaterThan(0);
+      for (const body of bodies) {
+        const [first] = body.split(/\n  \}\);/);
+        const title = /^[^"\'`]*(["\'`])(.+?)\1/.exec(body)?.[2] ?? "?";
+        expect(first, `${file.name}: "${title}" asserts nothing`).toMatch(/expect\(/);
+      }
+    }
+  });
+});
+
+/**
+ * The interface, singular since ADR 0025 — and still held at arm's length from
+ * everything below it, because "the only interface" is a fact about today rather
+ * than a licence. The IPC contract is written as if it crossed a process
+ * boundary (ADR 0017) for the same reason.
+ */
+describe("electron, the interface", () => {
   it("nothing below the interfaces imports electron", async () => {
     for (const dir of ["core", "store", "files", "parser", "scheduler", "host"]) {
       expect(await readAll(dir), `${dir} imports electron`).not.toMatch(

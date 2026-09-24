@@ -13,6 +13,8 @@ let core: Core;
 let idCounter: number;
 
 const MTIME = new Date("2026-09-01T00:00:00.000Z");
+/** `host`'s `COUNT_CAP` in production; an argument here, which is the point. */
+const CAP = 10_000;
 const T0 = new Date("2026-09-02T12:00:00.000Z");
 
 function nextId(): string {
@@ -39,7 +41,7 @@ async function write(rel: string, content: string): Promise<void> {
   await fs.utimes(abs, MTIME, MTIME);
 }
 
-describe("getDueCards", () => {
+describe("the order cards are served in", () => {
   it("orders new cards by (file_path, line_no) — the order they read", async () => {
     await write("z.md", "Z1 :: 1\nZ2 :: 2\n");
     await write("a.md", "A1 :: 1\nA2 :: 2\n");
@@ -110,7 +112,7 @@ describe("getDueCards", () => {
   });
 });
 
-describe("reviewCard", () => {
+describe("recording a review", () => {
   it("writes the log BEFORE SQLite", async () => {
     await write("a.md", "A :: 1\n");
     await core.sync(T0);
@@ -178,17 +180,47 @@ describe("reviewCard", () => {
   });
 });
 
-describe("stats", () => {
+describe("reporting what is due and what is new", () => {
   it("counts total, due now, due before local midnight, and new", async () => {
     await write("a.md", "A :: 1\nB :: 2\n");
     await core.sync(T0);
     await core.reviewCard("sr-000000000001", 1, T0);
 
-    const s = core.stats(T0);
+    const s = core.stats(T0, CAP);
     expect(s.total).toBe(2);
     expect(s.newCards).toBe(1);
     // A lapsed card is due within the hour, so before midnight either way.
     expect(s.dueBeforeMidnight).toBeGreaterThanOrEqual(s.dueNow);
+  });
+
+  it("reports the counts as exact when nothing hit the cap", async () => {
+    await write("a.md", "A :: 1\nB :: 2\n");
+    await core.sync(T0);
+    await core.reviewCard("sr-000000000001", 1, T0);
+    expect(core.stats(T0, CAP).capped).toBe(false);
+  });
+
+  it("says so when a count stopped at the cap", async () => {
+    // ADR 0024: counting what is due costs a probe per due row and counting
+    // what is new costs an index entry each, so both stop at the cap and report
+    // a floor rather than freezing the main process over a backlog. The cap is
+    // an argument, which is what makes this a three-card test rather than a
+    // ten-thousand-card one.
+    await write("a.md", "A :: 1\nB :: 2\nC :: 3\n");
+    await core.sync(T0);
+    await core.reviewCard("sr-000000000001", 1, T0);
+    await core.reviewCard("sr-000000000002", 1, T0);
+
+    const later = new Date(T0.getTime() + 3_600_000);
+    const s = core.stats(later, 2);
+    expect(s.dueNow).toBe(2);
+    expect(s.newCards).toBe(1);
+    expect(s.capped).toBe(true);
+    // The total is never capped: it is a fact about the collection.
+    expect(s.total).toBe(3);
+
+    // And with room to spare, every figure is exact and nothing claims a floor.
+    expect(core.stats(later, CAP)).toMatchObject({ dueNow: 2, newCards: 1, capped: false });
   });
 
   it("does not count a deleted card's surviving state as due", async () => {
@@ -206,7 +238,7 @@ describe("stats", () => {
     await core.sync(later);
     expect(store.getState("sr-000000000001")).toBeDefined();
 
-    const s = core.stats(later);
+    const s = core.stats(later, CAP);
     expect(s.total).toBe(1);
     expect(s.dueNow).toBe(0);
     expect(s.dueBeforeMidnight).toBe(0);

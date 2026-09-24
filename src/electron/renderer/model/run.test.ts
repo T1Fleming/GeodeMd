@@ -42,7 +42,7 @@ const finished = (over: Partial<RunFinished> = {}): RunFinished => ({
   ...over,
 });
 
-describe("percent", () => {
+describe("how far along a run is", () => {
   it("is zero before the total is known, rather than NaN", () => {
     // Every run starts at total 0. A bar driven by NaN renders at zero width
     // forever while the run actually progresses.
@@ -63,7 +63,7 @@ describe("percent", () => {
   });
 });
 
-describe("fromStatus", () => {
+describe("adopting a run the window did not start", () => {
   it("adopts a run already in flight when a window mounts late", () => {
     const v = fromStatus({ state: "running", progress: progress({ done: 4 }) });
     expect(v).toMatchObject({ at: "running", done: 4, total: 10 });
@@ -89,7 +89,7 @@ describe("fromStatus", () => {
   });
 });
 
-describe("phases", () => {
+describe("naming the phase a run is in", () => {
   it("names the phase rather than showing the enum", () => {
     // Without the phase the bar sits pinned at the end of the file loop for
     // the whole of prune and ingest, which on a first ingest is the longest
@@ -145,7 +145,7 @@ describe("dryRun travels with the run", () => {
   });
 });
 
-describe("isRunning", () => {
+describe("whether anything is running", () => {
   it("is true only in flight, because rebuild is refused while anything runs", () => {
     expect(isRunning(idle())).toBe(false);
     expect(isRunning(onProgress(idle(), progress()))).toBe(true);

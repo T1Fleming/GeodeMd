@@ -1,0 +1,194 @@
+/**
+ * The journey `docs/guides/reviewing.md` describes, held to what it says.
+ *
+ * Every test here reads the guide and checks the claim it finds, rather than
+ * restating the claim in TypeScript — which is the difference between a test that
+ * documents behaviour and a document that stays true. A reader who follows the
+ * guide's key table and finds `3` does something else has been misled by us, and
+ * that is the failure this file exists to make impossible.
+ *
+ * It does not re-prove the mechanisms: `host/queue.test.ts` covers the queue and
+ * `session.test.ts` covers the screen. What is here is the sequence a person
+ * actually performs, and the sentences we printed for them.
+ */
+
+import { afterEach, describe, expect, it } from "vitest";
+import * as fs from "node:fs/promises";
+import * as path from "node:path";
+import { ACTION_KEYS, RATING_KEYS, actionsAt, interpretKey } from "../host/present.js";
+import { FsrsScheduler } from "../scheduler/index.js";
+import { codeSpans, guide, plain, tableAfter } from "./guide.js";
+import { newCollection } from "./collection.js";
+import type { Collection } from "./collection.js";
+
+const T0 = new Date("2026-09-22T12:00:00.000Z");
+let open: Collection | null = null;
+
+afterEach(async () => {
+  await open?.close();
+  open = null;
+});
+
+async function reviewing(): Promise<string> {
+  return guide("reviewing.md");
+}
+
+describe("the guide's four ratings are the four the app honours", () => {
+  it("names the same keys, in the same order, with the same words", async () => {
+    const rows = tableAfter(await reviewing(), "## The four ratings");
+    const fromGuide = rows.map((cells) => [plain(cells[0]!), plain(cells[1]!)]);
+    expect(fromGuide).toEqual(RATING_KEYS.map(([key, label]) => [key, label]));
+  });
+
+  it("advertises no key that does nothing", async () => {
+    // The escape-key bug in reverse: the guide says `Escape` quits, and it now
+    // does — but a guide naming a key the code ignores is the same failure
+    // wearing a friendlier face, and it would read as authoritative.
+    const text = await reviewing();
+    const keys = new Set(
+      codeSpans(text).filter((s) => /^([0-9a-z]|Escape)$/.test(s)),
+    );
+    expect(keys.size).toBeGreaterThan(4);
+    for (const key of keys) {
+      expect(interpretKey(key).kind, `the guide advertises \`${key}\``).not.toBe("ignore");
+    }
+  });
+
+  it("puts `0` and `o` at the stages it says they are offered at", async () => {
+    const text = await reviewing();
+    // Stated as headings, so they are what a reader skims to.
+    expect(text).toContain("## `0 later` — the key for \"not now\"");
+    expect(text).toContain("Offered **only before you have seen the answer**");
+    expect(text).toContain("## `o` — open the note");
+    expect(text).toContain("Offered once the answer is showing");
+
+    expect(actionsAt("question").map((a) => a.key)).toContain("0");
+    expect(actionsAt("question").map((a) => a.key)).not.toContain("o");
+    expect(actionsAt("answer").map((a) => a.key)).toContain("o");
+    expect(actionsAt("answer").map((a) => a.key)).not.toContain("0");
+    // And `q` at both, which the guide's "from the question or the answer" says.
+    expect(ACTION_KEYS.find((a) => a.key === "q")?.stage).toBe("both");
+  });
+});
+
+describe("the intervals the guide quotes are the ones FSRS produces", () => {
+  it("matches every row of the table, against the real scheduler", async () => {
+    // The row that matters most is `3` — ten minutes is why a card comes back
+    // before the sitting ends, and the whole "A card usually comes back" section
+    // is built on it. A ts-fsrs bump that changed these would fail here rather
+        // than quietly making the guide wrong.
+    const rows = tableAfter(await reviewing(), "## A card usually comes back in the same session");
+    const scheduler = new FsrsScheduler();
+    expect(rows).toHaveLength(4);
+
+    for (const [keyCell, dueCell] of rows) {
+      const key = plain(keyCell!).split(" ")[0]! as "1" | "2" | "3" | "4";
+      const stated = plain(dueCell!);
+      const next = scheduler.next(scheduler.initial(T0), Number(key) as 1 | 2 | 3 | 4, T0);
+      const minutes = (new Date(next.due).getTime() - T0.getTime()) / 60_000;
+
+      const [, n, unit] = /^(\d+)\s+(minute|minutes|day|days)/.exec(stated) ?? [];
+      expect(n, `cannot read "${stated}" as an interval`).toBeDefined();
+      const expected = unit!.startsWith("day") ? Number(n) * 1440 : Number(n);
+      expect(minutes, `the guide says \`${key}\` gives ${stated}`).toBe(expected);
+    }
+  });
+
+  it("is right that a long-standing card rated `1` comes back in five minutes", async () => {
+    expect(await reviewing()).toContain("rated `1`, comes back in 5 minutes");
+    const scheduler = new FsrsScheduler();
+    const graduated = scheduler.next(scheduler.initial(T0), 4, T0);
+    const reviewedAt = new Date(graduated.due);
+    const lapsed = scheduler.next(graduated, 1, reviewedAt);
+    expect((new Date(lapsed.due).getTime() - reviewedAt.getTime()) / 60_000).toBe(5);
+  });
+});
+
+describe("a rating is safe the moment it is given", () => {
+  it("is in the review log on disk, which is what the guide promises", async () => {
+    // "Each one is written to the review log and flushed to disk before anything
+    // else happens" — so a rating is checkable in a file, not only in a database.
+    expect(await reviewing()).toContain("written to the review log and flushed to disk");
+
+    open = await newCollection("laptop");
+    await open.write("a.md", "Q1 :: A1\nQ2 :: A2\nQ3 :: A3\n");
+    await open.core.sync(T0);
+
+    const queue = open.core.getDueCards(T0, 10);
+    await open.core.reviewCard(queue[0]!.id, 3, T0);
+    await open.core.reviewCard(queue[1]!.id, 1, T0);
+
+    const dir = path.join(open.notes, ".sr", "log");
+    const shards = await fs.readdir(dir);
+    expect(shards).toEqual(["laptop-2026-09.jsonl"]);
+
+    const lines = (await fs.readFile(path.join(dir, shards[0]!), "utf8")).trim().split("\n");
+    expect(lines.map((l) => JSON.parse(l) as { card: string; rating: number })).toEqual([
+      { card: queue[0]!.id, at: T0.toISOString(), rating: 3 },
+      { card: queue[1]!.id, at: T0.toISOString(), rating: 1 },
+    ]);
+  });
+
+  it("survives quitting halfway, as the guide says it does", async () => {
+    // "quitting, closing the window, a crash, or a dead battery costs you nothing
+    // but the cards you had not answered yet."
+    expect(await reviewing()).toContain("costs you nothing but the cards you had not answered yet");
+
+    open = await newCollection();
+    await open.write("a.md", "Q1 :: A1\nQ2 :: A2\nQ3 :: A3\n");
+    await open.core.sync(T0);
+    expect(open.core.stats(T0, 100).newCards).toBe(3);
+
+    const queue = open.core.getDueCards(T0, 10);
+    await open.core.reviewCard(queue[0]!.id, 3, T0);
+    // …and the user quits here. Nothing else runs.
+    await open.reopen();
+
+    const after = open.core.stats(T0, 100);
+    expect(after.newCards).toBe(2);
+    expect(after.total).toBe(3);
+  });
+});
+
+describe("the session's own claims about what you get", () => {
+  it("serves due cards before new ones, most overdue first", async () => {
+    // "Cards that are due, most overdue first, then cards never reviewed, in the
+    // order they read in your notes. Nothing is randomised."
+    const text = await reviewing();
+    expect(text).toContain("most overdue first, then cards never reviewed");
+    expect(text).toContain("Nothing is randomised");
+
+    open = await newCollection();
+    await open.write("a.md", "Q1 :: A1\nQ2 :: A2\n");
+    await open.write("b.md", "Q3 :: A3\n");
+    await open.core.sync(T0);
+
+    const all = open.core.getDueCards(T0, 10);
+    // Answer the second card so it becomes the only one with a schedule.
+    await open.core.reviewCard(all[1]!.id, 1, T0);
+
+    const later = new Date(T0.getTime() + 10 * 60_000);
+    const queue = open.core.getDueCards(later, 10);
+    expect(queue[0]!.id).toBe(all[1]!.id);
+    expect(queue.slice(1).map((c) => c.question)).toEqual(["Q1", "Q3"]);
+  });
+
+  it("does not walk the notes, so a deleted card can still turn up", async () => {
+    // "`review` deliberately does not walk your notes … so a note you deleted
+    // since the last sync leaves its cards in the queue until you run `geode sync`."
+    expect(await reviewing()).toContain("leaves its cards in the queue until you sync");
+
+    open = await newCollection();
+    await open.write("a.md", "Q1 :: A1\n");
+    await open.write("b.md", "Q2 :: A2\n");
+    await open.core.sync(T0);
+    expect(open.core.getDueCards(T0, 10)).toHaveLength(2);
+
+    await fs.rm(path.join(open.notes, "b.md"));
+    expect(open.core.getDueCards(T0, 10)).toHaveLength(2);
+
+    const later = new Date(T0.getTime() + 60_000);
+    await open.core.sync(later);
+    expect(open.core.getDueCards(later, 10).map((c) => c.question)).toEqual(["Q1"]);
+  });
+});
