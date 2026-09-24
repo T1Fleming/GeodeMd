@@ -35,6 +35,7 @@ import type {
 } from "../ipc.js";
 import { openDetached } from "./open.js";
 import { Runner } from "./runs.js";
+import { counts, dueCards } from "./reads.js";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
@@ -133,17 +134,20 @@ function register(): void {
     }),
   );
 
+  // Both reads ingest the log first — see `reads.ts`. Without it the app never
+  // notices a review answered on another machine, and never repairs the
+  // one-review gap a crash leaves behind.
   ipcMain.handle(CH.statsRead, () =>
     guard<Stats>(async () => {
       const c = await ensureCore();
-      return c.stats(new Date(), COUNT_CAP);
+      return counts(c, new Date(), COUNT_CAP);
     }),
   );
 
   ipcMain.handle(CH.cardsDue, (_e, limit: number) =>
     guard(async () => {
       const c = await ensureCore();
-      return c.getDueCards(new Date(), limit);
+      return dueCards(c, new Date(), limit);
     }),
   );
 

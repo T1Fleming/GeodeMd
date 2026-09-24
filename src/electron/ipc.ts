@@ -93,7 +93,7 @@ export interface NoteOpened {
 /**
  * What the folder the user picked actually contains.
  *
- * The markdown count is the check `geode init` cannot make: pointing at a
+ * The markdown count is the check writing a config cannot make: pointing at a
  * Downloads folder, or at the parent of the notes, is the likeliest first-run
  * mistake and the counts are how it becomes visible. A **soft** signal — an
  * empty folder is a fine place to start writing cards.
@@ -221,7 +221,7 @@ export interface GeodeApi {
   setupPropose(folder: string): Promise<Result<ConfigProposal>>;
   /**
    * Write the config. `replace` must be passed explicitly to overwrite an
-   * existing one — the refusal is the same one `geode init` makes without
+   * existing one — the refusal is the same one a config writer makes without
    * `--force`, surfaced as a choice rather than an error.
    */
   setupWrite(folder: string, replace: boolean): Promise<Result<AppConfig>>;

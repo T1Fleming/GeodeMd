@@ -103,6 +103,7 @@ export const BY_FILE: Readonly<Record<string, string>> = {
   "electron/renderer/model/setup.test.ts": "Setting up this machine",
 
   "electron/main/runs.test.ts": "The app's long runs",
+  "electron/main/reads.test.ts": "Moving between machines",
   "electron/renderer/model/run.test.ts": "The app's long runs",
 
   "store/store.test.ts": "The database as a cache",

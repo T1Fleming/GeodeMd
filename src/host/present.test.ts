@@ -187,7 +187,7 @@ describe("why a freshly-edited file was left alone", () => {
   });
 
   it("leaves what to do about it to the interface", () => {
-    // The CLI appends "run `geode sync` again"; a window with a Sync button
+    // A terminal would append "run it again"; a window with a Sync button
     // must not say that, which is the whole reason this stops short.
     expect(deferralReason(summary({ filesDeferred: 1 }))!).not.toContain("geode");
   });

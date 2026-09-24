@@ -11,13 +11,13 @@ app do*, and *where is that proven*. What it deliberately cannot tell you is wha
 app does **untested** — an area that looks thin here is thinly covered, and that is
 worth reading as a finding rather than a gap in the document.
 
-442 behaviours in 11 areas, which follow [the guides](../guides/) rather than the source tree.
+448 behaviours in 11 areas, which follow [the guides](../guides/) rather than the source tree.
 
 - [Reviewing](#reviewing) — 107
 - [Recognising a card](#recognising-a-card) — 57
 - [Syncing notes](#syncing-notes) — 73
 - [Recovery and the log](#recovery-and-the-log) — 26
-- [Moving between machines](#moving-between-machines) — 9
+- [Moving between machines](#moving-between-machines) — 15
 - [Setting up this machine](#setting-up-this-machine) — 53
 - [The app's long runs](#the-apps-long-runs) — 31
 - [The database as a cache](#the-database-as-a-cache) — 7
@@ -586,7 +586,7 @@ _11 · `core/rebuild.test.ts`_
 
 _One notes directory, two devices, no built-in sync transport._
 
-**9 behaviours.**
+**15 behaviours.**
 
 ### two machines, one notes directory
 
@@ -606,6 +606,27 @@ _8 · `core/two-devices.test.ts`_
 _1 · `core/two-devices.test.ts`_
 
 - converges on one set of ids rather than duplicating the cards
+
+### reading the queue
+
+_3 · `electron/main/reads.test.ts`_
+
+- picks up a review another machine already recorded
+- repairs the gap a crash leaves between the log and the database
+- is a no-op when nothing new has arrived
+
+### reading the counts
+
+_1 · `electron/main/reads.test.ts`_
+
+- counts a card answered elsewhere as reviewed, not as new
+
+### a busy database
+
+_2 · `electron/main/reads.test.ts`_
+
+- is not allowed to cost the user their session
+- still reports a failure that is not a busy database
 
 ## Setting up this machine
 

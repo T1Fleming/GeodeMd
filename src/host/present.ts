@@ -242,7 +242,8 @@ export function summaryFields(s: SyncSummary): SummaryField[] {
  * be open in an editor and nothing is minted into it.
  *
  * The explanation is here; **what to do about it is not**, because that is the
- * one part that genuinely differs — the CLI says to run `geode sync` again,
+ * one part that genuinely differs — a terminal would say to run the command
+ * again,
  * and a window with a Sync button in it should not be telling anyone to open a
  * terminal.
  */

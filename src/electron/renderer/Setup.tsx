@@ -231,7 +231,7 @@ function Welcome({ onPick }: { onPick: () => void }): React.JSX.Element {
 /**
  * What is actually in there.
  *
- * The count is the check `geode init` cannot make, and the likeliest first-run
+ * The count is the check writing a config cannot make, and the likeliest first-run
  * mistake is pointing at a Downloads folder or at the parent of the notes. It
  * is a **soft** warning: an empty folder is a fine place to start.
  */

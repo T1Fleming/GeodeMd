@@ -71,7 +71,7 @@ export class Runner {
    * is destructive, so a joiner would receive a summary for a database it did
    * not expect. It is refused while anything is in flight.
    *
-   * This guards THIS process only. Another `geode sync` in a terminal at the
+   * This guards THIS process only. A second copy of the app at the
    * same time is fine and is designed for — WAL, the busy timeout, and the
    * re-stat before each write. Do not add a lock file.
    */

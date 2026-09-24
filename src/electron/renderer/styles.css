@@ -166,6 +166,9 @@ kbd {
 .done h2 { margin: 0; font-size: 1.375rem; font-weight: 600; }
 .breakdown { margin: 0; padding: 0; list-style: none; color: var(--muted); display: flex; gap: 1rem; }
 .stale { color: var(--muted); font-size: 0.9375rem; max-width: 34rem; }
+/* The finished screen is a column with a gap, so this needs no margin of its
+   own — only a little room to read as an action rather than part of the tally. */
+.done .more { margin-top: 0.5rem; }
 
 .muted { color: var(--muted); }
 .error { color: #b91c1c; padding: 2rem; font-family: ui-monospace, monospace; }

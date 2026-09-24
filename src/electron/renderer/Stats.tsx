@@ -38,7 +38,7 @@ export function Stats(): React.JSX.Element {
       <h2>Collection</h2>
       <div className="tiles">
         {/* `10000+` when a count stopped at the cap (ADR 0024) — `countText` is
-            host's, so this screen and `geode stats` say it the same way. The
+            host's, so a capped count reads the same wherever it is shown. The
             total is the one figure that is never capped. */}
         <Tile value={countText(data.dueNow)} label="due now" strong />
         <Tile value={countText(data.newCards)} label="new" strong />

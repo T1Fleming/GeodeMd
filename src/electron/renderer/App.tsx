@@ -135,15 +135,35 @@ type Screen =
   | { at: "empty"; total: number }
   | { at: "review"; queue: DueCard[]; backlog: number; capped: boolean };
 
+/**
+ * How many cards one sitting materialises.
+ *
+ * A cap rather than a preference: the queue is fetched in full, and at a million
+ * cards materialising the backlog would be the expensive part of the session
+ * (see [review-flow](../../../docs/design/review-flow.md)). The CLI let you ask
+ * for more with `-n 200`; what replaced it is the "review more" button on the
+ * finished screen, which fetches the next batch instead of a bigger one.
+ */
 const LIMIT = 50;
 
 function ReviewScreen({ onNote }: { onNote: (m: string) => void }): React.JSX.Element {
   const [screen, setScreen] = useState<Screen>({ at: "loading" });
   /** Notes edited during the session. Null until the session ends. */
   const [stale, setStale] = useState<string[] | null>(null);
+  /**
+   * Bumped for each sitting, and used as the `Review` component's `key`.
+   *
+   * Without it a second sitting would draw against the first session's state:
+   * `begin(queue)` runs in a `useState` initialiser, which React does not re-run
+   * for a component it is reusing. The key is what makes "review more" a new
+   * session rather than a new queue inside an old one.
+   */
+  const [sitting, setSitting] = useState(0);
 
   const load = useCallback(async () => {
     setScreen({ at: "loading" });
+    setStale(null);
+    setSitting((n) => n + 1);
     const [due, stats] = await Promise.all([
       window.geode.cardsDue(LIMIT),
       window.geode.statsRead(),
@@ -231,6 +251,7 @@ function ReviewScreen({ onNote }: { onNote: (m: string) => void }): React.JSX.El
 
   return (
     <Review
+      key={sitting}
       queue={screen.queue}
       backlog={screen.backlog}
       backlogCapped={screen.capped}
@@ -238,6 +259,10 @@ function ReviewScreen({ onNote }: { onNote: (m: string) => void }): React.JSX.El
       onRate={onRate}
       onOpen={onOpen}
       onDone={onDone}
+      // Offered only when the collection holds more than this sitting served —
+      // the same condition as the backlog chip, and the replacement for the
+      // CLI's `-n` (ADR 0025).
+      onMore={screen.backlog > screen.queue.length ? () => void load() : undefined}
     />
   );
 }

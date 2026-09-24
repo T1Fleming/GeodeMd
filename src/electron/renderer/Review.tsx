@@ -30,6 +30,12 @@ interface Props {
   onRate: (cardId: string, rating: 1 | 2 | 3 | 4) => Promise<Scheduled | null>;
   onOpen: (card: DueCard) => void;
   onDone: (session: Session) => void;
+  /**
+   * Start another sitting, when the collection holds more than this one served.
+   * Undefined when it does not, so the button is absent rather than disabled —
+   * there is nothing to explain to someone who has finished everything.
+   */
+  onMore?: (() => void) | undefined;
 }
 
 export function Review({
@@ -40,6 +46,7 @@ export function Review({
   onRate,
   onOpen,
   onDone,
+  onMore,
 }: Props): React.JSX.Element {
   const [session, setSession] = useState<Session>(() => begin(queue));
 
@@ -104,7 +111,7 @@ export function Review({
   const card = current(session);
 
   if (isOver(session)) {
-    return <Finished session={session} stale={stale} />;
+    return <Finished session={session} stale={stale} onMore={onMore} />;
   }
 
   // Nothing to show *yet*: the last card was rated and the scheduler's answer
@@ -168,9 +175,11 @@ export function Review({
 function Finished({
   session,
   stale,
+  onMore,
 }: {
   session: Session;
   stale: string[] | null;
+  onMore?: (() => void) | undefined;
 }): React.JSX.Element {
   const done = reviewed(session);
   const breakdown = RATING_KEYS.filter(([k]) => session.counts[Number(k) as 1 | 2 | 3 | 4] > 0);
@@ -197,10 +206,15 @@ function Finished({
           the queue holds text from the last sync and a rewritten card is stale
           in the database until the next one. Saying "you opened 3 notes, run
           sync" after three read-only glances trains the user to ignore it. */}
+      {onMore && (
+        <button className="primary more" onClick={onMore}>
+          Review more
+        </button>
+      )}
       {stale !== null && stale.length > 0 && (
         <p className="stale">
           {stale.length === 1 ? <code>{stale[0]}</code> : `${stale.length} notes you opened`}{" "}
-          changed while you were reviewing — run <code>geode sync</code>.
+          changed while you were reviewing — <strong>sync</strong> to pick the changes up.
         </p>
       )}
     </main>

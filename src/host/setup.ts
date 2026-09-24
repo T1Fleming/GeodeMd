@@ -9,7 +9,7 @@
  *
  * The stakes, specifically: **the first real sync writes an id comment into
  * every note that contains a card.** On an existing collection that is a diff
- * across the whole tree. `geode init` can only say so; a window can make the
+ * across the whole tree. A line of advice can only say so; a window can make the
  * number visible before it happens.
  */
 
@@ -36,7 +36,7 @@ export interface FolderReport {
 /**
  * Look, but touch nothing.
  *
- * Counting the `.md` files is the check `geode init` cannot make and the one
+ * Counting the `.md` files is the check a config writer cannot make and the one
  * that catches the likeliest mistake — pointing at a Downloads folder, or at
  * the parent of the notes rather than the notes. It is a **soft** signal: a
  * genuinely empty folder is a perfectly good place to start writing cards, so

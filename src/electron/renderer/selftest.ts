@@ -153,6 +153,10 @@ export async function runSelfTest(): Promise<void> {
       text(".toast"),
     );
 
+    // Whether the collection holds more than this sitting serves. The backlog
+    // chip is the app's own answer to that, so the check below can hold the
+    // finished screen to it rather than to a number hard-coded here.
+    const biggerThanOneSitting = exists(".backlog");
     const owedBefore = owedNow();
     await key("3");
     await settle(200);
@@ -180,6 +184,18 @@ export async function runSelfTest(): Promise<void> {
     check("q ends the session", exists(".done"), text(".done h2"));
     check("the tally counts only answered cards", text(".done h2").startsWith("1 reviewed"), text(".done h2"));
 
+    // What replaced the CLI's `-n 200` (ADR 0025): another sitting, offered only
+    // when there is more than this one served. Checked in both directions,
+    // because "the button is missing" and "the button is always there" are both
+    // wrong and only one of them is visible in a screenshot.
+    check(
+      biggerThanOneSitting
+        ? "a collection bigger than one sitting offers another"
+        : "a finished collection offers no more sittings",
+      exists(".done .more") === biggerThanOneSitting,
+      `backlog chip: ${biggerThanOneSitting}, button: ${exists(".done .more")}`,
+    );
+
     // The end-of-session check is an IPC round trip that stats every opened
     // note, so the screen renders before the answer arrives. Wait for it
     // rather than for a timer — and note this only has anything to report
@@ -187,10 +203,31 @@ export async function runSelfTest(): Promise<void> {
     for (let i = 0; i < 40 && !exists(".stale"); i++) await settle(50);
     check(
       "a note edited during the session is named at the end",
-      text(".stale").includes(".md") && text(".stale").includes("geode sync"),
+      text(".stale").includes(".md") && text(".stale").includes("sync"),
       text(".stale"),
     );
     await shot("review-03-done");
+
+    // And clicking it really starts a new sitting. The risky part is not the
+    // button, it is that `Review` holds its session in a `useState` initialiser
+    // — so without the `key` that resets the component, a second sitting would
+    // draw the new queue against the old session and the counter would not
+    // return to 1.
+    if (biggerThanOneSitting) {
+      await click(".done .more", "Review more");
+      const back = await until(".question");
+      check("clicking it starts a new sitting", back, text(".question"));
+      check(
+        "and the counter starts over rather than continuing the last one",
+        text(".meta").startsWith("1 /"),
+        text(".meta"),
+      );
+      await shot("review-04-another-sitting");
+      // Leave the screen as the rest of this run expects: finished, not mid-card.
+      await key("q");
+      await settle(200);
+    }
+
 
     await runSyncChecks();
     await runStatsChecks();
