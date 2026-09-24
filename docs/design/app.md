@@ -81,6 +81,8 @@ Routine on a desktop: the folder moved, or a drive is unmounted. Both states rea
 
 **Change folder…** on the Collection screen enters the same sequence at the folder step (#43). It differs from a repair in three ways, all in `model/setup.ts`. It can be **cancelled**, because unlike a repair there is a working folder to go back to. It **refuses the folder already in use**. And leaving without finishing **writes the original folder back**: the preview writes the config before its dry run, because the run reads it. The folder to restore comes from `from`, which is captured on the way in, and never from the proposal. After one preview the proposal is read from a config that already names the new folder, so it would restore the wrong one. "Keep those" on the settings step goes through the same restore, for a repair as well.
 
+The picker passes `createDirectory`, the only way the macOS panel offers New Folder, so a fresh collection can start without leaving the app. Choosing an empty folder during a change adds one line on the confirm step saying the old cards are still in the old folder (`leavesCollectionBehind`), because a collection that drops to zero reads as loss.
+
 ## Help
 
 The user documentation, bundled and rendered in the app ([ADR 0020](../decisions/0020-ship-the-docs-inside-the-app.md)). A Vite plugin copies `docs/guides/` and `docs/reference/` into the renderer bundle at build time, and `Help.tsx` renders them with `marked`.

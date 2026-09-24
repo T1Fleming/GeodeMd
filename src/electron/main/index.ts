@@ -233,6 +233,10 @@ function register(): void {
    *
    * Null for a cancel. That is an ordinary answer and must not arrive as an
    * error, or backing out of the picker would look like something broke.
+   *
+   * `createDirectory` puts New Folder in the macOS panel, which has none
+   * otherwise: starting a collection from nothing should not mean leaving the
+   * app for Finder. Windows and Linux pickers can already do it, and ignore it.
    */
   ipcMain.handle(CH.setupPick, () =>
     guard<string | null>(async () => {
@@ -241,8 +245,8 @@ function register(): void {
       // everything downstream of the pick is still exercised for real.
       if (SELFTEST) return SELFTEST_FOLDER;
       const r = win
-        ? await dialog.showOpenDialog(win, { properties: ["openDirectory"] })
-        : await dialog.showOpenDialog({ properties: ["openDirectory"] });
+        ? await dialog.showOpenDialog(win, { properties: ["openDirectory", "createDirectory"] })
+        : await dialog.showOpenDialog({ properties: ["openDirectory", "createDirectory"] });
       return r.canceled ? null : (r.filePaths[0] ?? null);
     }),
   );

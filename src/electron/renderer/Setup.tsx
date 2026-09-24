@@ -23,6 +23,7 @@ import {
   canAdvance,
   canCancel,
   canSync,
+  leavesCollectionBehind,
   next,
   picked,
   previewReport,
@@ -167,7 +168,12 @@ export function Setup({ from, onReady, onCancel }: Props): React.JSX.Element {
       {s.step === "welcome" && <Welcome onPick={() => void pick()} />}
 
       {s.step === "confirm" && (
-        <ConfirmFolder report={s.folder} from={s.from} onPick={() => void pick()} />
+        <ConfirmFolder
+          report={s.folder}
+          from={s.from}
+          leavingBehind={leavesCollectionBehind(s)}
+          onPick={() => void pick()}
+        />
       )}
 
       {s.step === "config" && (
@@ -279,10 +285,12 @@ const CONFIRM_HEADING = {
 function ConfirmFolder({
   report,
   from,
+  leavingBehind,
   onPick,
 }: {
   report: FolderReport | null;
   from: From | null;
+  leavingBehind: boolean;
   onPick: () => void;
 }): React.JSX.Element {
   return (
@@ -314,6 +322,12 @@ function ConfirmFolder({
             <p className="warn">
               No Markdown files in there. That is fine if you are starting fresh — but if
               you expected notes, this is probably the wrong folder.
+            </p>
+          )}
+          {leavingBehind && from && (
+            <p className="muted small">
+              Your current cards stay in <code>{from.notesPath}</code>, with their review
+              history. Nothing there is changed.
             </p>
           )}
           {report.symlinkedDirs > 0 && (

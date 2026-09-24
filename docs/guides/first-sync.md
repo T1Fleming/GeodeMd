@@ -90,7 +90,7 @@ From here the first sync never repeats. Later syncs only read what changed, and 
 
 Nothing breaks. The app notices on launch that the folder it was pointed at is gone — a moved directory, an external drive that is not plugged in — and offers to repoint it rather than treating you as a new user. Your device name and editor setting are kept, which matters more than it sounds: regenerating the device name would start a second review log and split this machine's history across two files.
 
-Pointing the app at a new folder does the same, and preserves the same two fields for the same reason: **Change folder…** at the bottom of the Collection screen. It walks the same steps as the first run, including the preview, and you can cancel at any point without changing anything.
+Pointing the app at a new folder does the same, and preserves the same two fields for the same reason: **Change folder…** at the bottom of the Collection screen. It walks the same steps as the first run, including the preview, and you can cancel at any point without changing anything. To start a fresh collection, make a new folder from the picker itself; your existing cards stay where they are, with their history.
 
 ## See also
 

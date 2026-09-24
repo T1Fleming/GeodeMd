@@ -11,14 +11,14 @@ app do*, and *where is that proven*. What it deliberately cannot tell you is wha
 app does **untested** — an area that looks thin here is thinly covered, and that is
 worth reading as a finding rather than a gap in the document.
 
-455 behaviours in 11 areas, which follow [the guides](../guides/) rather than the source tree.
+456 behaviours in 11 areas, which follow [the guides](../guides/) rather than the source tree.
 
 - [Reviewing](#reviewing) — 107
 - [Recognising a card](#recognising-a-card) — 57
 - [Syncing notes](#syncing-notes) — 73
 - [Recovery and the log](#recovery-and-the-log) — 26
 - [Moving between machines](#moving-between-machines) — 16
-- [Setting up this machine](#setting-up-this-machine) — 59
+- [Setting up this machine](#setting-up-this-machine) — 60
 - [The app's long runs](#the-apps-long-runs) — 31
 - [The database as a cache](#the-database-as-a-cache) — 7
 - [At scale](#at-scale) — 9
@@ -638,7 +638,7 @@ _2 · `electron/main/reads.test.ts`_
 
 _Config, XDG paths, the device name, and the first run._
 
-**59 behaviours.**
+**60 behaviours.**
 
 ### XDG paths
 
@@ -768,7 +768,7 @@ _2 · `electron/renderer/model/setup.test.ts`_
 
 ### pointing a working config at a different folder
 
-_7 · `electron/renderer/model/setup.test.ts`_
+_8 · `electron/renderer/model/setup.test.ts`_
 
 - opens at the folder step, not the welcome
 - asks for a folder before anything else
@@ -776,6 +776,7 @@ _7 · `electron/renderer/model/setup.test.ts`_
 - can be cancelled, where a repair and a first run cannot
 - has nothing to undo until a preview has written the config
 - puts the original folder back once one has, even after picking again
+- says the old cards stay put when the new folder is empty
 - restores for a repair too, and never for a first run
 
 ### what the preview says would change
