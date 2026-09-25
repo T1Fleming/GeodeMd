@@ -239,6 +239,7 @@ export async function runSelfTest(): Promise<void> {
     await runStatsChecks();
     await runChangeFolderChecks();
     await runEditorChecks();
+    await runVaultChecks();
     await runHelpChecks();
 
     const failed = results.some((r) => r.includes("FAIL"));
@@ -281,7 +282,7 @@ async function runSyncChecks(): Promise<void> {
 
   // Leave and come back. The finish event fired while this screen was mounted
   // the FIRST time; finding the result again can only happen by asking.
-  await click(".tabs .tab", "Collection");
+  await click(".tabs .tab", "Vault");
   await click(".tabs .tab", "Sync");
   check(
     "a remounted screen recovers the result it did not witness",
@@ -309,10 +310,10 @@ async function runSyncChecks(): Promise<void> {
   check("no cancel button is offered for a run", !all("button").some((b) => b === "Cancel"));
 }
 
-/** The collection screen. Four numbers, two of which are deliberately quieter. */
+/** The vault screen. Four numbers, two of which are deliberately quieter. */
 async function runStatsChecks(): Promise<void> {
-  await click(".tabs .tab", "Collection");
-  check("the collection screen opens", await until(".tiles"), text(".screen h2"));
+  await click(".tabs .tab", "Vault");
+  check("the vault screen opens", await until(".tiles"), text(".screen h2"));
 
   const labels = all(".tile .label");
   check("all four counts are shown", labels.length === 4, labels.join(" / "));
@@ -343,8 +344,8 @@ async function runStatsChecks(): Promise<void> {
  * one answer a change must refuse.
  */
 async function runChangeFolderChecks(): Promise<void> {
-  await click(".tabs .tab", "Collection");
-  check("the collection screen names its folder", await until(".folder .path"), text(".folder .path"));
+  await click(".tabs .tab", "Vault");
+  check("the vault screen names its folder", await until(".folder .path"), text(".folder .path"));
   const before = text(".folder .path");
   await shot("folder-01-collection");
 
@@ -376,7 +377,7 @@ async function runChangeFolderChecks(): Promise<void> {
 
   await click(".controls.wizard button", "Cancel");
   check("cancelling returns to the app", await until(".tabs"), "");
-  await click(".tabs .tab", "Collection");
+  await click(".tabs .tab", "Vault");
   await until(".folder .path");
   check("with the folder unchanged", text(".folder .path") === before, text(".folder .path"));
 }
@@ -390,8 +391,8 @@ async function runChangeFolderChecks(): Promise<void> {
  * launches an editor either way.
  */
 async function runEditorChecks(): Promise<void> {
-  await click(".tabs .tab", "Collection");
-  check("the collection screen offers an editor setting", await until(".editor-setting select"), "");
+  await click(".tabs .tab", "Vault");
+  check("the vault screen offers an editor setting", await until(".editor-setting select"), "");
   const options = all(".editor-setting option");
   check("with the system default among its options", options.includes("System default"), options.join(" / "));
   check("and a way to type a command", options.includes("Other…"), options.join(" / "));
@@ -424,6 +425,86 @@ async function runEditorChecks(): Promise<void> {
     back.ok ? String(back.value.current) : back.message,
   );
   check("and the command box goes away", !exists(".editor-setting input"), "");
+}
+
+/** The vault screen's total, which is the one count that is never capped. */
+async function totalCards(): Promise<number> {
+  await click(".tabs .tab", "Vault");
+  await until(".tile .label");
+  // Re-read after the screen's own load, not the previous vault's leftovers.
+  await settle(250);
+  const tiles = Array.from(document.querySelectorAll(".tile"));
+  const total = tiles.find((t) => t.querySelector(".label")?.textContent === "cards in total");
+  return Number(total?.querySelector(".value")?.textContent ?? NaN);
+}
+
+/**
+ * Several vaults (ADR 0027): add a second, switch to it, switch back.
+ *
+ * Only when this run wrote its own config AND was given a second folder —
+ * adding a vault is a real first sync of it, and a plain run's config is the
+ * user's. The switch is driven through the tab bar's `<select>`, because a
+ * switcher wired to the wrong handler passes every channel-level check.
+ */
+async function runVaultChecks(): Promise<void> {
+  await click(".tabs .tab", "Vault");
+  check("the switcher names the open vault in the tab bar", await until(".vault-menu select"), "");
+  const firstName = (document.querySelector(".vault-menu select") as HTMLSelectElement | null)
+    ?.selectedOptions[0]?.textContent ?? "";
+  check("and the vault screen is headed with the same name", text(".screen h2") === firstName, `${text(".screen h2")} / ${firstName}`);
+  check(
+    "the open vault cannot be removed",
+    (Array.from(document.querySelectorAll(".vault.on button")).find((b) => b.textContent?.includes("Remove")) as HTMLButtonElement | undefined)?.disabled === true,
+  );
+  await shot("vaults-01-one");
+  if (!ownsConfig) return;
+
+  const firstTotal = await totalCards();
+  await click(".vaults > button", "Add vault");
+  check("adding a vault opens the setup at the folder step", await until(".setup h2") && text(".setup h2").includes("Add a vault"), text(".setup h2"));
+  check("with a way back out", all(".controls.wizard button").includes("Cancel"), all(".controls.wizard button").join(" / "));
+  await click(".setup button", "Choose folder");
+  if (!(await until(".tiles", 20))) {
+    // No second folder given: the picker answered as a cancel.
+    check("(no GEODE_SELFTEST_SECOND_FOLDER — the rest of the vault checks are skipped)", true);
+    await click(".controls.wizard button", "Cancel");
+    await until(".tabs");
+    return;
+  }
+  await shot("vaults-02-add-folder");
+  await click(".controls.wizard button", "Continue");
+  check("the new vault's settings are shown before they are written", await until(".settings"), text(".setup h2"));
+  check("with no keep-or-replace question, since nothing is replaced", !exists(".choice"));
+  check("and a database of its own", text(".settings").includes("vaults"), all(".settings dd").join(" / "));
+  await click(".controls.wizard button", "Continue");
+  (document.querySelector(".check.big input") as HTMLInputElement).click();
+  await settle();
+  await click(".controls.wizard button", "Continue");
+  check("a new vault goes through the preview too", text("h2").includes("What would change"), text("h2"));
+  await click(".setup button", "Preview");
+  await until("strong");
+  const real = Array.from(document.querySelectorAll("button")).find((b) => (b.textContent ?? "").includes("Sync for real"));
+  real?.click();
+  check("syncing it lands in the app", await until(".tabs", 200), "");
+  await until(".vault-menu select");
+  const menu = () => document.querySelector(".vault-menu select") as HTMLSelectElement;
+  const secondName = menu().selectedOptions[0]?.textContent ?? "";
+  check("with the new vault open", secondName !== firstName && secondName !== "", secondName);
+  const secondTotal = await totalCards();
+  check("and the vault screen counting its cards, not the first vault's", secondTotal > 0 && text(".screen h2") === secondName, `${secondTotal} in ${text(".screen h2")}, ${firstTotal} in ${firstName}`);
+  check("both vaults are listed", all(".vault .name").length === 2, all(".vault .name").join(" / "));
+  await shot("vaults-03-two");
+
+  await choose(".vault-menu select", firstName);
+  await until(".tabs");
+  check("switching back from the tab bar reopens the first vault", (await totalCards()) === firstTotal && text(".screen h2") === firstName, `${text(".screen h2")}: ${text(".tile.strong .value")}`);
+  await shot("vaults-04-switched-back");
+
+  await choose(".vault-menu select", secondName);
+  await until(".tabs");
+  check("and switching again finds the second as it was", (await totalCards()) === secondTotal, text(".screen h2"));
+  await choose(".vault-menu select", firstName);
+  await until(".tabs");
 }
 
 /** Pick the option whose text matches, as a person does with a real select. */

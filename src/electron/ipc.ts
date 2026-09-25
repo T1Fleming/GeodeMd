@@ -32,13 +32,48 @@ export type Result<T> =
   | { ok: true; value: T }
   | { ok: false; kind: ErrorKind; message: string };
 
-/** The config as it crosses — `core`'s `Config` carries a function. */
+/**
+ * The active vault as it crosses — `core`'s `Config` carries a function.
+ * `id` and `name` are the vault's ([ADR 0027](../../docs/decisions/0027-vaults.md)).
+ */
 export interface AppConfig {
+  id: string;
+  name: string;
   notesPath: string;
   device: string;
   dbPath: string;
   editor?: string;
 }
+
+/** One vault in the list: a notes folder and its own database. */
+export interface VaultInfo {
+  id: string;
+  name: string;
+  notesPath: string;
+  dbPath: string;
+}
+
+/** What `vaults/list` answers: every vault, and which one is open. */
+export interface VaultList {
+  active: string;
+  vaults: VaultInfo[];
+}
+
+/**
+ * What switching (or adding, or re-pointing) answers.
+ *
+ * `left` is the end-of-session check for the vault that was just closed. A
+ * review session interrupted by a switch never reaches its own, and after the
+ * switch the notes it opened can no longer be asked about — so the answer is
+ * computed on the way out and carried here. Null when nothing was open.
+ */
+export interface VaultSwitched {
+  config: AppConfig;
+  left: { vault: string; changed: string[] } | null;
+}
+
+/** Why a folder is being picked, which decides the dialog's words. */
+export type PickPurpose = "first" | "repair" | "change" | "add";
 
 /** The sync options that cross — `SyncOptions` carries `onProgress`. */
 export interface SyncRequest {
@@ -110,15 +145,21 @@ export interface FolderReport {
 /**
  * What writing a config for this folder would produce, and what it replaces.
  *
+ * `point` re-points the active vault (a first run, a repair, Change folder…);
+ * `add` makes a new vault with its own database, whose id is `vault` — passed
+ * back to `vaults/add` so the database path shown is the one written.
+ *
  * `preserved` exists so the app can *say* that `device` and `editor` are kept
  * across a replace. The preservation itself is already right in `initConfig`;
  * what a GUI adds is telling the user, because silently keeping a field looks
  * like the question was ignored.
  */
 export interface ConfigProposal {
+  mode: "point" | "add";
   notesPath: string;
   device: string;
   dbPath: string;
+  vault: string;
   replaces: AppConfig | null;
   preserved: Array<"device" | "editor">;
 }
@@ -204,6 +245,12 @@ export const CH = {
   setupInspect: "geode:setup/inspect",
   setupPropose: "geode:setup/propose",
   setupWrite: "geode:setup/write",
+  setupOverlap: "geode:setup/overlap",
+  vaultsList: "geode:vaults/list",
+  vaultsAdd: "geode:vaults/add",
+  vaultsSwitch: "geode:vaults/switch",
+  vaultsRename: "geode:vaults/rename",
+  vaultsRemove: "geode:vaults/remove",
   linkOpen: "geode:link/open",
   editorsList: "geode:editors/list",
   editorsSet: "geode:editors/set",
@@ -232,15 +279,35 @@ export interface GeodeApi {
    * Open the OS folder chooser. Null when the user cancelled — which is an
    * ordinary answer, not a failure, and must not look like one.
    */
-  setupPick(): Promise<Result<string | null>>;
+  setupPick(purpose: PickPurpose): Promise<Result<string | null>>;
   setupInspect(folder: string): Promise<Result<FolderReport>>;
-  setupPropose(folder: string): Promise<Result<ConfigProposal>>;
+  setupPropose(folder: string, mode: "point" | "add"): Promise<Result<ConfigProposal>>;
   /**
-   * Write the config. `replace` must be passed explicitly to overwrite an
-   * existing one — the refusal is the same one a config writer makes without
-   * `--force`, surfaced as a choice rather than an error.
+   * Write the config, pointing the active vault at `folder`. `replace` must be
+   * passed explicitly to overwrite an existing one — the refusal is the same
+   * one a config writer makes without `--force`, surfaced as a choice rather
+   * than an error.
    */
-  setupWrite(folder: string, replace: boolean): Promise<Result<AppConfig>>;
+  setupWrite(folder: string, replace: boolean): Promise<Result<VaultSwitched>>;
+  /**
+   * Which vault this folder would overlap, as a sentence, or null. Asked at
+   * the folder step so a refusal is shown before anything is written.
+   */
+  setupOverlap(folder: string, mode: "point" | "add"): Promise<Result<string | null>>;
+  vaultsList(): Promise<Result<VaultList>>;
+  /** Add a vault at `folder` and switch to it. `id` is the proposal's. */
+  vaultsAdd(folder: string, id: string): Promise<Result<VaultSwitched>>;
+  /**
+   * Open another vault. Refused, with a reason, while a sync or rebuild is
+   * running — the Store is never closed under a job.
+   */
+  vaultsSwitch(id: string): Promise<Result<VaultSwitched>>;
+  vaultsRename(id: string, name: string): Promise<Result<VaultList>>;
+  /**
+   * Take a vault out of the list. Its notes and log are never touched;
+   * `deleteDatabase` also deletes its cache. The open vault cannot be removed.
+   */
+  vaultsRemove(id: string, deleteDatabase: boolean): Promise<Result<VaultList>>;
   /**
    * Open a link in the user's browser.
    *

@@ -26,13 +26,13 @@ It is slower than a normal sync, because it re-reads everything and replays ever
 
 ## When to reach for it
 
-**Counts look wrong.** The Collection tab disagrees with what you expect, or a card you know you have is not appearing.
+**Counts look wrong.** The Vault tab disagrees with what you expect, or a card you know you have is not appearing.
 
 **The database file is gone, or you deleted it.** Nothing is lost. Rebuild.
 
 **You restored an old backup of the database.** Rebuild rather than trusting it — the log has the truth about what you reviewed, and the backup does not.
 
-**After moving your notes directory.** Point GeodeMD at the new folder with **Change folder…** on the Collection screen — it offers to replace the config and keeps your device name — then Rebuild.
+**After moving your notes directory.** Point GeodeMD at the new folder with **Change folder…** on the Vault screen — it offers to replace the config and keeps your device name — then Rebuild.
 
 **You are not sure.** Rebuilding cannot lose review history, because it reads that history from the log rather than from the database. The worst case is that it takes a few minutes.
 

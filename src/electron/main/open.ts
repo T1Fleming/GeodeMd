@@ -97,6 +97,6 @@ export async function openDetached(
 function failure(cmd: string, err: unknown): string {
   const e = err as NodeJS.ErrnoException;
   return e?.code === "ENOENT"
-    ? `could not run \`${cmd}\` — choose another editor on the Collection screen`
+    ? `could not run \`${cmd}\` — choose another editor on the Vault screen`
     : `could not run \`${cmd}\`: ${e instanceof Error ? e.message : String(err)}`;
 }

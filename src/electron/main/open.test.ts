@@ -14,7 +14,7 @@ describe("launching an editor without holding the app open", () => {
     const r = await openDetached("/notes/a.md", 1, "geode-no-such-editor-xyz");
     expect(r.launched).toBe(false);
     expect(r.message).toContain("geode-no-such-editor-xyz");
-    expect(r.message).toContain("Collection screen");
+    expect(r.message).toContain("Vault screen");
   });
 
   it("reports a launcher that vanished between the lookup and the spawn", async () => {

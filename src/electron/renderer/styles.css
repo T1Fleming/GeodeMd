@@ -60,6 +60,27 @@ body {
 .tab:hover { border-color: transparent; color: var(--ink); }
 .tab.on { color: var(--ink); border-bottom-color: var(--accent); }
 
+/* The open vault, at the far end of the strip: always visible, so which
+   notes you are looking at is never a question. */
+.vault-menu {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding-bottom: 0.35rem;
+}
+.vault-menu .label { font-size: 0.8125rem; color: var(--muted); }
+.vault-menu select,
+.vaults input {
+  font: inherit;
+  font-size: 0.875rem;
+  color: var(--ink);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 0.3rem 0.5rem;
+}
+
 .review {
   flex: 1;
   display: grid;
@@ -316,6 +337,26 @@ button.quiet:hover { color: var(--ink); border-color: transparent; }
 }
 .editor-setting input { font-family: ui-monospace, monospace; width: 16rem; user-select: text; }
 .editor-setting .other { display: flex; gap: 0.5rem; }
+
+/* Every vault, one row each. Inside `.folder`: managing them is a setting,
+   not something to glance at. */
+.vaults { width: 100%; display: flex; flex-direction: column; align-items: flex-start; gap: 0.5rem; }
+.vaults h3 { margin: 0.5rem 0 0; font-size: 0.9375rem; }
+.vaults ul { list-style: none; margin: 0; padding: 0; width: 100%; }
+.vault {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 0.25rem 0.75rem;
+  align-items: baseline;
+  padding: 0.4rem 0;
+  border-bottom: 1px solid var(--line);
+}
+.vault .name { font-weight: 600; }
+.vault.on .name { color: var(--accent); }
+.vault .path { font-size: 0.8125rem; }
+.vault .actions { display: flex; gap: 0.4rem; align-items: baseline; }
+.vault .rename { grid-column: 1 / -1; display: flex; gap: 0.5rem; }
+.vault .confirm { grid-column: 1 / -1; padding: 0.5rem 0; }
 
 /* --- first run ---------------------------------------------------------- */
 

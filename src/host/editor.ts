@@ -255,7 +255,7 @@ export function launchCommand(
   if (found === null) {
     return {
       ok: false,
-      message: `the editor \`${cmd}\` was not found — choose another on the Collection screen`,
+      message: `the editor \`${cmd}\` was not found — choose another on the Vault screen`,
     };
   }
   return { ok: true, cmd: found, args };

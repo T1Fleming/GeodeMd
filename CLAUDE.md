@@ -6,6 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 GeodeMD is a spaced repetition tool where everything durable is plain text: cards live as one-line `::` entries inside the user's own Markdown notes, review history is an append-only JSONL log next to those notes, and the SQLite database is a fully rebuildable cache stored elsewhere. It has **one interface**: the Electron app under `src/electron/`. There was a CLI and it was removed rather than deprecated ([ADR 0025](docs/decisions/0025-the-app-is-the-only-interface.md)) — read that ADR before proposing anything that assumes a command line, including automation, cron or ssh, all of which it cost.
 
+**A vault is a notes folder together with its own database** ([ADR 0027](docs/decisions/0027-vaults.md)). Use the word for exactly that unit, in code, UI and docs — not "collection", "folder" or "workspace". "Notes folder" is the folder inside a vault; "collection" survives only as loose prose for a vault's cards. The config lists vaults and names the active one; `device` and `editor` are machine-wide; one vault is open at a time, and two vaults may never overlap (`host/vaults.ts`).
+
 `README.md` covers what it is and quickstart usage; `docs/guides/` covers the tasks with real stakes. `docs/design/` describes how each subsystem works now — read the relevant one before changing sync, the parser, or the store schema.
 
 ## Documentation map
@@ -82,7 +84,7 @@ src/files/      the only module that touches the filesystem, log included
 src/store/      the only module that touches SQLite
 src/scheduler/  FSRS, with its parameters pinned in source (not inherited from ts-fsrs defaults)
 src/core/       the Core class — sync, ingestLogs, getDueCards, countDue, reviewCard, stats, rebuild
-src/host/       this machine: XDG paths, env, hostname, config, error kinds,
+src/host/       this machine: XDG paths, env, hostname, config and the vault list, error kinds,
                 shared vocabulary: ratings, editor resolution, summary fields, phases,
                 the review queue (which card is next, and when one comes back)
 src/electron/   window, IPC contract, renderer       the other
@@ -121,7 +123,7 @@ Other properties the test suite asserts rather than assumes (regressions here ar
 
 The rule carries up into the interfaces where scheduling is involved: `serve(queue, now)` and `press(session, key, now)` take the clock rather than reading it, which is the only reason a ten-minute learning step is testable without waiting ten minutes. Each interface reads the real clock at the edge, on a keypress — never while drawing, or a card would change under the reader.
 
-**Purity is split from I/O even inside the interface.** `host/editor.ts` keeps `resolveEditor`/`editorCommand` pure while `electron/main/open.ts` holds the `spawn`; `main/runs.ts` holds single-flight and the progress throttle with no Electron imports at all; `renderer/model/` holds each screen's decisions as pure functions. The payoff every time: the decisions are testable without a running app. Follow the split when adding to any of them.
+**Purity is split from I/O even inside the interface.** `host/editor.ts` keeps `resolveEditor`/`editorCommand` pure while `electron/main/open.ts` holds the `spawn`; `main/active.ts` holds the open vault and the rule that a switch never closes a Store under a run; `main/runs.ts` holds single-flight and the progress throttle with no Electron imports at all; `renderer/model/` holds each screen's decisions as pure functions. The payoff every time: the decisions are testable without a running app. Follow the split when adding to any of them.
 
 **Source comments cite the original brief by section.** Module headers say things like "section 6 rule 2" or "section 8 step 4", referring to `docs/design/phase-1-brief.md` — retired, historical, still the target of 83 such citations. `docs/design/README.md` maps each section onto the document that now owns it. When code looks odd, that citation is where the rationale lives. **New code should cite the design docs or an ADR, not a brief section.**
 
@@ -152,7 +154,7 @@ XDG_CONFIG_HOME=/tmp/x/config XDG_DATA_HOME=/tmp/x/data \
   GEODE_SELFTEST_FOLDER=/tmp/x/notes GEODE_SELFTEST=1 npx electron dist/electron/main/index.js
 ```
 
-It performs a **real first sync** and stamps every card in that folder, so point it at a copy. Three things are substituted so the harness stays runnable rather than invasive — the editor becomes `touch`, the folder picker answers from the environment, and rebuild is confirmed but not run. All three are listed in `docs/design/app.md`.
+It performs a **real first sync** and stamps every card in that folder, so point it at a copy. Add `GEODE_SELFTEST_SECOND_FOLDER=/tmp/x/work` (another copy, holding different notes) and it also adds that folder as a second vault and switches to it and back. Three things are substituted so the harness stays runnable rather than invasive — the editor becomes `touch`, the folder picker answers from the environment, and rebuild is confirmed but not run. All three are listed in `docs/design/app.md`.
 
 The self-test drives every IPC channel against a real database **and** clicks real buttons, because a button wired to the wrong handler passes every API-level check. `console.log("SHOT name")` from the renderer writes `name.png` of the window — which is the only way to find out whether anything rendered, whether text is legible, or whether a layout collapsed. Screenshots are diagnostic, never fixtures: comparing them byte-for-byte across machines fails on font rendering alone.
 

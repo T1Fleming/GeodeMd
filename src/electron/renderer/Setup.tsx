@@ -17,6 +17,8 @@
 import { useCallback, useEffect, useState } from "react";
 import type { ConfigProposal, FolderReport, SyncSummary } from "../ipc.js";
 import {
+  abandonAdd,
+  abandoned,
   back,
   begin,
   blockers,
@@ -24,6 +26,7 @@ import {
   canCancel,
   canSync,
   leavesCollectionBehind,
+  mode,
   next,
   picked,
   previewReport,
@@ -51,25 +54,50 @@ export function Setup({ from, onReady, onCancel }: Props): React.JSX.Element {
 
   const pick = useCallback(async () => {
     setError(null);
-    const chosen = await window.geode.setupPick();
+    const chosen = await window.geode.setupPick(s.from?.reason ?? "first");
     if (!chosen.ok) return setError(chosen.message);
     // Null is a cancel, which is an ordinary answer — not an error, and not a
     // reason to move the user anywhere.
     if (chosen.value === null) return;
     const report = await window.geode.setupInspect(chosen.value);
     if (!report.ok) return setError(report.message);
-    setS((prev) => picked(prev, report.value));
-  }, []);
+    // Asked now, so a folder inside another vault is refused on this step
+    // rather than by a failed write after the preview.
+    const overlap = await window.geode.setupOverlap(chosen.value, mode(s));
+    if (!overlap.ok) return setError(overlap.message);
+    setS((prev) => picked(prev, report.value, overlap.value));
+  }, [s]);
 
   // Fetch the proposal when the config step opens, so the screen can show what
   // would be written before anything is.
   useEffect(() => {
     if (s.step !== "config" || !s.folder || s.proposal) return;
-    void window.geode.setupPropose(s.folder.path).then((r) => {
+    void window.geode.setupPropose(s.folder.path, mode(s)).then((r) => {
       if (r.ok) setS((prev) => proposed(prev, r.value));
       else setError(r.message);
     });
   }, [s.step, s.folder, s.proposal]);
+
+  /**
+   * Take back a vault this sequence added: switch to the one that was open,
+   * then remove the new one and its database. True when that is done.
+   */
+  const undoAdd = useCallback(async (): Promise<boolean> => {
+    const undo = abandonAdd(s);
+    if (!undo) return true;
+    const back = await window.geode.vaultsSwitch(undo.back);
+    if (!back.ok) {
+      setError(back.message);
+      return false;
+    }
+    const removed = await window.geode.vaultsRemove(undo.remove, true);
+    if (!removed.ok) {
+      setError(removed.message);
+      return false;
+    }
+    setS(abandoned);
+    return true;
+  }, [s]);
 
   const preview = useCallback(async () => {
     if (!s.folder) return;
@@ -86,16 +114,26 @@ export function Setup({ from, onReady, onCancel }: Props): React.JSX.Element {
       // the settings step, BEFORE anything was written. Letting it fire again
       // here would only mean the second preview of the same run failing
       // because the first one succeeded.
-      const written = await window.geode.setupWrite(s.folder.path, true);
-      if (!written.ok) return setError(written.message);
-      setS(wroteConfig);
+      if (mode(s) === "add") {
+        // A vault added by an earlier preview may be for a folder since
+        // changed; the one in the list must be the one being previewed.
+        if (!s.proposal || !(await undoAdd())) return;
+        const added = await window.geode.vaultsAdd(s.folder.path, s.proposal.vault);
+        if (!added.ok) return setError(added.message);
+        const id = added.value.config.id;
+        setS((prev) => wroteConfig(prev, id));
+      } else {
+        const written = await window.geode.setupWrite(s.folder.path, true);
+        if (!written.ok) return setError(written.message);
+        setS((prev) => wroteConfig(prev));
+      }
       const summary = await runToCompletion(true);
       if (typeof summary === "string") return setError(summary);
       setS((prev) => previewed(prev, summary));
     } finally {
       setBusy(false);
     }
-  }, [s.folder, s.replace]);
+  }, [s, undoAdd]);
 
   const syncForReal = useCallback(async () => {
     setBusy(true);
@@ -117,6 +155,7 @@ export function Setup({ from, onReady, onCancel }: Props): React.JSX.Element {
    * the config no longer points at.
    */
   const restore = useCallback(async (): Promise<boolean> => {
+    if (mode(s) === "add") return undoAdd();
     const target = restoreTo(s);
     if (target === null) return true;
     const r = await window.geode.setupWrite(target, true);
@@ -125,7 +164,7 @@ export function Setup({ from, onReady, onCancel }: Props): React.JSX.Element {
       return false;
     }
     return true;
-  }, [s]);
+  }, [s, undoAdd]);
 
   const cancel = useCallback(async () => {
     setBusy(true);
@@ -279,6 +318,7 @@ function Welcome({ onPick }: { onPick: () => void }): React.JSX.Element {
 const CONFIRM_HEADING = {
   repair: "Where did your notes go?",
   change: "Change your notes folder",
+  add: "Add a vault",
   first: "Is this the right folder?",
 } as const;
 
@@ -302,6 +342,14 @@ function ConfirmFolder({
           more. If the folder moved — or lives on a drive that is not plugged in — point
           GeodeMD at it again. Nothing has been lost: your review history lives beside
           your notes.
+        </p>
+      )}
+      {from?.reason === "add" && !report && (
+        <p className="lead">
+          A vault is a notes folder with its own database. Choose the folder for the new
+          one — it cannot be inside another vault, or contain one. The vault you have open,
+          at <code>{from.notesPath}</code>, is not changed, and you can cancel at any
+          point.
         </p>
       )}
       {from?.reason === "change" && !report && (
@@ -366,7 +414,7 @@ function PreviewConfig({
 
   return (
     <>
-      <h2>Settings</h2>
+      <h2>{proposal.mode === "add" ? "The new vault" : "Settings"}</h2>
       <dl className="settings">
         <Row label="notes" value={proposal.notesPath} />
         <Row label="this device" value={proposal.device} />
@@ -376,6 +424,13 @@ function PreviewConfig({
         The database is a cache and can be rebuilt at any time. What matters lives in your
         notes and in the review log beside them.
       </p>
+      {proposal.mode === "add" && (
+        <p className="muted small">
+          The device name{proposal.preserved.includes("editor") && " and editor setting"}{" "}
+          {proposal.preserved.length > 1 ? "are" : "is"} shared by every vault on this
+          machine; the database is this vault's own.
+        </p>
+      )}
 
       {proposal.replaces && (
         <div className="choice">

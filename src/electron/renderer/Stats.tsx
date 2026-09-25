@@ -1,28 +1,38 @@
 /**
- * What is in the collection, and what is waiting.
+ * What is in the open vault, and what is waiting.
  *
  * Four numbers, and the split between two of them is the whole reason this
  * screen is not one number: `due` is an instant, so "due today" is ambiguous.
  * **Due now** is the actionable count and gets the emphasis; *before midnight*
  * is a forecast and is deliberately quieter.
  *
- * It also says which folder those numbers are about, and is where that folder
- * is changed (#43) — the one screen that is about the collection as a whole —
+ * It also says which vault and folder those numbers are about, and is where
+ * that folder is changed (#43) — the one screen that is about the vault as a
+ * whole — where the other vaults are listed, renamed and removed (ADR 0027),
  * and which editor `o` opens a note in (#47), because that is the other
  * setting someone would otherwise have to hand-edit the config for.
  */
 
 import { useCallback, useEffect, useState } from "react";
 import { backlogCapped, countText } from "../../host/present.js";
-import type { EditorChoices, Stats as StatsData } from "../ipc.js";
+import type { AppConfig, EditorChoices, Stats as StatsData, VaultList } from "../ipc.js";
 import { OTHER, SYSTEM_DEFAULT, editorView, onChoose } from "./model/editor.js";
+import { cannotRemove } from "./model/vaults.js";
 
 export function Stats({
-  notesPath,
+  config,
+  vaults,
   onChangeFolder,
+  onAddVault,
+  onSwitch,
+  onVaults,
 }: {
-  notesPath: string;
+  config: AppConfig;
+  vaults: VaultList;
   onChangeFolder: () => void;
+  onAddVault: () => void;
+  onSwitch: (id: string) => void;
+  onVaults: (list: VaultList) => void;
 }): React.JSX.Element {
   const [data, setData] = useState<StatsData | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -47,7 +57,7 @@ export function Stats({
 
   return (
     <main className="screen">
-      <h2>Collection</h2>
+      <h2>{vaults.vaults.find((v) => v.id === vaults.active)?.name ?? config.name}</h2>
       <div className="tiles">
         {/* `10000+` when a count stopped at the cap (ADR 0024) — `countText` is
             host's, so a capped count reads the same wherever it is shown. The
@@ -63,11 +73,146 @@ export function Stats({
           : "Nothing waiting. New cards appear here after a sync."}
       </p>
       <div className="folder">
-        <p className="path">{notesPath}</p>
+        <p className="path">{config.notesPath}</p>
         <button onClick={onChangeFolder}>Change folder…</button>
+        <p className="blocker">
+          For when these notes have moved. To keep a second set of notes beside these, add a
+          vault instead.
+        </p>
+        <Vaults list={vaults} onAdd={onAddVault} onSwitch={onSwitch} onVaults={onVaults} />
         <EditorSetting />
       </div>
     </main>
+  );
+}
+
+/**
+ * Every vault, and what can be done to each: open it, rename it, remove it.
+ *
+ * Removing asks first and says exactly what it does, because "remove" next to
+ * a folder of notes reads as deleting them. It never touches the notes or the
+ * log; the database is offered separately, and said to be a cache.
+ */
+function Vaults({
+  list,
+  onAdd,
+  onSwitch,
+  onVaults,
+}: {
+  list: VaultList;
+  onAdd: () => void;
+  onSwitch: (id: string) => void;
+  onVaults: (list: VaultList) => void;
+}): React.JSX.Element {
+  const [renaming, setRenaming] = useState<string | null>(null);
+  const [name, setName] = useState("");
+  const [removing, setRemoving] = useState<string | null>(null);
+  const [dropDb, setDropDb] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const rename = async (id: string): Promise<void> => {
+    const r = await window.geode.vaultsRename(id, name);
+    if (!r.ok) return setError(r.message);
+    setError(null);
+    setRenaming(null);
+    onVaults(r.value);
+  };
+
+  const remove = async (id: string): Promise<void> => {
+    const r = await window.geode.vaultsRemove(id, dropDb);
+    if (!r.ok) return setError(r.message);
+    setError(null);
+    setRemoving(null);
+    onVaults(r.value);
+  };
+
+  return (
+    <div className="vaults">
+      <h3>Vaults</h3>
+      <ul>
+        {list.vaults.map((v) => (
+          <li key={v.id} className={v.id === list.active ? "vault on" : "vault"}>
+            {renaming === v.id ? (
+              <form
+                className="rename"
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  void rename(v.id);
+                }}
+              >
+                <input
+                  type="text"
+                  value={name}
+                  spellCheck={false}
+                  autoFocus
+                  onChange={(e) => setName(e.target.value)}
+                />
+                <button type="submit" disabled={name.trim() === ""}>
+                  Save
+                </button>
+                <button type="button" onClick={() => setRenaming(null)}>
+                  Cancel
+                </button>
+              </form>
+            ) : (
+              <>
+                <span className="name">{v.name}</span>
+                <span className="path small">{v.notesPath}</span>
+                <span className="actions">
+                  {v.id === list.active ? (
+                    <span className="muted small">open</span>
+                  ) : (
+                    <button onClick={() => onSwitch(v.id)}>Open</button>
+                  )}
+                  <button
+                    onClick={() => {
+                      setName(v.name);
+                      setRenaming(v.id);
+                      setRemoving(null);
+                    }}
+                  >
+                    Rename…
+                  </button>
+                  <button
+                    disabled={cannotRemove(list, v.id) !== null}
+                    title={cannotRemove(list, v.id) ?? ""}
+                    onClick={() => {
+                      setDropDb(true);
+                      setRemoving(v.id);
+                      setRenaming(null);
+                    }}
+                  >
+                    Remove…
+                  </button>
+                </span>
+              </>
+            )}
+            {removing === v.id && (
+              <div className="confirm">
+                <p>
+                  Take “{v.name}” out of the list? Its notes and its review log stay exactly
+                  where they are, in <code>{v.notesPath}</code> — adding the folder again later
+                  brings the vault back with its history.
+                </p>
+                <label className="check">
+                  <input type="checkbox" checked={dropDb} onChange={(e) => setDropDb(e.target.checked)} />
+                  Also delete its database. It is a cache, rebuilt from the notes and the log
+                  when the vault is added again.
+                </label>
+                <div className="controls">
+                  <button className="primary" onClick={() => void remove(v.id)}>
+                    Remove from list
+                  </button>
+                  <button onClick={() => setRemoving(null)}>Cancel</button>
+                </div>
+              </div>
+            )}
+          </li>
+        ))}
+      </ul>
+      <button onClick={onAdd}>Add vault…</button>
+      {error && <p className="error inline">{error}</p>}
+    </div>
   );
 }
 

@@ -13,7 +13,15 @@ import {
   InitRefused,
   newId,
   readConfig,
+  readSettings,
   setEditor,
+  addVault,
+  chooseVault,
+  renameVault,
+  removeVault,
+  removeDatabase,
+  VaultRefused,
+  vaultDbPath,
 } from "./config.js";
 import { classify, isBusy } from "./errors.js";
 import { ConfigError } from "../core/index.js";
@@ -269,7 +277,12 @@ describe("reading a config, and healing a missing device", () => {
 
   it("leaves an existing device alone and writes nothing", async () => {
     const file = path.join(dir, "config.json");
-    await fs.writeFile(file, JSON.stringify({ notesPath: dir, device: "fixed-abcd" }), "utf8");
+    const vault = { id: "abcd1234", name: "notes", notesPath: dir, dbPath: "db" };
+    await fs.writeFile(
+      file,
+      JSON.stringify({ device: "fixed-abcd", active: vault.id, vaults: [vault] }),
+      "utf8",
+    );
     const before = await fs.stat(file);
     expect((await ensureConfig(file))!.device).toBe("fixed-abcd");
     expect((await fs.stat(file)).mtimeMs).toBe(before.mtimeMs);
@@ -305,6 +318,194 @@ describe("reading a config, and healing a missing device", () => {
 
   it("is null for a missing config, like readConfig", async () => {
     expect(await ensureConfig(path.join(dir, "nope.json"))).toBeNull();
+  });
+});
+
+describe("migrating a single-folder config into a vault", () => {
+  /** What every install before vaults has on disk. */
+  async function legacy(fields: Record<string, unknown>): Promise<string> {
+    const file = path.join(dir, "config.json");
+    await fs.writeFile(file, JSON.stringify(fields), "utf8");
+    return file;
+  }
+  const env = (): NodeJS.ProcessEnv => ({ XDG_DATA_HOME: path.join(dir, "data") });
+
+  it("keeps device, dbPath and editor, so this machine's history stays in one shard", async () => {
+    const notes = path.join(dir, "notes");
+    const file = await legacy({ notesPath: notes, device: "mac-ab12", dbPath: "/db/here.sqlite", editor: "code" });
+    const c = await ensureConfig(file, env());
+    expect(c).toMatchObject({ notesPath: notes, device: "mac-ab12", dbPath: "/db/here.sqlite", editor: "code" });
+  });
+
+  it("reads back as one vault, named after its folder and active", async () => {
+    const file = await legacy({ notesPath: path.join(dir, "notes"), device: "mac-ab12", dbPath: "/db" });
+    await ensureConfig(file, env());
+    const s = (await readSettings(file, env()))!;
+    expect(s.vaults).toHaveLength(1);
+    expect(s.vaults[0]).toMatchObject({ name: "notes", notesPath: path.join(dir, "notes"), dbPath: "/db" });
+    expect(s.active).toBe(s.vaults[0]!.id);
+
+    // On disk in the new shape, with the old top-level keys gone.
+    const raw = JSON.parse(await fs.readFile(file, "utf8")) as Record<string, unknown>;
+    expect(raw["notesPath"]).toBeUndefined();
+    expect(raw["device"]).toBe("mac-ab12");
+  });
+
+  it("keeps the database where the old default put it, rather than moving it under vaults/", async () => {
+    // The existing database becomes the first vault's; a path under vaults/
+    // would open an empty one and re-read every note.
+    const file = await legacy({ notesPath: dir, device: "mac-ab12" });
+    expect((await ensureConfig(file, env()))!.dbPath).toBe(path.join(dir, "data", "geodemd", "db.sqlite"));
+  });
+
+  it("migrates once: the vault id is persisted, and the next read writes nothing", async () => {
+    const file = await legacy({ notesPath: dir, device: "mac-ab12" });
+    const first = await ensureConfig(file, env());
+    const before = await fs.stat(file);
+    const second = await ensureConfig(file, env());
+    expect(second!.id).toBe(first!.id);
+    expect((await fs.stat(file)).mtimeMs).toBe(before.mtimeMs);
+  });
+
+  it("leaves the old config readable when the migration cannot be written", async () => {
+    const sub = path.join(dir, "locked");
+    await fs.mkdir(sub);
+    const file = path.join(sub, "config.json");
+    const body = JSON.stringify({ notesPath: dir, device: "mac-ab12", dbPath: "/db" });
+    await fs.writeFile(file, body, "utf8");
+    await fs.chmod(sub, 0o500);
+    try {
+      // The app still opens, on the same device and database…
+      expect(await ensureConfig(file, env())).toMatchObject({ device: "mac-ab12", dbPath: "/db" });
+      // …and the file is exactly what it was, to be migrated next time.
+      expect(await fs.readFile(file, "utf8")).toBe(body);
+      expect((await fs.readdir(sub)).filter((n) => n.endsWith(".tmp"))).toEqual([]);
+    } finally {
+      await fs.chmod(sub, 0o700);
+    }
+  });
+});
+
+describe("keeping a list of vaults", () => {
+  const env = (): NodeJS.ProcessEnv => ({ XDG_DATA_HOME: path.join(dir, "data") });
+  const file = (): string => path.join(dir, "config.json");
+
+  async function twoVaults(): Promise<{ first: string; second: string }> {
+    await fs.mkdir(path.join(dir, "home"), { recursive: true });
+    await fs.mkdir(path.join(dir, "work"), { recursive: true });
+    const first = (await initConfig(file(), path.join(dir, "home"), { env: env() })).id;
+    const second = (await addVault(file(), path.join(dir, "work"), { env: env() })).id;
+    return { first, second };
+  }
+
+  it("gives an added vault its own database, and makes it the open one", async () => {
+    const before = await initConfig(file(), path.join(dir, "home"), { env: env() });
+    const added = await addVault(file(), path.join(dir, "work"), { env: env() });
+    expect(added.dbPath).toBe(vaultDbPath(added.id, env()));
+    expect(added.dbPath).not.toBe(before.dbPath);
+    expect(added.name).toBe("work");
+    expect((await readConfig(file(), env()))!.id).toBe(added.id);
+  });
+
+  it("shares device and editor across vaults, since both are about the machine", async () => {
+    const before = await initConfig(file(), path.join(dir, "home"), { env: env() });
+    await setEditor(file(), "code", env());
+    const added = await addVault(file(), path.join(dir, "work"), { env: env() });
+    expect(added.device).toBe(before.device);
+    expect(added.editor).toBe("code");
+  });
+
+  it("uses the id the proposal showed, and replaces one that is malformed or taken", async () => {
+    const first = await initConfig(file(), path.join(dir, "home"), { env: env() });
+    expect((await addVault(file(), path.join(dir, "a"), { id: "abcd1234", env: env() })).id).toBe("abcd1234");
+    expect((await addVault(file(), path.join(dir, "b"), { id: "abcd1234", env: env() })).id).not.toBe("abcd1234");
+    expect((await addVault(file(), path.join(dir, "c"), { id: "../../x", env: env() })).id).toMatch(/^[a-z0-9]{8}$/);
+    expect((await addVault(file(), path.join(dir, "d"), { id: first.id, env: env() })).id).not.toBe(first.id);
+  });
+
+  it("names two vaults apart even when their folders share a name", async () => {
+    await initConfig(file(), path.join(dir, "a", "notes"), { env: env() });
+    expect((await addVault(file(), path.join(dir, "b", "notes"), { env: env() })).name).toBe("notes 2");
+  });
+
+  it("refuses to add a vault that overlaps one already in the list", async () => {
+    await initConfig(file(), path.join(dir, "home"), { env: env() });
+    await expect(addVault(file(), path.join(dir, "home", "sub"), { env: env() })).rejects.toBeInstanceOf(VaultRefused);
+    await expect(addVault(file(), dir, { env: env() })).rejects.toBeInstanceOf(VaultRefused);
+    expect((await readSettings(file(), env()))!.vaults).toHaveLength(1);
+  });
+
+  it("switches by changing only which vault is active", async () => {
+    const { first } = await twoVaults();
+    const before = (await readSettings(file(), env()))!;
+    await chooseVault(file(), first, env());
+    const after = (await readSettings(file(), env()))!;
+    expect(after.active).toBe(first);
+    expect(after.vaults).toEqual(before.vaults);
+    expect(after.device).toBe(before.device);
+    await expect(chooseVault(file(), "nosuchid", env())).rejects.toBeInstanceOf(VaultRefused);
+  });
+
+  it("renames a vault without moving anything, and refuses a blank or taken name", async () => {
+    const { first, second } = await twoVaults();
+    const s = await renameVault(file(), first, "  Personal ", env());
+    expect(s.vaults.find((v) => v.id === first)).toMatchObject({ name: "Personal", notesPath: path.join(dir, "home") });
+    await expect(renameVault(file(), first, "  ", env())).rejects.toBeInstanceOf(VaultRefused);
+    await expect(renameVault(file(), second, "Personal", env())).rejects.toBeInstanceOf(VaultRefused);
+  });
+
+  it("will not remove the open vault", async () => {
+    const { second } = await twoVaults();
+    await expect(removeVault(file(), second, env())).rejects.toBeInstanceOf(VaultRefused);
+  });
+
+  it("removes a vault without touching its notes or its log", async () => {
+    const { first } = await twoVaults();
+    await fs.mkdir(path.join(dir, "home", ".sr", "log"), { recursive: true });
+    await fs.writeFile(path.join(dir, "home", "a.md"), "Q :: A\n");
+    await fs.writeFile(path.join(dir, "home", ".sr", "log", "mac-2026-09.jsonl"), "{}\n");
+
+    const { removed, settings } = await removeVault(file(), first, env());
+    expect(removed.id).toBe(first);
+    expect(settings.vaults.map((v) => v.id)).not.toContain(first);
+    expect(await fs.readFile(path.join(dir, "home", "a.md"), "utf8")).toBe("Q :: A\n");
+    await fs.access(path.join(dir, "home", ".sr", "log", "mac-2026-09.jsonl"));
+  });
+
+  it("deletes a removed vault's database only when asked, and its directory with it", async () => {
+    const { first, second } = await twoVaults();
+    const work = (await readSettings(file(), env()))!.vaults.find((v) => v.id === second)!;
+    await fs.mkdir(path.dirname(work.dbPath), { recursive: true });
+    for (const f of ["", "-wal", "-shm"]) await fs.writeFile(`${work.dbPath}${f}`, "x");
+
+    await chooseVault(file(), first, env());
+    const { removed } = await removeVault(file(), second, env());
+    await fs.access(work.dbPath); // removing from the list alone keeps it
+    await removeDatabase(removed);
+    await expect(fs.access(path.dirname(work.dbPath))).rejects.toThrow();
+  });
+
+  it("re-points the open vault, keeping its id and its database", async () => {
+    const { second } = await twoVaults();
+    const before = (await readConfig(file(), env()))!;
+    const after = await initConfig(file(), path.join(dir, "moved"), { force: true, env: env() });
+    expect(after).toMatchObject({ id: second, dbPath: before.dbPath, device: before.device });
+    // The name followed the folder, because it was still the folder's name.
+    expect(after.name).toBe("moved");
+    expect((await readSettings(file(), env()))!.vaults).toHaveLength(2);
+  });
+
+  it("keeps a name the user chose when the vault is re-pointed", async () => {
+    const { second } = await twoVaults();
+    await renameVault(file(), second, "Job", env());
+    expect((await initConfig(file(), path.join(dir, "moved"), { force: true, env: env() })).name).toBe("Job");
+  });
+
+  it("refuses to re-point a vault into another one", async () => {
+    await twoVaults();
+    await expect(
+      initConfig(file(), path.join(dir, "home", "inside"), { force: true, env: env() }),
+    ).rejects.toBeInstanceOf(VaultRefused);
   });
 });
 

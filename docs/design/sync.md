@@ -28,7 +28,7 @@ This step is the only part of the design that knows how changes are discovered; 
 
 **Two passes.** The walk collects paths without stat'ing them; a bounded pool (64 in flight) then fills each candidate's mtime and size **in place at its own index**. The pool never pushes, sorts or appends, so ordering is produced by the walk exactly as before — which matters because step 4 re-mints the *later* duplicate of an ID and writes that stamp into the user's note.
 
-Stat'ing concurrently *per directory* would be the obvious shape and the wrong one: concurrency would scale with directory width, and a vault of topic folders holding a handful of notes each would get almost none of it.
+Stat'ing concurrently *per directory* would be the obvious shape and the wrong one: concurrency would scale with directory width, and a notes folder of topic folders holding a handful of notes each would get almost none of it.
 
 The pool is bounded, but not because of file descriptors — `fs.stat` takes a path and holds none. Unbounded fan-out allocates a promise and a closure per file and hands libuv a queue that deep with no backpressure, which at the top of the scale range is a memory cliff.
 
@@ -45,7 +45,7 @@ Measured in one process against one tree, `enumerate()` only — **not extrapola
 | 100 files per directory | 8.34 µs/file | **4.37 µs/file** | 1.91× |
 | 4 files per directory | 15.00 µs/file | **9.49 µs/file** | 1.58× |
 
-The narrow shape is the realistic one for a vault of topic folders, and it is both slower per file and helped less — at four files per directory the serial `readdir` is a fifth of the syscalls rather than a hundredth.
+The narrow shape is the realistic one for a notes folder of topic folders, and it is both slower per file and helped less — at four files per directory the serial `readdir` is a fifth of the syscalls rather than a hundredth.
 
 `statSync` measures faster still (2.69 and 5.91 µs/file) and is rejected anyway: it blocks the event loop for the length of the walk, and the interface over this `core` is a window ([ADR 0025](../decisions/0025-the-app-is-the-only-interface.md)), where that is a frozen UI rather than an invisible pause in a process about to exit.
 
@@ -62,7 +62,7 @@ Measured, and the answer is that it barely matters. Same 20,000-file tree at 4 f
 
 That was the open question, and the walk survives it.
 
-Two limits on the claim. This is local APFS on an SSD — a vault on a network mount, or on a cloud filesystem with online-only placeholders, is a different measurement entirely and the one place a watcher could still earn its dependency. And per-file cost is **not** flat with tree size, so do not extrapolate this to a million files; extrapolating is exactly how the previous figures went wrong.
+Two limits on the claim. This is local APFS on an SSD — a notes folder on a network mount, or on a cloud filesystem with online-only placeholders, is a different measurement entirely and the one place a watcher could still earn its dependency. And per-file cost is **not** flat with tree size, so do not extrapolate this to a million files; extrapolating is exactly how the previous figures went wrong.
 
 Enumeration is also only one of the per-file costs here — the indexed read in step 2 is sequential synchronous SQLite that this does not touch.
 

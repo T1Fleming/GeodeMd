@@ -28,6 +28,12 @@ const CH = {
   setupInspect: "geode:setup/inspect",
   setupPropose: "geode:setup/propose",
   setupWrite: "geode:setup/write",
+  setupOverlap: "geode:setup/overlap",
+  vaultsList: "geode:vaults/list",
+  vaultsAdd: "geode:vaults/add",
+  vaultsSwitch: "geode:vaults/switch",
+  vaultsRename: "geode:vaults/rename",
+  vaultsRemove: "geode:vaults/remove",
   linkOpen: "geode:link/open",
   editorsList: "geode:editors/list",
   editorsSet: "geode:editors/set",
@@ -60,11 +66,18 @@ contextBridge.exposeInMainWorld("geode", {
     // A plain array crosses; a readonly one is the same object to
     // `structuredClone`, and the annotation is only about this side.
     ipcRenderer.invoke(CH.noteChanged, [...filePaths]),
-  setupPick: () => ipcRenderer.invoke(CH.setupPick),
+  setupPick: (purpose: string) => ipcRenderer.invoke(CH.setupPick, purpose),
   setupInspect: (folder: string) => ipcRenderer.invoke(CH.setupInspect, folder),
-  setupPropose: (folder: string) => ipcRenderer.invoke(CH.setupPropose, folder),
+  setupPropose: (folder: string, mode: string) => ipcRenderer.invoke(CH.setupPropose, folder, mode),
   setupWrite: (folder: string, replace: boolean) =>
     ipcRenderer.invoke(CH.setupWrite, folder, replace),
+  setupOverlap: (folder: string, mode: string) => ipcRenderer.invoke(CH.setupOverlap, folder, mode),
+  vaultsList: () => ipcRenderer.invoke(CH.vaultsList),
+  vaultsAdd: (folder: string, id: string) => ipcRenderer.invoke(CH.vaultsAdd, folder, id),
+  vaultsSwitch: (id: string) => ipcRenderer.invoke(CH.vaultsSwitch, id),
+  vaultsRename: (id: string, name: string) => ipcRenderer.invoke(CH.vaultsRename, id, name),
+  vaultsRemove: (id: string, deleteDatabase: boolean) =>
+    ipcRenderer.invoke(CH.vaultsRemove, id, deleteDatabase),
   linkOpen: (href: string) => ipcRenderer.invoke(CH.linkOpen, href),
   editorsList: () => ipcRenderer.invoke(CH.editorsList),
   editorsSet: (editor: string | null) => ipcRenderer.invoke(CH.editorsSet, editor),

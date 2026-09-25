@@ -16,8 +16,16 @@
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { enumerate } from "../files/index.js";
-import { defaultDbPath, defaultDevice, readConfig } from "./config.js";
-import type { FileConfig } from "./config.js";
+import {
+  defaultDbPath,
+  defaultDevice,
+  newVaultId,
+  readConfig,
+  readSettings,
+  vaultDbPath,
+} from "./config.js";
+import type { VaultConfig } from "./config.js";
+import { findOverlap, overlapMessage } from "./vaults.js";
 
 /** What is actually in the folder the user just picked. */
 export interface FolderReport {
@@ -90,44 +98,88 @@ async function exists(p: string): Promise<boolean> {
  * What writing a config for this folder would produce, and what it would
  * replace.
  *
- * `replaces` is the part worth having. `initConfig` already preserves `device`
- * and `editor` across a `--force`, and that is correct — regenerating `device`
- * silently starts a second log shard and scatters one machine's history across
- * two names. But a GUI that quietly preserves a field looks like it ignored
- * you, so the app has to be able to *say* what is kept. It can only say it if
- * it is told, which is what this returns.
+ * Two kinds of write. **`point`** is a first run, a repair, or Change
+ * folder…: it points the active vault at this folder, keeping that vault's
+ * database. **`add`** makes a new vault beside the others, with a database of
+ * its own ([ADR 0027](../../docs/decisions/0027-vaults.md)).
  *
- * Nothing is written. The name in `device` is a **proposal**: it is minted
- * fresh on every call, so the value shown to the user is not the value that
- * ends up in the file unless a write follows. That is fine here and would not
- * be if this pretended to be a read of the real config — hence the name.
+ * `replaces` is the part worth having for `point`. `initConfig` preserves
+ * `device` and `editor` across a `force`, and that is correct — regenerating
+ * `device` silently starts a second log shard and scatters one machine's
+ * history across two names. But a GUI that quietly preserves a field looks
+ * like it ignored you, so the app has to be able to *say* what is kept. It
+ * can only say it if it is told, which is what this returns.
+ *
+ * Nothing is written. On a first run the name in `device` is a **proposal**:
+ * minted fresh on every call, so the value shown is not the value written.
+ * `vault` is different — `addVault` takes it back, so the database path shown
+ * for a new vault is the path it gets.
  */
 export interface ConfigProposal {
+  mode: "point" | "add";
   notesPath: string;
   device: string;
   dbPath: string;
-  /** The config this would overwrite, or null when there is none. */
-  replaces: FileConfig | null;
-  /** Fields carried over from `replaces` rather than minted. */
+  /** The vault's id: the active one's for `point`, a fresh one for `add`. */
+  vault: string;
+  /** For `point`, the active vault this would re-point, or null on a first run. */
+  replaces: VaultConfig | null;
+  /** Machine-wide fields carried over rather than minted. */
   preserved: Array<"device" | "editor">;
 }
 
 export async function proposeConfig(
   configFile: string,
   notesPath: string,
+  mode: "point" | "add" = "point",
   env: NodeJS.ProcessEnv = process.env,
 ): Promise<ConfigProposal> {
-  const replaces = await readConfig(configFile);
+  const current = await readConfig(configFile, env);
   const preserved: Array<"device" | "editor"> = [];
-  if (replaces) {
+  if (current) {
     preserved.push("device");
-    if (replaces.editor !== undefined) preserved.push("editor");
+    if (current.editor !== undefined) preserved.push("editor");
+  }
+  if (mode === "add") {
+    const id = newVaultId();
+    return {
+      mode,
+      notesPath: path.resolve(notesPath),
+      device: current?.device ?? defaultDevice(),
+      dbPath: vaultDbPath(id, env),
+      vault: id,
+      replaces: null,
+      preserved,
+    };
   }
   return {
+    mode,
     notesPath: path.resolve(notesPath),
-    device: replaces?.device ?? defaultDevice(),
-    dbPath: replaces?.dbPath ?? defaultDbPath(env),
-    replaces,
+    device: current?.device ?? defaultDevice(),
+    dbPath: current?.dbPath ?? defaultDbPath(env),
+    vault: current?.id ?? newVaultId(),
+    replaces: current,
     preserved,
   };
+}
+
+/**
+ * Which vault, if any, this folder would overlap — for showing at the folder
+ * step, before anything is written. `addVault` and `initConfig` refuse the
+ * same thing again at the write, so this is the early warning rather than
+ * the guard.
+ *
+ * `mode` decides whether the active vault counts. Re-pointing it may move it
+ * inside its own old folder; adding a vault there may not.
+ */
+export async function vaultOverlap(
+  configFile: string,
+  folder: string,
+  mode: "point" | "add",
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<string | null> {
+  const s = await readSettings(configFile, env);
+  if (!s) return null;
+  const o = await findOverlap(folder, s.vaults, (p) => fs.realpath(p), mode === "point" ? s.active : null);
+  return o ? overlapMessage(folder, o) : null;
 }

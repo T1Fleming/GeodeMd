@@ -6,7 +6,9 @@ Three stores, only two of which are durable.
 |---|---|---|
 | Card content | the user's notes, as the lines they wrote | yes |
 | Review history | `<notes>/.sr/log/<device>-YYYY-MM.jsonl` | yes |
-| Everything else | `~/.local/share/geodemd/db.sqlite` | no — a cache |
+| Everything else | the vault's `dbPath` — `~/.local/share/geodemd/db.sqlite` for the first vault | no — a cache |
+
+**All three are per vault** ([ADR 0027](../decisions/0027-vaults.md)). A vault is one notes folder and one database, and nothing crosses between vaults: a card's history is in its own vault's `.sr/log/`, and its database never holds another vault's rows. That is why two vaults may not overlap — the same stamped line in two vaults would split its history across two logs — and why `core` and `store` did not change when vaults arrived. A `Core` was always one folder and one database; there is simply one per vault now, one open at a time.
 
 ```mermaid
 flowchart LR
