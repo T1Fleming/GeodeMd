@@ -6,6 +6,7 @@ import {
   emptyCounts,
   interpretAnnotatingKey,
   interpretKey,
+  interpretViewingKey,
   PHASE_LABEL,
   RATING_KEYS,
   ratingBreakdown,
@@ -59,9 +60,23 @@ describe("the shared vocabulary", () => {
     for (const [key] of RATING_KEYS) {
       expect(interpretKey(key).kind, key).toBe("rate");
     }
-    for (const { key } of ACTION_KEYS) {
-      expect(interpretKey(key).kind, key).not.toBe("ignore");
+    // Each against the table that is live where it is offered: the note
+    // viewer's keys are read by `interpretViewingKey`, not `interpretKey`.
+    for (const { key, stage } of ACTION_KEYS) {
+      const kind = stage === "note" ? interpretViewingKey(key).kind : interpretKey(key).kind;
+      expect(kind, `${key} at ${stage}`).not.toBe("ignore");
     }
+  });
+
+  it("gives the note viewer its own keys, and none of the review's", () => {
+    // #51: `3` must not rate a card hidden behind the note, and `q` must not
+    // end the session from behind it.
+    expect(actionsAt("note").map((a) => a.key)).toEqual(["o", "e"]);
+    for (const k of ["1", "2", "3", "4", "q", "0", "a", " ", "ArrowDown"]) {
+      expect(interpretViewingKey(k), k).toEqual({ kind: "ignore" });
+    }
+    for (const k of ["o", "O", "Escape"]) expect(interpretViewingKey(k), k).toEqual({ kind: "close" });
+    expect(interpretViewingKey("e")).toEqual({ kind: "editor" });
   });
 
   it("offers `later` only at the question and `open` only at the answer", () => {
@@ -100,6 +115,8 @@ describe("the shared vocabulary", () => {
     for (const stage of ["question", "answer"] as const) {
       expect(actionsAt(stage).some((a) => a.key === "q"), stage).toBe(true);
     }
+    // And not over the note, where the session it would end is out of sight.
+    expect(actionsAt("note").some((a) => a.key === "q")).toBe(false);
   });
 
   it("maps 0 to defer, which records nothing", () => {

@@ -43,6 +43,8 @@ export interface AppConfig {
   device: string;
   dbPath: string;
   editor?: string;
+  /** `o` shows the note inside the app rather than opening `editor` (#51). */
+  viewNotesInside?: boolean;
 }
 
 /** One vault in the list: a notes folder and its own database. */
@@ -137,6 +139,20 @@ export interface NoteOpened {
 }
 
 /**
+ * What `note/read` answers: the note as it is on disk now, for the viewer
+ * (#51).
+ *
+ * `line` is 1-based and is where the card's **stamp** was found in `text`,
+ * which is not necessarily the line the last sync stored — the note may have
+ * been edited since. Null when the card is not in the note any more, and then
+ * the viewer highlights nothing rather than the wrong line.
+ */
+export interface NoteText {
+  text: string;
+  line: number | null;
+}
+
+/**
  * What the folder the user picked actually contains.
  *
  * The markdown count is the check writing a config cannot make: pointing at a
@@ -187,6 +203,8 @@ export interface ConfigProposal {
 export interface EditorChoices {
   detected: Array<{ command: string; label: string }>;
   current: string | null;
+  /** Whether `o` shows the note inside the app (#51); `current` is still what `e` opens. */
+  viewNotesInside: boolean;
 }
 
 export interface RunStarted {
@@ -252,6 +270,7 @@ export const CH = {
   runStatus: "geode:run/status",
   noteOpen: "geode:note/open",
   noteChanged: "geode:note/changed",
+  noteRead: "geode:note/read",
   annotationGet: "geode:annotation/get",
   annotationSet: "geode:annotation/set",
   setupPick: "geode:setup/pick",
@@ -268,6 +287,7 @@ export const CH = {
   linkOpen: "geode:link/open",
   editorsList: "geode:editors/list",
   editorsSet: "geode:editors/set",
+  editorsViewInside: "geode:editors/view-inside",
   // Events, main → renderer.
   runProgress: "geode:run/progress",
   runFinished: "geode:run/finished",
@@ -289,6 +309,13 @@ export interface GeodeApi {
    * has been typed, so asking sooner reports nothing (ADR 0012).
    */
   noteChanged(filePaths: readonly string[]): Promise<Result<string[]>>;
+  /**
+   * A card's note, read for the viewer inside the app (#51). `filePath` is
+   * relative to the notes folder, as stored, and main refuses one that
+   * resolves outside it. `vault` is the vault the review was drawn from, and
+   * main refuses the read if another one is open by now.
+   */
+  noteRead(vault: string, filePath: string, cardId: string): Promise<Result<NoteText>>;
   /**
    * A card's annotation, or null when it has none ([ADR
    * 0029](../../docs/decisions/0029-annotations.md)). Asked when a card is
@@ -359,6 +386,11 @@ export interface GeodeApi {
    * `launchCommand` in `host/editor.ts`. Null is the system default.
    */
   editorsSet(editor: string | null): Promise<Result<EditorChoices>>;
+  /**
+   * Whether `o` shows the note inside the app rather than opening the editor
+   * (#51). Its own config key, so the editor stays chosen for the viewer's `e`.
+   */
+  editorsViewInside(on: boolean): Promise<Result<EditorChoices>>;
   onRunProgress(fn: (p: RunProgress) => void): () => void;
   onRunFinished(fn: (f: RunFinished) => void): () => void;
 }

@@ -74,6 +74,22 @@ Offered once the answer is showing. It opens the note the card lives in, at the 
 
 GeodeMD does not wait for the editor to close — it launches it and carries on, so you can keep reviewing with the note open beside you. At the end of the session it names the notes that changed while you were reviewing, because the cards on screen came from the last sync: **an edited note needs a sync** before the change reaches your queue.
 
+### Reading the note without leaving the review
+
+Most of the time `o` is for reading the paragraph around a card, not for fixing it, and another app taking focus is heavy for that. Tick **Read notes inside GeodeMD first** on the Vault screen, under **Open notes in**, and `o` shows the note in the review window instead — rendered, scrolled to the card, with the card's line highlighted. It is **read-only**.
+
+While the note is showing, **the review keys do nothing**: `3` does not rate the card behind it, `q` does not quit, and `a` does not open the annotation. The arrow keys, Space and Page Down scroll the note. Three keys mean something:
+
+| | |
+|---|---|
+| `o` | back to the card |
+| `Escape` | back to the card |
+| `e` | open in editor |
+
+Back at the card, everything is as you left it — the same card, the answer still showing. `e` opens the note in the editor chosen under **Open notes in**, at the card's line where that editor can be told one — the same thing `o` does with the box unticked — for when reading turns into fixing.
+
+What you see is the note **as it is on disk now**, and the card is from the last sync. If the note has been edited since, the card is looked for by its id rather than its old line number: if it moved, it is highlighted where it is now and a line above the note says so; if it is not in the note any more, nothing is highlighted and that line says why. Links in a note open in your browser; images are not shown yet.
+
 ## `a` — annotate the card
 
 Offered once the answer is showing. It opens a box under the answer for what reviewing this card taught you: a mnemonic, why you keep mixing it up with another card, a source, an example. What is already written there is in the box when it opens.
@@ -91,7 +107,7 @@ If a save fails, the box stays open with your text in it and says why, so nothin
 
 ## Quitting, and what is saved
 
-`q` quits, from the question or the answer. So does `Escape` — except while an annotation is open, where it saves and closes the box instead — and so does Ctrl-C.
+`q` quits, from the question or the answer. So does `Escape` — except while an annotation is open, where it saves and closes the box instead, and while a note is showing, where it goes back to the card — and so does Ctrl-C.
 
 **Every rating you have already given is saved.** Each one is written to the review log and flushed to disk before anything else happens, so quitting, closing the window, a crash, or a dead battery costs you nothing but the cards you had not answered yet. There is no "end session" step and nothing to commit.
 

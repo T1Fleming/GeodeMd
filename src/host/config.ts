@@ -51,6 +51,13 @@ export interface Settings {
    * which is a better answer than any value setup could invent.
    */
   editor?: string;
+  /**
+   * Whether `o` shows the note inside the app rather than opening `editor`
+   * (#51). Its own key rather than a value of `editor`, so choosing the
+   * viewer does not cost the editor it hands on to. Written only when true;
+   * absent means the editor, which is what `o` did before the viewer.
+   */
+  viewNotesInside?: boolean;
   /** The id of the vault the app has open. Always one of `vaults`. */
   active: string;
   /** Never empty: a config with no vault in it is no config at all. */
@@ -65,6 +72,7 @@ export interface Settings {
 export interface VaultConfig extends Vault {
   device: string;
   editor?: string;
+  viewNotesInside?: boolean;
 }
 
 const ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
@@ -302,6 +310,9 @@ async function readRaw(
   const settings: Settings = { device, active: active!, vaults };
   const editor = str(parsed["editor"]);
   if (editor !== undefined && editor.trim() !== "") settings.editor = editor;
+  // Only a literal `true` turns it on: a hand-edited `"yes"` is not a
+  // reason to stop opening the editor the user chose.
+  if (parsed["viewNotesInside"] === true) settings.viewNotesInside = true;
   return { settings, changed, minted };
 }
 
@@ -321,6 +332,7 @@ export function activeVault(settings: Settings): VaultConfig {
     device: settings.device,
   };
   if (settings.editor !== undefined) config.editor = settings.editor;
+  if (settings.viewNotesInside) config.viewNotesInside = true;
   return config;
 }
 
@@ -417,6 +429,7 @@ export async function writeConfig(file: string, settings: Settings): Promise<voi
   const tmp = `${file}.${process.pid}-${tmpSeq++}.tmp`;
   const ordered: Settings = { device: settings.device, active: settings.active, vaults: settings.vaults };
   if (settings.editor !== undefined) ordered.editor = settings.editor;
+  if (settings.viewNotesInside) ordered.viewNotesInside = true;
   await fs.writeFile(tmp, `${JSON.stringify(ordered, null, 2)}\n`, "utf8");
   await fs.rename(tmp, file);
 }
@@ -490,6 +503,28 @@ export async function setEditor(
       delete s.editor;
       const value = editor?.trim() ?? "";
       if (value !== "") s.editor = value;
+    });
+    return settings;
+  } catch (err) {
+    if (err instanceof NoConfig) return null;
+    throw err;
+  }
+}
+
+/**
+ * Turn the note viewer on or off (#51), keeping every other key — `editor`
+ * above all, which the viewer's `e` still opens. Off removes the key rather
+ * than writing `false`. Null when there is no config, as for `setEditor`.
+ */
+export async function setViewNotesInside(
+  file: string,
+  on: boolean,
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<Settings | null> {
+  try {
+    const { settings } = await update(file, env, (s) => {
+      delete s.viewNotesInside;
+      if (on) s.viewNotesInside = true;
     });
     return settings;
   } catch (err) {

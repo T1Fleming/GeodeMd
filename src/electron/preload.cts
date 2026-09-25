@@ -24,6 +24,7 @@ const CH = {
   runStatus: "geode:run/status",
   noteOpen: "geode:note/open",
   noteChanged: "geode:note/changed",
+  noteRead: "geode:note/read",
   annotationGet: "geode:annotation/get",
   annotationSet: "geode:annotation/set",
   setupPick: "geode:setup/pick",
@@ -40,6 +41,7 @@ const CH = {
   linkOpen: "geode:link/open",
   editorsList: "geode:editors/list",
   editorsSet: "geode:editors/set",
+  editorsViewInside: "geode:editors/view-inside",
   runProgress: "geode:run/progress",
   runFinished: "geode:run/finished",
 } as const;
@@ -69,6 +71,8 @@ contextBridge.exposeInMainWorld("geode", {
     // A plain array crosses; a readonly one is the same object to
     // `structuredClone`, and the annotation is only about this side.
     ipcRenderer.invoke(CH.noteChanged, [...filePaths]),
+  noteRead: (vault: string, filePath: string, cardId: string) =>
+    ipcRenderer.invoke(CH.noteRead, vault, filePath, cardId),
   annotationGet: (cardId: string) => ipcRenderer.invoke(CH.annotationGet, cardId),
   annotationSet: (vault: string, cardId: string, text: string) =>
     ipcRenderer.invoke(CH.annotationSet, vault, cardId, text),
@@ -88,6 +92,7 @@ contextBridge.exposeInMainWorld("geode", {
   linkOpen: (href: string) => ipcRenderer.invoke(CH.linkOpen, href),
   editorsList: () => ipcRenderer.invoke(CH.editorsList),
   editorsSet: (editor: string | null) => ipcRenderer.invoke(CH.editorsSet, editor),
+  editorsViewInside: (on: boolean) => ipcRenderer.invoke(CH.editorsViewInside, on),
   onRunProgress: (fn: (p: unknown) => void) => on(CH.runProgress, fn),
   onRunFinished: (fn: (f: unknown) => void) => on(CH.runFinished, fn),
 });

@@ -235,7 +235,8 @@ function Tile({
 }
 
 /**
- * Which program `o` opens a note in. Choosing an installed editor saves at
+ * Which program `o` opens a note in, and whether `o` shows it here first.
+ * Choosing an installed editor saves at
  * once; **Other…** waits for a command and a Save, because saving each
  * keystroke would write `c`, `co` and `cod` to the config on the way to `code`.
  */
@@ -263,8 +264,19 @@ function EditorSetting(): React.JSX.Element | null {
     else setError(r.message);
   };
 
+  /**
+   * The viewer (#51) is its own key, so turning it on leaves the editor
+   * chosen above in place: that is what `e` opens from the note.
+   */
+  const viewInside = async (on: boolean): Promise<void> => {
+    const r = await window.geode.editorsViewInside(on);
+    if (r.ok) setChoices(r.value);
+    else setError(r.message);
+  };
+
   if (!choices || picked === null) return error ? <p className="error inline">{error}</p> : null;
   const view = editorView(choices);
+  const opener = choices.viewNotesInside ? "e, from the note," : "o";
   const saved = view.selected === picked && (picked !== OTHER || view.other === typed.trim());
 
   return (
@@ -311,13 +323,27 @@ function EditorSetting(): React.JSX.Element | null {
         <p className="error inline">{error}</p>
       ) : (
         <p className="blocker">
+          {/* With the viewer on, the editor is reached with `e` from the note. */}
           {picked === SYSTEM_DEFAULT
-            ? "o opens the note at the top, in whatever app opens .md files."
+            ? `${opener} opens the note at the top, in whatever app opens .md files.`
             : picked === OTHER
               ? "A terminal editor such as vim needs a terminal to run in — the app has none to give it."
-              : "o opens the note at the card's line."}
+              : `${opener} opens the note at the card's line.`}
         </p>
       )}
+      <label className="check view-inside">
+        <input
+          type="checkbox"
+          checked={choices.viewNotesInside}
+          onChange={(e) => void viewInside(e.target.checked)}
+        />
+        Read notes inside GeodeMD first
+      </label>
+      <p className="blocker">
+        {choices.viewNotesInside
+          ? "o shows the note here, read-only, at the card's line. e from there opens it in the editor above."
+          : "Off: o goes straight to the editor above."}
+      </p>
     </div>
   );
 }

@@ -11,26 +11,26 @@ app do*, and *where is that proven*. What it deliberately cannot tell you is wha
 app does **untested** — an area that looks thin here is thinly covered, and that is
 worth reading as a finding rather than a gap in the document.
 
-593 behaviours in 12 areas, which follow [the guides](../guides/) rather than the source tree.
+631 behaviours in 12 areas, which follow [the guides](../guides/) rather than the source tree.
 
-- [Reviewing](#reviewing) — 154
+- [Reviewing](#reviewing) — 183
 - [Recognising a card](#recognising-a-card) — 57
 - [Syncing notes](#syncing-notes) — 74
 - [Recovery and the log](#recovery-and-the-log) — 43
 - [Moving between machines](#moving-between-machines) — 16
 - [Keeping several vaults](#keeping-several-vaults) — 45
-- [Setting up this machine](#setting-up-this-machine) — 77
+- [Setting up this machine](#setting-up-this-machine) — 82
 - [The app's long runs](#the-apps-long-runs) — 31
 - [The database as a cache](#the-database-as-a-cache) — 7
 - [At scale](#at-scale) — 9
 - [Rules the project enforces on itself](#rules-the-project-enforces-on-itself) — 34
-- [The documentation tells the truth](#the-documentation-tells-the-truth) — 46
+- [The documentation tells the truth](#the-documentation-tells-the-truth) — 50
 
 ## Reviewing
 
 _A session: which card is next, what the keys mean, what a rating records, and what comes back before the sitting ends._
 
-**154 behaviours.**
+**183 behaviours.**
 
 ### the order cards are served in
 
@@ -136,10 +136,11 @@ _4 · `host/present.test.ts`_
 
 ### the shared vocabulary
 
-_7 · `host/present.test.ts`_
+_8 · `host/present.test.ts`_
 
 - names all four FSRS ratings, in order
 - agrees with interpretKey about every key it advertises
+- gives the note viewer its own keys, and none of the review's
 - offers `later` only at the question and `open` only at the answer
 - offers `annotate` at the answer only, because an annotation may restate it
 - treats every key as text while an annotation is open, except the two that close it
@@ -304,6 +305,22 @@ _15 · `electron/renderer/model/session.test.ts`_
 - refuses the vault switch when that save fails, keeping the text and the error
 - ignores an annotation that arrives for a card no longer on screen
 
+### reading the card's note inside the app
+
+_11 · `electron/renderer/model/session.test.ts`_
+
+- shows the note with `o` rather than spawning an editor, when that is the choice
+- still hands the note to an editor when the viewer is not the choice
+- reveals with `o` at the question, as before, rather than showing the note
+- gives the rating keys, q, 0 and a no effect while the note is showing, or on its way
+- goes back to the same card at the same stage on Escape, or on `o` again
+- hands the note to an editor on `e`, back at the card, and remembers it was opened
+- does not open the note over the card after Escape, when the read answers late
+- goes back to the card when the read fails
+- does not open the note while annotating — `o` is text there
+- does not open the annotation while the note is showing
+- lets the keys it does not use through to the page, so the note can scroll
+
 ### launching an editor without holding the app open
 
 _5 · `electron/main/open.test.ts`_
@@ -323,6 +340,43 @@ _5 · `electron/renderer/model/editor.test.ts`_
 - shows an installed editor as itself
 - shows an editor that is not installed as a typed command, not as the default
 - saves a choice at once, except a typed command, which waits to be typed
+
+### the note's Markdown as the viewer renders it
+
+_7 · `host/note.test.ts`_
+
+- marks the card's line, and only that line
+- marks after a list marker or task box, so the list still renders as one
+- shows no stamp anywhere, on the card's line or any other
+- drops frontmatter, which would render as a rule and a heading made of YAML
+- keeps each line's own terminator, so a CRLF note keeps its line numbers
+- marks nothing when the card was not found
+- refuses a marker id that could break out of the attribute
+
+### what the viewer says about where the card is
+
+_3 · `host/note.test.ts`_
+
+- says nothing when the card is where the last sync left it
+- says so when the note changed and the card moved
+- says so, rather than pointing at the wrong line, when the card is gone
+
+### reading a card's note for the viewer
+
+_4 · `electron/main/note.test.ts`_
+
+- returns the note as it is on disk, and the card's line in it
+- finds the card by its stamp when the note has been edited since the sync
+- has no line for a card that is no longer in the note, rather than a wrong one
+- says the note has gone, as a result rather than a throw
+
+### a note read is confined to the notes folder
+
+_3 · `electron/main/note.test.ts`_
+
+- refuses a stored `..`, however it is spelled
+- resolves before it checks, so a path that only wanders inside is fine
+- is refused for a vault that is no longer open
 
 ### a card's annotation
 
@@ -870,7 +924,7 @@ _7 · `electron/renderer/model/setup.test.ts`_
 
 _Config, XDG paths, the device name, and the first run._
 
-**77 behaviours.**
+**82 behaviours.**
 
 ### where the config lives
 
@@ -925,6 +979,16 @@ _5 · `host/host.test.ts`_
 - removes the key for the system default
 - treats a blank value as the system default
 - persists a device rather than minting a new one on every write
+- is null when there is no config to set it in
+
+### choosing to read notes inside the app
+
+_5 · `host/host.test.ts`_
+
+- is its own key, and leaves the chosen editor where it was
+- removes the key when turned off, rather than writing false
+- is on only for a literal true, so a hand-edited string does not replace the editor
+- survives re-pointing the vault, like the editor
 - is null when there is no config to set it in
 
 ### reading a config, and healing a missing device
@@ -1278,7 +1342,7 @@ _5 · `behaviours/areas.test.ts`_
 
 _Documents that make checkable claims, checked._
 
-**46 behaviours.**
+**50 behaviours.**
 
 ### the demo collection
 
@@ -1328,6 +1392,15 @@ _4 · `journeys/reviewing.test.ts`_
 - advertises no key that does nothing
 - puts `0` and `o` at the stages it says they are offered at
 - offers the editors it says `o` can put on a line, and no terminal ones
+
+### reading the note inside the app does what the guide says
+
+_4 · `journeys/reviewing.test.ts`_
+
+- offers the three keys in its table, and they do what the table says
+- gives the review keys nothing to do while the note is showing
+- is a setting of its own, so `e` still opens the editor chosen under Open notes in
+- finds the card by its id when the note has changed, and says so rather than highlighting the wrong line
 
 ### the intervals the guide quotes are the ones FSRS produces
 

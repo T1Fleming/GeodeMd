@@ -3,8 +3,9 @@
  * which is why that file has thirty tests and this one has none.
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { actionsAt, countText, RATING_KEYS } from "../../host/present.js";
+import { cardLineNote } from "../../host/note.js";
 import type { DueCard } from "../../core/index.js";
 import {
   annotating,
@@ -17,14 +18,18 @@ import {
   isOver,
   keyIsText,
   mayLeave,
+  noteRead,
   owed,
+  passesThrough,
   press,
   reviewed,
   scheduled,
+  viewing,
 } from "./model/session.js";
-import type { Annotation, Effect, Session } from "./model/session.js";
+import type { Annotation, Effect, OpenIn, Session, Viewer } from "./model/session.js";
 import type { Scheduled } from "../../host/queue.js";
-import type { Result } from "../ipc.js";
+import type { NoteText, Result } from "../ipc.js";
+import { linkTarget, renderNote } from "./note.js";
 
 interface Props {
   queue: DueCard[];
@@ -45,6 +50,10 @@ interface Props {
    */
   onRate: (cardId: string, rating: 1 | 2 | 3 | 4) => Promise<Scheduled | null>;
   onOpen: (card: DueCard) => void;
+  /** What `o` does this sitting: an editor, or the viewer here (#51). */
+  openIn: OpenIn;
+  /** A card's note as it is on disk, for the viewer. */
+  onNoteRead: (card: DueCard) => Promise<Result<NoteText>>;
   /** A card's annotation, asked for when it is revealed (ADR 0029). */
   onAnnotationRead: (cardId: string) => Promise<Result<string | null>>;
   /** Write one. A failure keeps the text in the box, with the reason beside it. */
@@ -72,6 +81,8 @@ export function Review({
   stale,
   onRate,
   onOpen,
+  openIn,
+  onNoteRead,
   onAnnotationRead,
   onAnnotationWrite,
   onNote,
@@ -79,7 +90,7 @@ export function Review({
   onRegisterFlush,
   onMore,
 }: Props): React.JSX.Element {
-  const [session, setSession] = useState<Session>(() => begin(queue));
+  const [session, setSession] = useState<Session>(() => begin(queue, openIn));
 
   /**
    * The session that transitions are computed from.
@@ -124,6 +135,16 @@ export function Review({
         return;
       }
 
+      if (effect.kind === "read-note") {
+        void onNoteRead(effect.card).then((r) => {
+          // A failed read goes back to the card with a quiet note, the same
+          // treatment a failed `open` gets: the session survives it.
+          if (!r.ok) onNote(`could not show the note: ${r.message}`);
+          commit(noteRead(live.current, effect.card.id, r.ok ? r.value : null));
+        });
+        return;
+      }
+
       if (effect.kind === "save-annotation") {
         // Kept, so a vault switch can wait for a save already under way.
         const done = onAnnotationWrite(effect.cardId, effect.text).then((r) => {
@@ -144,7 +165,7 @@ export function Review({
         commit(scheduled(live.current, effect.cardId, next, new Date()));
       });
     },
-    [commit, onOpen, onRate, onAnnotationRead, onAnnotationWrite, onNote],
+    [commit, onOpen, onRate, onNoteRead, onAnnotationRead, onAnnotationWrite, onNote],
   );
 
   const handle = useCallback(
@@ -185,6 +206,10 @@ export function Review({
         return;
       }
       if (command || e.altKey) return; // leave shortcuts alone
+      // Over the note, a key the viewer does not use is the page's — the
+      // arrows, Space and Page Down scroll it. The session ignores them all
+      // the same; this only decides whether the page may have them.
+      if (viewing(live.current) && passesThrough(live.current, e.key, command)) return;
       e.preventDefault();
       handle(e.key);
     };
@@ -264,54 +289,130 @@ export function Review({
         )}
       </header>
 
-      <section className="card">
-        <p className="question">{card.question}</p>
-        {session.revealed ? (
-          <p className="answer">{card.answer}</p>
-        ) : (
-          <p className="prompt">press any key to reveal</p>
-        )}
-        {/* Only ever after the reveal — an annotation may restate the answer
-            (ADR 0029). A marker when there is one, never the text itself
-            until asked for. */}
-        {session.revealed && <AnnotationView annotation={session.annotation} onEdit={edit} onSave={save} />}
-      </section>
-
-      {/* Both stages are mapped from the same table, never written out.
-          ACTION_KEYS exists so the two interfaces cannot advertise different
-          keys — dropping `q` is what the first version of this did, and the
-          hand-written `q quit` hint that used to sit at the question stage was
-          the same mistake waiting to happen the moment a second key belonged
-          there. Which keys belong to which stage is `host`'s to say. */}
-      <footer className="legend">
-        {session.revealed && (
-          <>
-            {RATING_KEYS.map(([key, label]) => (
+      {viewing(session) ? (
+        <NoteViewer viewer={session.viewer} onKey={handle} />
+      ) : (
+        <>
+          <section className="card">
+            <p className="question">{card.question}</p>
+            {session.revealed ? (
+              <p className="answer">{card.answer}</p>
+            ) : (
+              <p className="prompt">press any key to reveal</p>
+            )}
+            {/* Only ever after the reveal — an annotation may restate the answer
+                (ADR 0029). A marker when there is one, never the text itself
+                until asked for. */}
+            {session.revealed && <AnnotationView annotation={session.annotation} onEdit={edit} onSave={save} />}
+          </section>
+    
+          {/* Both stages are mapped from the same table, never written out.
+              ACTION_KEYS exists so the two interfaces cannot advertise different
+              keys — dropping `q` is what the first version of this did, and the
+              hand-written `q quit` hint that used to sit at the question stage was
+              the same mistake waiting to happen the moment a second key belonged
+              there. Which keys belong to which stage is `host`'s to say. */}
+          <footer className="legend">
+            {session.revealed && (
+              <>
+                {RATING_KEYS.map(([key, label]) => (
+                  <button
+                    key={key}
+                    className="rating"
+                    disabled={annotating(session)}
+                    onClick={() => handle(key)}
+                  >
+                    <kbd>{key}</kbd> {label}
+                  </button>
+                ))}
+                <span className="spacer" />
+              </>
+            )}
+            {!session.revealed && <span className="spacer" />}
+            {actionsAt(session.revealed ? "answer" : "question").map((a) => (
               <button
-                key={key}
-                className="rating"
+                key={a.key}
+                className="action"
                 disabled={annotating(session)}
-                onClick={() => handle(key)}
+                onClick={() => handle(a.key)}
               >
-                <kbd>{key}</kbd> {label}
+                <kbd>{a.key}</kbd> {a.label}
               </button>
             ))}
-            <span className="spacer" />
-          </>
+          </footer>
+        </>
+      )}
+    </main>
+  );
+}
+
+/**
+ * The card's note, in place of the card (#51). Read-only. Every decision —
+ * which keys work here, what `o` and `Escape` go back to — is in
+ * `model/session.ts`; the Markdown it renders is `host/note.ts`'s, sanitised
+ * in `note.ts`.
+ */
+function NoteViewer({
+  viewer,
+  onKey,
+}: {
+  viewer: Viewer;
+  onKey: (key: string) => void;
+}): React.JSX.Element {
+  const body = useRef<HTMLElement>(null);
+  const open = viewer.at === "open" ? viewer : null;
+  const rendered = useMemo(() => (open ? renderNote(open.text, open.line) : null), [open]);
+  const where = open ? cardLineNote(open.stored, open.line) : null;
+
+  // Focused so the arrows and Page Down scroll the note rather than the
+  // window, and scrolled so the card's line is in the middle of it.
+  useEffect(() => {
+    if (!rendered || !body.current) return;
+    body.current.focus({ preventScroll: true });
+    document.getElementById(rendered.markerId)?.scrollIntoView({ block: "center" });
+  }, [rendered]);
+
+  /**
+   * Links in a note: only http(s), and only through `link/open`. Everything
+   * is intercepted here, so no link in a note ever navigates the window — and
+   * main refuses navigation as well, should one get past.
+   */
+  const onClick = useCallback((e: React.MouseEvent<HTMLElement>) => {
+    const anchor = (e.target as HTMLElement).closest("a");
+    if (!anchor) return;
+    e.preventDefault();
+    const href = linkTarget(anchor.getAttribute("href"));
+    if (href) void window.geode.linkOpen(href);
+  }, []);
+
+  return (
+    <>
+      <section className="viewer">
+        {/* The note's path is already in the bar above, as the locator. */}
+        {where !== null && <p className="viewer-moved">{where}</p>}
+        {rendered ? (
+          <article
+            ref={body}
+            className="note doc"
+            tabIndex={-1}
+            onClick={onClick}
+            // Sanitised in `renderNote`: a note is user content, unlike the
+            // bundled docs Help renders this way.
+            dangerouslySetInnerHTML={{ __html: rendered.html }}
+          />
+        ) : (
+          <p className="muted">reading the note…</p>
         )}
-        {!session.revealed && <span className="spacer" />}
-        {actionsAt(session.revealed ? "answer" : "question").map((a) => (
-          <button
-            key={a.key}
-            className="action"
-            disabled={annotating(session)}
-            onClick={() => handle(a.key)}
-          >
+      </section>
+      <footer className="legend">
+        <span className="spacer" />
+        {actionsAt("note").map((a) => (
+          <button key={a.key} className="action" onClick={() => onKey(a.key)}>
             <kbd>{a.key}</kbd> {a.label}
           </button>
         ))}
       </footer>
-    </main>
+    </>
   );
 }
 

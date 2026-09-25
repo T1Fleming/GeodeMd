@@ -13,6 +13,7 @@ src/electron/
   main/index.ts       window, protocol, handlers. Owns the Store and the Core
   main/runs.ts        single-flight and the progress throttle. No Electron imports
   main/open.ts        the detached editor spawn. No Electron imports
+  main/note.ts        a note's path confined to the notes folder, and read. No Electron imports
   renderer/           React. No Node, no Electron, no core
   renderer/model/     the decisions, as pure functions
 ```
@@ -111,7 +112,29 @@ The user documentation, bundled and rendered in the app ([ADR 0020](../decisions
 
 Links are intercepted at the container rather than rewritten in the HTML. A link to another bundled document navigates inside the window; anything else resolves against the repository's blob URL and opens in a browser. Left alone, a relative link navigates the `app://` page away from the renderer and strands the user in a blank window with no way back.
 
-`dangerouslySetInnerHTML` is safe here **because the input is ours**. The moment a note's text is rendered this way that stops being true.
+`dangerouslySetInnerHTML` is safe here **because the input is ours**. A note's text is not, and the viewer below does not render it this way unsanitised.
+
+## A note is user content: the viewer
+
+With **Read notes inside GeodeMD first** ticked on the Vault screen, `o` shows the card's note in the review window rather than spawning an editor (#51). The choice is its own config key, `viewNotesInside`, not a value of `editor`: the viewer's `e` hands the note on to an editor, and a reserved value would have left it no editor to hand on to but the system default. So `editor` keeps meaning the program, and `e` runs exactly today's `o` path through `note/open` with it — nothing between the config and a spawn had to learn about the viewer. The review screen reads the key from the config when it draws a sitting, so a change applies from the next one; it is never re-read mid-session, for the same reason the card is chosen on a keypress rather than while drawing.
+
+**It is a session state, not a layer.** `Session.viewer` in `renderer/model/session.ts` is `closed`, `loading` or `open`, and while it is not `closed` the review keys are not consulted at all: `host`'s `interpretViewingKey` is the whole table — `o` and `Escape` go back, `e` hands the note to an editor, and everything else is ignored by the session and let through to the page so the arrows scroll the note. `3` cannot rate the card behind the viewer because no path in `press` reaches the rating. The viewer and the annotation box exclude each other the same way: whichever is open has its keys checked first, and neither table opens the other. Its keys are `ACTION_KEYS` rows with `stage: "note"`, which `both` does not reach — `q` over the note would end a session the user cannot see.
+
+**Rendered, with a marker, not raw source with line numbers.** The reason to press `o` is usually reading the paragraph around a card, and prose with its headings, lists and emphasis reads as prose only when rendered; Help already renders Markdown with `marked`, so the viewer looks like the rest of the app. The difficulty rendering brings — `marked`'s HTML has no line numbers — turned out to be small because of the parser's skip list: a card is never read from a code block, table, blockquote, heading or frontmatter, so **a card's line is always paragraph or list-item text**, where inline HTML is honoured. `noteMarkdown` in `host/note.ts` wraps that line's text, after any list marker, in a `<mark>` with a per-render random id before `marked` sees it, and the viewer scrolls to it. The same function removes every stamp (with `parser`'s own `readStamp`, not a second pattern) and drops frontmatter, which would otherwise render as a rule and a heading made of YAML. `breaks: true`, because a note that lists cards one per line would otherwise render as one paragraph with the highlight in the middle of it. Raw source stays the fallback if a note ever defeats this; nothing about the IPC shape would change.
+
+**The card is found by its stamp, not its stored line.** The note is read from disk now and the card is from the last sync, so the stored line may hold something else. `core.readNote` parses the text and returns the line the card's id is on, or null. Moved, it is highlighted where it is and a line above the note says so; gone, nothing is highlighted and the line says why (`cardLineNote`). Highlighting the stored line would point at the wrong text with confidence.
+
+**Sanitising.** A notes folder is often synced or shared, so a note holds whatever anyone with write access to it put there. Three locks, each sufficient against the obvious attacks, so a gap in one is not a hole:
+
+1. **DOMPurify** (3.4.16, in `desktop/`) over `marked`'s output in `renderer/note.ts`, before anything reaches the DOM: HTML profile only (no SVG or MathML), and `<style>`, `style=`, `<form>` and `<button>` forbidden on top of its defaults — a style could draw over the app's own buttons, a form could navigate, and a button in a note could pass for one of the app's. `<script>`, `on*` attributes and `javascript:` URLs are its defaults.
+2. **The CSP** in `index.html` is unchanged: `default-src 'self'`, so an inline script or handler that got past the sanitiser would still not run, and a remote image is not fetched. It is not loosened to make something in a note load.
+3. **The window does not navigate.** Clicks on links in the viewer are intercepted; only `http(s)` goes to `link/open`, which hands only `http(s)` to the shell. Anything else does nothing — `link/open` resolves relative links against the documentation's repository, which is right for Help and meaningless for a note. Behind that, main refuses `will-navigate` and denies `window.open` for the whole window.
+
+The self-test renders a note holding `<script>`, an `onerror`, `javascript:` links, a `style` cover, a form, a button with an `onclick`, an iframe and an SVG script through the viewer's own function in the shipped Chromium, mounts it, and checks that none of it is in the DOM and nothing ran. That check lives there rather than in vitest because the sanitiser needs a DOM, and the one that matters is the app's.
+
+**Reading goes through `note/read`**, which takes the path relative to the notes folder, as the card row stores it, and confines it the way `note/open` does — resolve, then check the prefix — in `main/note.ts`, which both channels share and which is tested under vitest with a stored `..`. Like `annotation/set`, it names the vault the review was drawn from and is refused through `Active.ensureVault` after a switch: a note of the same relative path in another vault is not the note that was asked for. A read is not recorded in `OpenedNotes`, since it cannot change the note; the viewer's `e` goes through `note/open` and is.
+
+Not yet: **images**. A relative image path points into the notes folder, and the CSP blocks it; serving one needs a deliberate route, such as the `app://` handler confined to the notes folder, and is a follow-up. **Editing** is out of scope entirely: it would compete with sync, which writes stamps into the same files, and with the user's own editor.
 
 ## What the screens take from `host`
 
@@ -121,6 +144,8 @@ A decision lives in `host`, not in the component that wanted it first. With two 
 |---|---|
 | `RATING_KEYS`, `interpretKey` | what `3` does, and whether `escape` quits |
 | `interpretAnnotatingKey` | which keys close an open annotation — and that `Escape` there saves rather than quits ([ADR 0029](../decisions/0029-annotations.md)) |
+| `interpretViewingKey`, `stage: "note"` | which keys work while a note is showing — and that the review's do not |
+| `noteMarkdown`, `cardLineNote` | what of a note is rendered and where the card is marked, and what to say when the card has moved |
 | `resolveEditor`, `editorCommand`, `launchCommand`, `detectEditors` | which program `o` opens, how it is told a line, where it is installed, and which editors the Vault screen offers |
 | `OpenedNotes` | the mtime-at-open record behind "this note changed" |
 | `summaryFields` | which counts a sync reports, and in what order |
