@@ -9,13 +9,14 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { DueCard } from "../../core/index.js";
-import type { AppConfig, GeodeApi } from "../ipc.js";
+import type { AppConfig, GeodeApi, VaultList } from "../ipc.js";
 import { Help } from "./Help.js";
 import { Review } from "./Review.js";
 import { Setup } from "./Setup.js";
 import { Stats } from "./Stats.js";
 import { Sync } from "./Sync.js";
 import type { Session } from "./model/session.js";
+import { choose, leftNote, switcherOptions } from "./model/vaults.js";
 import type { Scheduled } from "../../host/queue.js";
 import { backlogCapped } from "../../host/present.js";
 
@@ -30,7 +31,7 @@ type Tab = "review" | "sync" | "stats" | "help";
 const TABS: ReadonlyArray<readonly [Tab, string]> = [
   ["review", "Review"],
   ["sync", "Sync"],
-  ["stats", "Collection"],
+  ["stats", "Vault"],
   ["help", "Help"],
 ];
 
@@ -43,13 +44,15 @@ const TABS: ReadonlyArray<readonly [Tab, string]> = [
  * that happened is an external drive is unplugged.
  *
  * `change` is the third way into the same sequence: a working config the user
- * has asked to point somewhere else (#43).
+ * has asked to point somewhere else (#43). `add` is the fourth: a new vault
+ * beside the open one, whose first sync needs the same preview (ADR 0027).
  */
 type Boot =
   | { at: "checking" }
   | { at: "setup" }
   | { at: "repair"; config: AppConfig }
   | { at: "change"; config: AppConfig }
+  | { at: "add"; config: AppConfig }
   | { at: "ready"; config: AppConfig }
   | { at: "error"; message: string };
 
@@ -57,6 +60,7 @@ export function App(): React.JSX.Element {
   const [tab, setTab] = useState<Tab>("review");
   const [note, setNote] = useState<string | null>(null);
   const [boot, setBoot] = useState<Boot>({ at: "checking" });
+  const [vaults, setVaults] = useState<VaultList | null>(null);
 
   const check = useCallback(async () => {
     setBoot({ at: "checking" });
@@ -69,6 +73,8 @@ export function App(): React.JSX.Element {
       );
     }
     if (c.value === null) return setBoot({ at: "setup" });
+    const list = await window.geode.vaultsList();
+    setVaults(list.ok ? list.value : null);
 
     // A config whose notesPath has gone is routine on a desktop — the folder
     // moved, or a drive is unmounted — and it is NOT a first run.
@@ -84,14 +90,53 @@ export function App(): React.JSX.Element {
     void check();
   }, [check]);
 
+  /**
+   * Open another vault. Every screen is remounted by the re-check, so each
+   * reads the new vault from scratch — nothing drawn for the old one
+   * survives. A review in progress simply ends: every rating was recorded
+   * when it was given, and main answers the end-of-session question for the
+   * vault being left.
+   */
+  const switchTo = useCallback(
+    async (id: string) => {
+      const r = await window.geode.vaultsSwitch(id);
+      if (!r.ok) return setNote(r.message);
+      setNote(leftNote(r.value.left, vaults));
+      await check();
+    },
+    [check, vaults],
+  );
+
+  const onVault = useCallback(
+    (value: string) => {
+      if (!vaults || boot.at === "checking" || boot.at === "setup" || boot.at === "error") return;
+      const c = choose(vaults, value);
+      if (c.kind === "switch") void switchTo(c.id);
+      if (c.kind === "add") setBoot({ at: "add", config: boot.config });
+    },
+    [vaults, boot, switchTo],
+  );
+
   if (boot.at === "checking") return <p className="muted">loading…</p>;
   if (boot.at === "error") return <p className="error">{boot.message}</p>;
-  if (boot.at === "setup" || boot.at === "repair" || boot.at === "change") {
+  if (boot.at === "setup" || boot.at === "repair" || boot.at === "change" || boot.at === "add") {
     return (
       <div className="app">
+        {/* A vault whose folder has gone must not trap the user in it: the
+            other vaults are one choice away. Not offered mid-change or
+            mid-add, where Cancel is the way out and puts things back. */}
+        {boot.at === "repair" && vaults && vaults.vaults.length > 1 && (
+          <nav className="tabs">
+            <VaultMenu list={vaults} onChoose={onVault} allowAdd={false} />
+          </nav>
+        )}
         <Setup
+          // A fresh sequence for each way in, never one carried across.
+          key={boot.at === "setup" ? "setup" : `${boot.at}-${boot.config.id}`}
           from={
-            boot.at === "setup" ? null : { reason: boot.at, notesPath: boot.config.notesPath }
+            boot.at === "setup"
+              ? null
+              : { reason: boot.at, notesPath: boot.config.notesPath, vault: boot.config.id }
           }
           onReady={() => {
             setTab("review");
@@ -117,6 +162,7 @@ export function App(): React.JSX.Element {
             {label}
           </button>
         ))}
+        {vaults && <VaultMenu list={vaults} onChoose={onVault} allowAdd />}
       </nav>
 
       {/* Each screen is mounted only while it is showing, which is what makes
@@ -127,10 +173,14 @@ export function App(): React.JSX.Element {
           given. */}
       {tab === "review" && <ReviewScreen onNote={setNote} />}
       {tab === "sync" && <Sync />}
-      {tab === "stats" && (
+      {tab === "stats" && vaults && (
         <Stats
-          notesPath={boot.config.notesPath}
+          config={boot.config}
+          vaults={vaults}
           onChangeFolder={() => setBoot({ at: "change", config: boot.config })}
+          onAddVault={() => setBoot({ at: "add", config: boot.config })}
+          onSwitch={(id) => void switchTo(id)}
+          onVaults={setVaults}
         />
       )}
       {tab === "help" && <Help />}
@@ -141,6 +191,42 @@ export function App(): React.JSX.Element {
         </div>
       )}
     </div>
+  );
+}
+
+/**
+ * The switcher: the open vault's name, always in the tab bar, and every other
+ * vault one choice away. A plain `<select>`, blurred after each choice so the
+ * review screen's document-level keys are not typed into it.
+ */
+function VaultMenu({
+  list,
+  onChoose,
+  allowAdd,
+}: {
+  list: VaultList;
+  onChoose: (value: string) => void;
+  allowAdd: boolean;
+}): React.JSX.Element {
+  const options = switcherOptions(list).filter((o) => allowAdd || list.vaults.some((v) => v.id === o.value));
+  return (
+    <label className="vault-menu">
+      <span className="label">Vault</span>
+      <select
+        value={list.active}
+        onChange={(e) => {
+          const value = e.target.value;
+          e.target.blur();
+          onChoose(value);
+        }}
+      >
+        {options.map((o) => (
+          <option key={o.value} value={o.value}>
+            {o.label}
+          </option>
+        ))}
+      </select>
+    </label>
   );
 }
 
@@ -258,7 +344,7 @@ function ReviewScreen({ onNote }: { onNote: (m: string) => void }): React.JSX.El
       <main className="review done">
         <h2>Nothing due</h2>
         <p className="muted">
-          {screen.total} cards in the collection. Sync after writing more.
+          {screen.total} cards in this vault. Sync after writing more.
         </p>
       </main>
     );

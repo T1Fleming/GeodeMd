@@ -56,6 +56,12 @@ export const AREAS: readonly Area[] = [
     blurb: "One notes directory, two devices, no built-in sync transport.",
   },
   {
+    name: "Keeping several vaults",
+    blurb:
+      "Several notes folders, each with its own database, one open at a time — " +
+      "adding, switching, and the overlap that would split a card's history.",
+  },
+  {
     name: "Setting up this machine",
     blurb: "Config, XDG paths, the device name, and the first run.",
   },
@@ -99,6 +105,10 @@ export const BY_FILE: Readonly<Record<string, string>> = {
   "core/rebuild.test.ts": "Recovery and the log",
   "core/two-devices.test.ts": "Moving between machines",
 
+  "host/vaults.test.ts": "Keeping several vaults",
+  "electron/main/active.test.ts": "Keeping several vaults",
+  "electron/renderer/model/vaults.test.ts": "Keeping several vaults",
+
   "host/host.test.ts": "Setting up this machine",
   "host/setup.test.ts": "Setting up this machine",
   "electron/renderer/model/setup.test.ts": "Setting up this machine",
@@ -119,6 +129,7 @@ export const BY_FILE: Readonly<Record<string, string>> = {
   "journeys/reviewing.test.ts": "The documentation tells the truth",
   "journeys/recovery.test.ts": "The documentation tells the truth",
   "journeys/moving-notes.test.ts": "The documentation tells the truth",
+  "journeys/vaults.test.ts": "The documentation tells the truth",
 };
 
 /**
@@ -134,6 +145,9 @@ export const BY_GROUP: Readonly<Record<string, string>> = {
   "host/present.test.ts:which counts a sync summary shows": "Syncing notes",
   "host/present.test.ts:why a freshly-edited file was left alone": "Syncing notes",
   "host/present.test.ts:what each sync phase is called": "Syncing notes",
+
+  "host/host.test.ts:keeping a list of vaults": "Keeping several vaults",
+  "electron/renderer/model/setup.test.ts:adding a vault beside the open one": "Keeping several vaults",
 
   "files/files.test.ts:the review log": "Recovery and the log",
   "files/files.test.ts:reading a log shard from where it left off": "Recovery and the log",

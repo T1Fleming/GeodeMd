@@ -3,7 +3,7 @@ import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
 import { inspectFolder, proposeConfig } from "./setup.js";
-import { initConfig, writeConfig } from "./config.js";
+import { initConfig, setEditor } from "./config.js";
 
 let dir: string;
 
@@ -73,7 +73,7 @@ describe("what writing a config would change", () => {
   const configFile = (): string => path.join(dir, "config.json");
 
   it("proposes a fresh device and the default db path on a first run", async () => {
-    const p = await proposeConfig(configFile(), path.join(dir, "notes"), {
+    const p = await proposeConfig(configFile(), path.join(dir, "notes"), "point", {
       XDG_DATA_HOME: path.join(dir, "data"),
     } as NodeJS.ProcessEnv);
     expect(p.replaces).toBeNull();
@@ -97,8 +97,7 @@ describe("what writing a config would change", () => {
     await initConfig(configFile(), path.join(dir, "old"));
     expect((await proposeConfig(configFile(), dir)).preserved).toEqual(["device"]);
 
-    const existing = (await proposeConfig(configFile(), dir)).replaces!;
-    await writeConfig(configFile(), { ...existing, editor: "nvim" });
+    await setEditor(configFile(), "nvim");
     expect((await proposeConfig(configFile(), dir)).preserved).toEqual(["device", "editor"]);
   });
 

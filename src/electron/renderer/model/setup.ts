@@ -24,14 +24,17 @@ export const STEPS: readonly Step[] = ["welcome", "confirm", "config", "vcs", "p
 /**
  * Where the sequence was entered from, when it was not a first run.
  *
- * `repair` is a config whose folder has gone; `change` is the user asking to
- * point a working config somewhere else (#43). Both carry the folder the
- * config held on the way in, because both can end with that folder being
- * wanted back — and by then the config on disk may no longer say what it was.
+ * `repair` is a vault whose folder has gone; `change` is the user asking to
+ * point the open vault somewhere else (#43); `add` is a new vault beside it
+ * ([ADR 0027](../../../../docs/decisions/0027-vaults.md)). All three carry
+ * the open vault's folder and id on the way in, because all three can end
+ * with that vault being wanted back — and by then the config on disk may no
+ * longer say what it was.
  */
 export interface From {
-  reason: "repair" | "change";
+  reason: "repair" | "change" | "add";
   notesPath: string;
+  vault: string;
 }
 
 export interface Setup {
@@ -50,6 +53,12 @@ export interface Setup {
   /** The one explicit acknowledgement. Not a blocker anywhere else. */
   acknowledged: boolean;
   /**
+   * Why this folder would overlap another vault, or null. Asked when the
+   * folder is picked, so the refusal is on the folder step rather than a
+   * failed write three steps later.
+   */
+  overlap: string | null;
+  /**
    * The dry run. Null until one has finished **for the current folder** —
    * changing the folder clears it, which is the whole point.
    */
@@ -60,6 +69,12 @@ export interface Setup {
    * without finishing has to put the old folder back. See `restoreTo`.
    */
   wrote: boolean;
+  /**
+   * The id of the vault this sequence added, once it has. Kept here rather
+   * than read from the proposal, because picking another folder replaces the
+   * proposal — and the vault to undo is the one that was written.
+   */
+  added: string | null;
 }
 
 /**
@@ -71,11 +86,13 @@ export function begin(from: From | null = null): Setup {
     step: from ? "confirm" : "welcome",
     from,
     folder: null,
+    overlap: null,
     proposal: null,
     replace: null,
     acknowledged: false,
     preview: null,
     wrote: false,
+    added: null,
   };
 }
 
@@ -87,8 +104,16 @@ export function begin(from: From | null = null): Setup {
  * a change of folder is how the user ends up looking at one collection's
  * numbers while a different one is about to be rewritten.
  */
-export function picked(s: Setup, report: FolderReport): Setup {
-  return { ...s, step: "confirm", folder: report, proposal: null, preview: null };
+export function picked(s: Setup, report: FolderReport, overlap: string | null = null): Setup {
+  return { ...s, step: "confirm", folder: report, overlap, proposal: null, preview: null };
+}
+
+/**
+ * Which write this sequence ends in: re-pointing the open vault, or adding a
+ * new one. Everything from the proposal to the undo follows from it.
+ */
+export function mode(s: Setup): "point" | "add" {
+  return s.from?.reason === "add" ? "add" : "point";
 }
 
 export function proposed(s: Setup, proposal: ConfigProposal): Setup {
@@ -109,8 +134,8 @@ export function previewed(s: Setup, summary: SyncSummary): Setup {
   return { ...s, preview: summary };
 }
 
-export function wroteConfig(s: Setup): Setup {
-  return { ...s, wrote: true };
+export function wroteConfig(s: Setup, added: string | null = null): Setup {
+  return { ...s, wrote: true, added: added ?? s.added };
 }
 
 /**
@@ -123,7 +148,26 @@ export function wroteConfig(s: Setup): Setup {
  * nothing to restore: there was no config before it.
  */
 export function restoreTo(s: Setup): string | null {
-  return s.wrote && s.from ? s.from.notesPath : null;
+  return s.wrote && s.from && s.from.reason !== "add" ? s.from.notesPath : null;
+}
+
+/**
+ * What undoing an add means: switch back to the vault that was open, then
+ * take the new one out of the list — database included, since the only thing
+ * in it is this sequence's preview. Null when nothing was added.
+ *
+ * Also what a second preview does first, when the folder was changed after
+ * the first one added a vault: the vault in the list must be the one being
+ * previewed, not the one picked before.
+ */
+export function abandonAdd(s: Setup): { back: string; remove: string } | null {
+  if (s.from?.reason !== "add" || s.added === null) return null;
+  return { back: s.from.vault, remove: s.added };
+}
+
+/** Undone: nothing added any more, so there is nothing to undo on the way out. */
+export function abandoned(s: Setup): Setup {
+  return { ...s, added: null, wrote: false };
 }
 
 /**
@@ -135,9 +179,13 @@ export function leavesCollectionBehind(s: Setup): boolean {
   return s.from?.reason === "change" && folderIsUsable(s.folder) && s.folder!.markdownFiles === 0;
 }
 
-/** Only a change can be cancelled: a repair has no working folder to go back to. */
+/**
+ * A change or an add can be cancelled. A repair cannot: it has no working
+ * folder to go back to — though the switcher can still leave it for another
+ * vault.
+ */
 export function canCancel(s: Setup): boolean {
-  return s.from?.reason === "change";
+  return s.from?.reason === "change" || s.from?.reason === "add";
 }
 
 /** A usable place to keep notes. Empty is fine; missing or a file is not. */
@@ -160,15 +208,21 @@ export function blockers(s: Setup): string[] {
       if (s.from?.reason === "change" && s.folder === null) {
         return ["Choose the folder to use instead."];
       }
+      if (s.from?.reason === "add" && s.folder === null) {
+        return ["Choose the folder for the new vault."];
+      }
       if (!folderIsUsable(s.folder)) return ["That folder is not there any more."];
       // Not for a repair: reconnecting the drive and picking the same path is
       // exactly how a repair is meant to end.
       if (s.from?.reason === "change" && s.folder!.path === s.from.notesPath) {
         return ["That is already your notes folder."];
       }
+      // After the same-folder check, so a change says the plainer thing.
+      if (s.overlap) return [s.overlap];
       return [];
     case "config":
       if (!s.proposal) return ["Still reading your existing settings."];
+      if (s.proposal.mode === "add") return [];
       // Only a real question when there is something to replace — and only
       // `true` gets past it. Keeping the old settings is not a way forward
       // through this sequence; it is a way OUT of it, handled by the screen,

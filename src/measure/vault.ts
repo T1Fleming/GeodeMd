@@ -42,7 +42,8 @@ import * as path from "node:path";
 import { LOG_DIR, shardName } from "../files/index.js";
 import type { LogLine } from "../files/index.js";
 import { openCore } from "../host/open.js";
-import type { FileConfig } from "../host/config.js";
+import { activeVault, writeConfig } from "../host/config.js";
+import type { Settings } from "../host/config.js";
 
 /** Cards per note. Fifty is a dense but unremarkable note. */
 const CARDS_PER_FILE = 50;
@@ -160,11 +161,12 @@ async function main(): Promise<void> {
 
   const notes = path.join(root, "notes");
   const configFile = path.join(root, "config.json");
-  const config: FileConfig = {
-    notesPath: notes,
+  const settings: Settings = {
     device: "measure",
-    dbPath: path.join(root, "db.sqlite"),
+    active: "measure0",
+    vaults: [{ id: "measure0", name: "measure", notesPath: notes, dbPath: path.join(root, "db.sqlite") }],
   };
+  const config = activeVault(settings);
 
   // Refuse to build on top of an existing one: a half-overwritten collection
   // would measure something nobody could describe afterwards.
@@ -173,7 +175,7 @@ async function main(): Promise<void> {
     process.exit(1);
   }
   await fs.mkdir(notes, { recursive: true });
-  await fs.writeFile(configFile, `${JSON.stringify(config, null, 2)}\n`, "utf8");
+  await writeConfig(configFile, settings);
 
   let t = Date.now();
   const written = await writeNotes(notes, cards);

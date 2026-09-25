@@ -9,7 +9,7 @@
 import { Core } from "../core/index.js";
 import { Store } from "../store/index.js";
 import { configPath, ensureConfig, newId } from "./config.js";
-import type { FileConfig } from "./config.js";
+import type { VaultConfig } from "./config.js";
 
 /**
  * The config for this machine, or null when there is none yet.
@@ -24,7 +24,7 @@ import type { FileConfig } from "./config.js";
  * a review log, and a config with no `device` would otherwise hand out a fresh
  * name every read.
  */
-export async function readAppConfig(file = configPath()): Promise<FileConfig | null> {
+export async function readAppConfig(file = configPath()): Promise<VaultConfig | null> {
   return ensureConfig(file);
 }
 
@@ -33,7 +33,7 @@ export async function readAppConfig(file = configPath()): Promise<FileConfig | n
  * close it — the CLI does so in a `finally`, and a long-lived process has to
  * do it on shutdown.
  */
-export function openCore(config: FileConfig): { core: Core; store: Store } {
+export function openCore(config: VaultConfig): { core: Core; store: Store } {
   const store = new Store(config.dbPath);
   // Named fields rather than a spread: `editor` belongs to whichever interface
   // opens a note and has no place in core's Config. A spread would quietly

@@ -13,15 +13,25 @@ import { pathToFileURL } from "node:url";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { ConfigError } from "../../core/index.js";
-import type { Core } from "../../core/index.js";
-import type { Store } from "../../store/index.js";
-import { configPath, initConfig, setEditor, settleConfigPath } from "../../host/config.js";
-import type { FileConfig } from "../../host/config.js";
-import { inspectFolder, proposeConfig } from "../../host/setup.js";
-import { OpenedNotes, detectEditors, resolveEditor, thisMachine } from "../../host/editor.js";
+import {
+  NoConfig,
+  addVault,
+  chooseVault,
+  configPath,
+  ensureSettings,
+  initConfig,
+  removeDatabase,
+  removeVault,
+  renameVault,
+  setEditor,
+  settleConfigPath,
+} from "../../host/config.js";
+import type { Settings, VaultConfig } from "../../host/config.js";
+import { inspectFolder, proposeConfig, vaultOverlap } from "../../host/setup.js";
+import { detectEditors, resolveEditor, thisMachine } from "../../host/editor.js";
 import { classify, isBusy } from "../../host/errors.js";
 import { COUNT_CAP } from "../../host/present.js";
-import { openCore, readAppConfig } from "../../host/open.js";
+import { readAppConfig } from "../../host/open.js";
 import { CH } from "../ipc.js";
 import type {
   AppConfig,
@@ -29,13 +39,16 @@ import type {
   EditorChoices,
   FolderReport,
   NoteOpened,
+  PickPurpose,
   Rated,
   Result,
   Stats,
   SyncRequest,
+  VaultList,
+  VaultSwitched,
 } from "../ipc.js";
+import { Active } from "./active.js";
 import { openDetached } from "./open.js";
-import { Runner } from "./runs.js";
 import { counts, dueCards } from "./reads.js";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -50,17 +63,7 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
  */
 const REPO_DOCS = "https://github.com/T1Fleming/GeodeMd/blob/main/docs";
 
-let core: Core | null = null;
-let store: Store | null = null;
-let runner: Runner | null = null;
 let win: BrowserWindow | null = null;
-let config: FileConfig | null = null;
-/**
- * Kept beside the Core rather than in the renderer: the renderer cannot stat a
- * file, and it is the mtime at open time — not the path — that makes the
- * end-of-session answer possible.
- */
-let opened: OpenedNotes | null = null;
 
 /**
  * The config file for this session. Settled once at startup — which may move
@@ -70,45 +73,37 @@ let opened: OpenedNotes | null = null;
 let configFile = configPath();
 
 /**
- * Lazily, on the first command that needs it — never at startup. On a first run
- * there is no config and therefore no dbPath, and opening a database at a path
- * nobody chose is how a stray db.sqlite appears in someone's home directory.
+ * The vault the app has open — its Core, Store, Runner and OpenedNotes, all
+ * opened lazily on the first command that needs them, and all dropped
+ * together whenever the config changes. See `active.ts`.
  */
-async function ensureCore(): Promise<Core> {
-  if (core) return core;
-  const c = await readAppConfig(configFile);
-  if (!c) throw new NoConfig();
-  config = c;
-  opened = new OpenedNotes(c.notesPath);
-  const it = openCore(c);
-  core = it.core;
-  store = it.store;
-  runner = new Runner({
-    core: it.core,
-    emit: (p) => win?.webContents.send(CH.runProgress, p),
-    finish: (f) => win?.webContents.send(CH.runFinished, f),
-  });
-  return core;
+const active = new Active({
+  get configFile() {
+    return configFile;
+  },
+  emit: (p) => win?.webContents.send(CH.runProgress, p),
+  finish: (f) => win?.webContents.send(CH.runFinished, f),
+});
+
+function wire(c: VaultConfig): AppConfig {
+  return { id: c.id, name: c.name, notesPath: c.notesPath, device: c.device, dbPath: c.dbPath };
 }
 
-class NoConfig extends Error {}
+function list(s: Settings): VaultList {
+  return {
+    active: s.active,
+    vaults: s.vaults.map((v) => ({ id: v.id, name: v.name, notesPath: v.notesPath, dbPath: v.dbPath })),
+  };
+}
 
 /**
- * Drop everything derived from the config.
- *
- * Called after the config is rewritten, which is the whole reason it exists:
- * `ensureCore` memoizes, so without this a repaired `notesPath` would be
- * accepted, written, and then ignored for the rest of the session — the app
- * would keep syncing the folder that moved. The Store is closed rather than
- * abandoned, because the next one may well be a different file.
+ * Rewrite the config through `active.change`, which refuses while a run is in
+ * flight and closes the open vault afterwards — so a written config is never
+ * accepted and then ignored because the old `Core` was memoized.
  */
-function resetCore(): void {
-  store?.close();
-  store = null;
-  core = null;
-  runner = null;
-  config = null;
-  opened = null;
+async function switched(write: () => Promise<VaultConfig>): Promise<VaultSwitched> {
+  const { value, left } = await active.change(write);
+  return { config: wire(value), left };
 }
 
 /**
@@ -120,9 +115,6 @@ async function guard<T>(fn: () => Promise<T> | T): Promise<Result<T>> {
   try {
     return { ok: true, value: await fn() };
   } catch (err) {
-    if (err instanceof NoConfig) {
-      return { ok: false, kind: "no-config", message: "no config yet" };
-    }
     return {
       ok: false,
       kind: classify(err),
@@ -138,7 +130,7 @@ function register(): void {
       // Null rather than an error: a first run is an ordinary state, and code
       // that decides "show setup" by catching an exception eventually shows
       // setup after a disk error.
-      return c ? { notesPath: c.notesPath, device: c.device, dbPath: c.dbPath } : null;
+      return c ? wire(c) : null;
     }),
   );
 
@@ -147,23 +139,23 @@ function register(): void {
   // one-review gap a crash leaves behind.
   ipcMain.handle(CH.statsRead, () =>
     guard<Stats>(async () => {
-      const c = await ensureCore();
-      return counts(c, new Date(), COUNT_CAP);
+      const { core } = await active.ensure();
+      return counts(core, new Date(), COUNT_CAP);
     }),
   );
 
   ipcMain.handle(CH.cardsDue, (_e, limit: number) =>
     guard(async () => {
-      const c = await ensureCore();
-      return dueCards(c, new Date(), limit);
+      const { core } = await active.ensure();
+      return dueCards(core, new Date(), limit);
     }),
   );
 
   ipcMain.handle(CH.cardsReview, (_e, cardId: string, rating: 1 | 2 | 3 | 4) =>
     guard<Rated>(async () => {
-      const c = await ensureCore();
+      const { core } = await active.ensure();
       try {
-        const next = await c.reviewCard(cardId, rating, new Date());
+        const next = await core.reviewCard(cardId, rating, new Date());
         // Only what a session needs. `CardState` carries stability, difficulty
         // and the rest, and none of it belongs on a wire type that exists to
         // answer "when do I show this again?".
@@ -179,22 +171,19 @@ function register(): void {
   );
 
   ipcMain.handle(CH.runStart, async (_e, kind: "sync" | "rebuild", req: SyncRequest) => {
-    const r = await guard(async () => {
-      await ensureCore();
-      return runner!.start(kind, req);
-    });
+    const r = await guard(async () => (await active.ensure()).runner.start(kind, req));
     // `start` returns a Result of its own; unwrap rather than nest.
     return r.ok ? r.value : r;
   });
 
   ipcMain.handle(CH.runStatus, () =>
-    guard(() => runner?.status() ?? ({ state: "never" } as const)),
+    guard(() => active.status()),
   );
 
   /**
    * Open the note a card was written in — the app's half of `o`.
    *
-   * `ensureCore` first, for the config rather than the Core: the notes path
+   * `active.ensure` first, for the config rather than the Core: the notes path
    * and the `editor` setting both live there, and a first run has neither.
    *
    * A failure crosses as `ok: false` and is tagged `config`, not `internal`:
@@ -204,8 +193,7 @@ function register(): void {
    */
   ipcMain.handle(CH.noteOpen, async (_e, filePath: string, line: number | null) => {
     const r = await guard<Result<NoteOpened>>(async () => {
-      await ensureCore();
-      const c = config!;
+      const { config: c, opened } = await active.ensure();
       // Resolve, then check the prefix. `filePath` comes from a card row and is
       // relative by construction, but a stored `..` must not be able to reach
       // out of the notes directory and hand an arbitrary file to a spawn.
@@ -216,7 +204,7 @@ function register(): void {
       }
       // Recorded before the spawn: afterwards the editor may already have
       // touched the file, and the baseline would be the edited mtime.
-      await opened!.opened(filePath);
+      await opened.opened(filePath);
       const editor = SELFTEST ? SELFTEST_EDITOR : resolveEditor(c.editor, process.env);
       const result = await openDetached(abs, line, editor);
       if (result.launched) return { ok: true, value: { launched: true } };
@@ -232,7 +220,7 @@ function register(): void {
    * `OpenedNotes` for why not sooner.
    */
   ipcMain.handle(CH.noteChanged, (_e, filePaths: string[]) =>
-    guard<string[]>(async () => (opened ? opened.changed(filePaths) : [])),
+    guard<string[]>(async () => active.current?.opened.changed(filePaths) ?? []),
   );
 
   /**
@@ -246,37 +234,38 @@ function register(): void {
    * otherwise: starting a collection from nothing should not mean leaving the
    * app for Finder. Windows and Linux pickers can already do it, and ignore it.
    */
-  ipcMain.handle(CH.setupPick, () =>
+  ipcMain.handle(CH.setupPick, (_e, purpose: PickPurpose) =>
     guard<string | null>(async () => {
       // The one thing a headless harness genuinely cannot drive: a native
       // modal has no DOM to click. Substituted rather than skipped, so
       // everything downstream of the pick is still exercised for real.
-      if (SELFTEST) return SELFTEST_FOLDER;
-      const r = win
-        ? await dialog.showOpenDialog(win, { properties: ["openDirectory", "createDirectory"] })
-        : await dialog.showOpenDialog({ properties: ["openDirectory", "createDirectory"] });
+      if (SELFTEST) return purpose === "add" ? SELFTEST_SECOND_FOLDER : SELFTEST_FOLDER;
+      const options: Electron.OpenDialogOptions = {
+        properties: ["openDirectory", "createDirectory"],
+        ...(purpose === "add" ? { title: "Choose a folder for the new vault" } : {}),
+      };
+      const r = win ? await dialog.showOpenDialog(win, options) : await dialog.showOpenDialog(options);
       return r.canceled ? null : (r.filePaths[0] ?? null);
     }),
   );
 
   // Deliberately reachable with no config: this is what runs BEFORE there is
-  // one, so it must not go anywhere near `ensureCore`.
+  // one, so it must not go anywhere near `active.ensure`.
   ipcMain.handle(CH.setupInspect, (_e, folder: string) =>
     guard<FolderReport>(() => inspectFolder(folder)),
   );
 
-  ipcMain.handle(CH.setupPropose, (_e, folder: string) =>
-    guard<ConfigProposal>(() => proposeConfig(configFile, folder)),
+  ipcMain.handle(CH.setupPropose, (_e, folder: string, mode: "point" | "add") =>
+    guard<ConfigProposal>(async () => {
+      const p = await proposeConfig(configFile, folder, mode);
+      return { ...p, replaces: p.replaces ? wire(p.replaces) : null };
+    }),
   );
 
-  /**
-   * Write it.
-   *
-   * `replace` maps to `init --force`, so refusing without it is the same
-   * refusal the CLI makes — and it crosses as `init-refused`, which the app
-   * turns into a choice rather than an error. `device` and `editor` survive
-   * the replace; `proposeConfig` is what lets the app say so first.
-   */
+  ipcMain.handle(CH.setupOverlap, (_e, folder: string, mode: "point" | "add") =>
+    guard<string | null>(() => vaultOverlap(configFile, folder, mode)),
+  );
+
   /**
    * Open a link in the user's browser.
    *
@@ -319,13 +308,14 @@ function register(): void {
   /**
    * Choose it. Written to the config file — `o` reads it from the memoized
    * config, so that copy is updated too rather than the Core being reset: the
-   * editor has nothing to do with the collection, and closing the Store to
-   * change it would be all cost.
+   * editor has nothing to do with the vault, and closing the Store to change
+   * it would be all cost.
    */
   ipcMain.handle(CH.editorsSet, (_e, editor: string | null) =>
     guard<EditorChoices>(async () => {
       const written = await setEditor(configFile, editor);
       if (!written) throw new NoConfig();
+      const config = active.current?.config;
       if (config) {
         if (written.editor === undefined) delete config.editor;
         else config.editor = written.editor;
@@ -334,12 +324,62 @@ function register(): void {
     }),
   );
 
+  /**
+   * Write it: point the active vault at `folder`.
+   *
+   * `replace` maps to `init --force`, so refusing without it crosses as
+   * `init-refused`, which the app turns into a choice rather than an error.
+   * `device` and `editor` survive the replace; `proposeConfig` is what lets
+   * the app say so first.
+   */
   ipcMain.handle(CH.setupWrite, (_e, folder: string, replace: boolean) =>
-    guard<AppConfig>(async () => {
-      const written = await initConfig(configFile, folder, { force: replace });
-      // Anything opened against the old config is now wrong.
-      resetCore();
-      return { notesPath: written.notesPath, device: written.device, dbPath: written.dbPath };
+    guard<VaultSwitched>(() => switched(() => initConfig(configFile, folder, { force: replace }))),
+  );
+
+  ipcMain.handle(CH.vaultsList, () =>
+    guard<VaultList>(async () => {
+      const s = await ensureSettings(configFile);
+      if (!s) throw new NoConfig();
+      return list(s);
+    }),
+  );
+
+  /**
+   * Add a vault and open it. The renderer reaches this only through the
+   * setup sequence, because the new vault's first sync stamps every card in
+   * its folder and the preview exists for exactly that.
+   */
+  ipcMain.handle(CH.vaultsAdd, (_e, folder: string, id: string) =>
+    guard<VaultSwitched>(() => switched(() => addVault(configFile, folder, { id }))),
+  );
+
+  ipcMain.handle(CH.vaultsSwitch, (_e, id: string) =>
+    guard<VaultSwitched>(() => switched(() => chooseVault(configFile, id))),
+  );
+
+  /**
+   * Renaming changes only the label, so the open vault is left open — the
+   * same reasoning as `editors/set`.
+   */
+  ipcMain.handle(CH.vaultsRename, (_e, id: string, name: string) =>
+    guard<VaultList>(async () => {
+      const s = await renameVault(configFile, id, name);
+      const open = active.current?.config;
+      if (open?.id === id) open.name = s.vaults.find((v) => v.id === id)!.name;
+      return list(s);
+    }),
+  );
+
+  /**
+   * Take a vault out of the list. Never the open one — `removeVault` refuses
+   * that — so no Store in use is ever deleted from under the app. The notes
+   * and their log are not touched either way.
+   */
+  ipcMain.handle(CH.vaultsRemove, (_e, id: string, deleteDatabase: boolean) =>
+    guard<VaultList>(async () => {
+      const { removed, settings } = await removeVault(configFile, id);
+      if (deleteDatabase) await removeDatabase(removed);
+      return list(settings);
     }),
   );
 }
@@ -378,6 +418,13 @@ const SELFTEST_EDITOR = "touch";
  * exercises "the user backed out" rather than failing.
  */
 const SELFTEST_FOLDER = process.env["GEODE_SELFTEST_FOLDER"] ?? null;
+
+/**
+ * What the picker answers when the self-test adds a second vault. Unset means
+ * a cancel, so the vault checks that need a second folder are skipped rather
+ * than failed. Also a COPY: adding a vault is a real first sync of it.
+ */
+const SELFTEST_SECOND_FOLDER = process.env["GEODE_SELFTEST_SECOND_FOLDER"] ?? null;
 
 /**
  * Where `SHOT` writes. Defaults next to the build so a stray run cannot
@@ -493,9 +540,6 @@ void app.whenReady().then(async () => {
 });
 
 // Nothing closes the Store for you the way the CLI's `finally` blocks do.
-app.on("before-quit", () => {
-  store?.close();
-  store = null;
-});
+app.on("before-quit", () => active.reset());
 
 app.on("window-all-closed", () => app.quit());

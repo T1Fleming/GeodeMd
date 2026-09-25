@@ -121,7 +121,7 @@ async function forEachLimited<T>(
  * per file and hands libuv a queue that deep with no backpressure, which at the
  * top of the scale range is a memory cliff. libuv's threadpool defaults to four
  * threads, so the marginal gain above ~16 is small on a warm local disk; 64 is
- * for the case that actually hurts, a vault on a network or cloud-synced
+ * for the case that actually hurts, a notes folder on a network or cloud-synced
  * filesystem, where the win is overlapping latency rather than CPU.
  */
 const STAT_CONCURRENCY = 64;
@@ -142,7 +142,7 @@ const STAT_CONCURRENCY = 64;
  * of an id and writes that stamp into the user's note.
  *
  * Stat'ing per directory instead would be the obvious shape and the wrong one:
- * concurrency would scale with directory width, and a vault of topic folders
+ * concurrency would scale with directory width, and a notes folder of topic folders
  * holding a handful of notes each would get almost none of it. Measured on a
  * 20k tree at 4 files per directory, this is 1.6x; at 100 per directory, 2.0x.
  *

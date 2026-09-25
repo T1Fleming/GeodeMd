@@ -11,19 +11,20 @@ app do*, and *where is that proven*. What it deliberately cannot tell you is wha
 app does **untested** — an area that looks thin here is thinly covered, and that is
 worth reading as a finding rather than a gap in the document.
 
-491 behaviours in 11 areas, which follow [the guides](../guides/) rather than the source tree.
+545 behaviours in 12 areas, which follow [the guides](../guides/) rather than the source tree.
 
 - [Reviewing](#reviewing) — 129
 - [Recognising a card](#recognising-a-card) — 57
 - [Syncing notes](#syncing-notes) — 73
 - [Recovery and the log](#recovery-and-the-log) — 26
 - [Moving between machines](#moving-between-machines) — 16
-- [Setting up this machine](#setting-up-this-machine) — 72
+- [Keeping several vaults](#keeping-several-vaults) — 44
+- [Setting up this machine](#setting-up-this-machine) — 77
 - [The app's long runs](#the-apps-long-runs) — 31
 - [The database as a cache](#the-database-as-a-cache) — 7
 - [At scale](#at-scale) — 9
 - [Rules the project enforces on itself](#rules-the-project-enforces-on-itself) — 34
-- [The documentation tells the truth](#the-documentation-tells-the-truth) — 37
+- [The documentation tells the truth](#the-documentation-tells-the-truth) — 42
 
 ## Reviewing
 
@@ -40,7 +41,7 @@ _7 · `core/review.test.ts`_
 - serves due cards ahead of new ones, most overdue first
 - respects the limit across both queries
 - starves new cards when the due backlog exceeds the limit
-- builds a locator from the vault-relative path and line
+- builds a locator from the notes-relative path and line
 - carries the path and line as data, not only as a display string
 
 ### recording a review
@@ -290,7 +291,7 @@ _5 · `electron/main/open.test.ts`_
 - does not keep the event loop alive waiting for the child
 - passes the line through the same table the CLI uses
 
-### the editor setting on the Collection screen
+### the editor setting on the Vault screen
 
 _5 · `electron/renderer/model/editor.test.ts`_
 
@@ -676,11 +677,106 @@ _2 · `electron/main/reads.test.ts`_
 - is not allowed to cost the user their session
 - still reports a failure that is not a busy database
 
+## Keeping several vaults
+
+_Several notes folders, each with its own database, one open at a time — adding, switching, and the overlap that would split a card's history._
+
+**44 behaviours.**
+
+### refusing two vaults that share notes
+
+_8 · `host/vaults.test.ts`_
+
+- refuses a folder inside an existing vault
+- refuses a folder that contains an existing vault
+- refuses the same folder twice
+- sees through a symlink, which would otherwise get round the check
+- allows two unrelated folders, including ones that merely share a prefix
+- still counts a vault whose folder is missing, as an unplugged drive would be
+- does not count the vault being re-pointed against itself
+- says which vault, and why that matters, in one sentence
+
+### switching between vaults
+
+_4 · `electron/main/active.test.ts`_
+
+- opens whichever vault the config names, lazily
+- reads no files on coming back to a vault, because its cache survived the switch
+- keeps each vault's cards and schedules its own
+- drops the old Store on a switch rather than keeping it open
+
+### switching while something is running
+
+_3 · `electron/main/active.test.ts`_
+
+- is refused during a sync, and leaves the Store and the config alone
+- refuses to open a vault while a switch is part-way through
+- leaves the open vault open when the write itself is refused
+
+### the end of a session a switch interrupted
+
+_2 · `electron/main/active.test.ts`_
+
+- answers which notes changed in the vault being left, before it is closed
+- has nothing to answer when no vault was open
+
+### the vault switcher
+
+_4 · `electron/renderer/model/vaults.test.ts`_
+
+- lists every vault by name, then a way to add one
+- switches straight to a vault already added — there is nothing to preview
+- sends adding one into the setup sequence instead
+- does nothing when the open vault is chosen again, or an unknown one
+
+### removing a vault from the list
+
+_1 · `electron/renderer/model/vaults.test.ts`_
+
+- is not offered for the open vault, and says why
+
+### notes edited in the vault just left
+
+_2 · `electron/renderer/model/vaults.test.ts`_
+
+- names the vault, since its notes are no longer the ones on screen
+- says nothing when nothing changed, or nothing was open
+
+### keeping a list of vaults
+
+_13 · `host/host.test.ts`_
+
+- gives an added vault its own database, and makes it the open one
+- shares device and editor across vaults, since both are about the machine
+- uses the id the proposal showed, and replaces one that is malformed or taken
+- names two vaults apart even when their folders share a name
+- refuses to add a vault that overlaps one already in the list
+- switches by changing only which vault is active
+- renames a vault without moving anything, and refuses a blank or taken name
+- will not remove the open vault
+- removes a vault without touching its notes or its log
+- deletes a removed vault's database only when asked, and its directory with it
+- re-points the open vault, keeping its id and its database
+- keeps a name the user chose when the vault is re-pointed
+- refuses to re-point a vault into another one
+
+### adding a vault beside the open one
+
+_7 · `electron/renderer/model/setup.test.ts`_
+
+- opens at the folder step, and ends in an add rather than a re-point
+- asks for the new vault's folder first
+- refuses a folder that overlaps another vault, on the folder step
+- has no keep-or-replace question, because nothing is replaced
+- still goes through the preview, because the first sync of a new vault stamps its notes
+- can be cancelled
+- undoes the vault it added — the one written, even after picking again
+
 ## Setting up this machine
 
 _Config, XDG paths, the device name, and the first run._
 
-**72 behaviours.**
+**77 behaviours.**
 
 ### where the config lives
 
@@ -747,6 +843,16 @@ _6 · `host/host.test.ts`_
 - leaves exactly one device behind when two heals race, and settles after
 - does not leave temp files behind
 - is null for a missing config, like readConfig
+
+### migrating a single-folder config into a vault
+
+_5 · `host/host.test.ts`_
+
+- keeps device, dbPath and editor, so this machine's history stays in one shard
+- reads back as one vault, named after its folder and active
+- keeps the database where the old default put it, rather than moving it under vaults/
+- migrates once: the vault id is persisted, and the next read writes nothing
+- leaves the old config readable when the migration cannot be written
 
 ### classifying an error
 
@@ -1078,7 +1184,7 @@ _5 · `behaviours/areas.test.ts`_
 
 _Documents that make checkable claims, checked._
 
-**37 behaviours.**
+**42 behaviours.**
 
 ### the demo collection
 
@@ -1186,4 +1292,34 @@ _2 · `journeys/moving-notes.test.ts`_
 
 - recognises both shapes it names, and neither shape it says it will not
 - leaves one alone in a real sync, and says that it did
+
+### what the guide says belongs to a vault, and what to the machine
+
+_1 · `journeys/vaults.test.ts`_
+
+- shares exactly the rows it says belong to the machine
+
+### where the guide says a new vault's database goes
+
+_1 · `journeys/vaults.test.ts`_
+
+- is the path it shows, and the first vault keeps the old one
+
+### what switching costs, as the guide promises it
+
+_1 · `journeys/vaults.test.ts`_
+
+- reads no notes on coming back to a vault whose notes have not changed
+
+### the folders the guide says are refused
+
+_1 · `journeys/vaults.test.ts`_
+
+- refuses and allows exactly the rows of its table
+
+### what the guide says removing a vault keeps
+
+_1 · `journeys/vaults.test.ts`_
+
+- leaves its notes and log, so adding the folder again brings its history back
 

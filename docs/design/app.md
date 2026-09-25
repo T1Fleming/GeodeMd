@@ -19,9 +19,9 @@ src/electron/
 
 `core` runs in the **main process**, measured rather than assumed ([ADR 0017](../decisions/0017-core-runs-in-the-main-process.md)), and re-measured at ten and fifty times that collection ([ADR 0024](../decisions/0024-remeasure-the-main-process-stall.md)). The decision rests on `core`'s long operations being chunked, so a change that introduces one long synchronous span invalidates it — `src/measure/bench.ts` is how you find out, and `src/measure/vault.ts` builds a collection big enough to ask.
 
-What ADR 0024 changed, and what it left: every count that can grow without bound stops at `COUNT_CAP`, because `stats` — the Collection tab, which nobody thinks of as expensive — cost 632 ms at a million cards; `sync` folds the WAL back in before returning, so the first rating of a session does not pay for it. `rebuild` still stalls the loop for ~240 ms at a time, and that is accepted: it is modal, it offers no cancel, and nothing else in the window does anything while it runs.
+What ADR 0024 changed, and what it left: every count that can grow without bound stops at `COUNT_CAP`, because `stats` — the Vault tab, which nobody thinks of as expensive — cost 632 ms at a million cards; `sync` folds the WAL back in before returning, so the first rating of a session does not pay for it. `rebuild` still stalls the loop for ~240 ms at a time, and that is accepted: it is modal, it offers no cancel, and nothing else in the window does anything while it runs.
 
-`main/runs.ts` and `main/open.ts` deliberately import nothing from Electron, which is what lets them be tested under plain vitest against a real `Core` and a real temp vault. Follow that when adding to `main/`: the Electron-shaped part is usually thin, and everything under it is ordinary code.
+`main/runs.ts`, `main/active.ts` and `main/open.ts` deliberately import nothing from Electron, which is what lets them be tested under plain vitest against a real `Core` and a real temp vault. Follow that when adding to `main/`: the Electron-shaped part is usually thin, and everything under it is ordinary code.
 
 ## Two rules hold the contract together
 
@@ -79,9 +79,25 @@ Routine on a desktop: the folder moved, or a drive is unmounted. Both states rea
 
 ### Changing folder is the same walk, with a way out
 
-**Change folder…** on the Collection screen enters the same sequence at the folder step (#43). It differs from a repair in three ways, all in `model/setup.ts`. It can be **cancelled**, because unlike a repair there is a working folder to go back to. It **refuses the folder already in use**. And leaving without finishing **writes the original folder back**: the preview writes the config before its dry run, because the run reads it. The folder to restore comes from `from`, which is captured on the way in, and never from the proposal. After one preview the proposal is read from a config that already names the new folder, so it would restore the wrong one. "Keep those" on the settings step goes through the same restore, for a repair as well.
+**Change folder…** on the Vault screen enters the same sequence at the folder step (#43). It differs from a repair in three ways, all in `model/setup.ts`. It can be **cancelled**, because unlike a repair there is a working folder to go back to. It **refuses the folder already in use**. And leaving without finishing **writes the original folder back**: the preview writes the config before its dry run, because the run reads it. The folder to restore comes from `from`, which is captured on the way in, and never from the proposal. After one preview the proposal is read from a config that already names the new folder, so it would restore the wrong one. "Keep those" on the settings step goes through the same restore, for a repair as well.
 
 The picker passes `createDirectory`, the only way the macOS panel offers New Folder, so a fresh collection can start without leaving the app. Choosing an empty folder during a change adds one line on the confirm step saying the old cards are still in the old folder (`leavesCollectionBehind`), because a collection that drops to zero reads as loss.
+
+## Vaults
+
+A vault is a notes folder together with its own database, and one is open at a time ([ADR 0027](../decisions/0027-vaults.md)). Everything main derives from the config — the `Core`, the `Store`, the `Runner`, `OpenedNotes` — lives in one `Active` object in `main/active.ts`, opened lazily on the first command that needs it and dropped all together. Every handler that rewrites the config goes through `Active.change`: `setup/write` (re-point), `vaults/add` and `vaults/switch`. Three rules live there, and each is tested against two real vaults in `active.test.ts`:
+
+- **It refuses while a run is in flight**, before the config is written. `core` takes no `AbortSignal`, so the alternative is closing a `Store` under a running job. Refusing rather than waiting, because a click that hangs for the length of a rebuild says nothing.
+- **It refuses to open anything while a switch is part-way through.** The config write is awaited, and a `run/start` landing in that window would otherwise start on the Store about to be closed.
+- **It answers the vault being left's end-of-session question on the way out.** A review interrupted by a switch never reaches its own `note/changed` call, and after the switch that vault's `OpenedNotes` is gone. The answer rides on `VaultSwitched.left`, and the renderer turns it into a note naming the vault.
+
+`vaults/rename` and `editors/set` do *not* go through it: neither changes which folder or database is open, so closing the Store would be all cost.
+
+The switcher is a `<select>` at the end of the tab bar, and is blurred after every choice so the review screen's document-level keys are not typed into it. Its decisions — what the options are, what choosing one means, when **Remove…** is offered — are in `renderer/model/vaults.ts`. The repair screen shows it too, when there is another vault to go to: a vault on an unplugged drive must not trap the user in it.
+
+**Adding a vault is the setup sequence with `from.reason = "add"`.** It differs from a change in what it writes and what it undoes, both in `model/setup.ts`: `mode(s)` is `add`, so the proposal mints a vault id — passed back to `vaults/add`, so the database path shown is the one written — and asks no keep-or-replace question. Undoing is `abandonAdd`: switch back to `from.vault`, then remove the added vault *and* its database, since the only thing in it is the preview. The id to remove is the one recorded at the write, not the proposal's, because picking another folder replaces the proposal. A second preview after a change of folder undoes the first add before adding again, so the vault in the list is always the one being previewed.
+
+The folder step asks `setup/overlap` as soon as a folder is picked, so a folder inside another vault is refused there — `addVault` and `initConfig` refuse the same thing again at the write, and `host/vaults.ts` is the one check both use.
 
 ## Help
 
@@ -100,7 +116,7 @@ A decision lives in `host`, not in the component that wanted it first. With two 
 | In `host` | Why it cannot be per-interface |
 |---|---|
 | `RATING_KEYS`, `interpretKey` | what `3` does, and whether `escape` quits |
-| `resolveEditor`, `editorCommand`, `launchCommand`, `detectEditors` | which program `o` opens, how it is told a line, where it is installed, and which editors the Collection screen offers |
+| `resolveEditor`, `editorCommand`, `launchCommand`, `detectEditors` | which program `o` opens, how it is told a line, where it is installed, and which editors the Vault screen offers |
 | `OpenedNotes` | the mtime-at-open record behind "this note changed" |
 | `summaryFields` | which counts a sync reports, and in what order |
 | `deferralReason` | why a freshly-edited file was left alone |
@@ -122,7 +138,7 @@ The line flag is chosen from the name *before* it is resolved. That is why Zed, 
 
 A named editor that is found nowhere is an `editor` error, **not** a fallback to the OS opener. A fallback would open the note at the top, and nothing would tell the user why the line jump had stopped working.
 
-The Collection screen lists only GUI editors that `editorCommand` can put on a line, and no terminal editors: the spawn is detached with no TTY, so `vim` would start in a window nobody can type into. **Other…** takes any command for the rest.
+The Vault screen lists only GUI editors that `editorCommand` can put on a line, and no terminal editors: the spawn is detached with no TTY, so `vim` would start in a window nobody can type into. **Other…** takes any command for the rest.
 
 ## The two traps
 
@@ -165,6 +181,6 @@ Three substitutions keep the harness runnable rather than invasive:
 
 - `o` spawns `touch` instead of the real editor, so a run does not open TextEdit but the end-of-session "this note changed" path still fires
 - the rebuild confirmation is asserted without the rebuild being run, because on a real collection that is minutes
-- `GEODE_SELFTEST_FOLDER` answers the folder picker, because a native modal has no DOM to click — everything downstream of the pick is driven for real
+- `GEODE_SELFTEST_FOLDER` answers the folder picker, because a native modal has no DOM to click — everything downstream of the pick is driven for real. `GEODE_SELFTEST_SECOND_FOLDER` answers it when the harness adds a second vault
 
-With no config present and that variable set, the harness drives the whole first-run sequence and then continues into the review checks against the collection it just set up. **It performs a real first sync**, so point it at a copy.
+With no config present and that variable set, the harness drives the whole first-run sequence and then continues into the review checks against the vault it just set up. **It performs a real first sync**, so point it at a copy. With the second variable set as well, it adds that folder as a second vault, switches to it and back through the tab bar, and checks that the Vault screen's counts follow — another real first sync, so another copy, and one that does not hold the same notes as the first, or the counts cannot tell the vaults apart.

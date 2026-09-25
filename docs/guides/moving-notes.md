@@ -34,9 +34,13 @@ Point GeodeMD at the folder, then **Rebuild** — it reads the notes and the log
 
 **Do not copy the database.** It lives outside the notes directory, it is a cache, and copying it between machines gets you nothing a rebuild does not do more reliably.
 
+**Several vaults?** Each one is its own notes directory, so copy each, then point GeodeMD at the first during setup and add the rest with **Add vault…** ([Keeping several vaults](vaults.md)). Every vault on the new machine shares that machine's one device name, as they did on the old one.
+
 ## Moving the folder on one machine
 
-Point GeodeMD at the new location — **Change folder…** at the bottom of the Collection screen, which offers to replace the config and keeps your device name — then **Rebuild**.
+Point GeodeMD at the new location — **Change folder…** at the bottom of the Vault screen, which re-points the open vault and keeps your device name — then **Rebuild**. With several vaults, switch to the one whose notes moved first; the others are not touched.
+
+**Change folder…** is not **Add vault…**. Change folder moves a vault; Add vault keeps a second set of notes beside the first. Using Change folder to reach a different set of notes works, but it re-reads every note each time you go back and forth, which is what vaults exist to avoid.
 
 Replacing the config is an explicit choice, because fixing a path should not double as a way to change the machine's identity. It **keeps your `device` name** and your `editor` setting, which is what you want: the device name is what your log file is called, and regenerating it would scatter one machine's history across two filenames.
 

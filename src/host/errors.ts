@@ -14,7 +14,7 @@
  */
 
 import { ConfigError } from "../core/index.js";
-import { InitRefused } from "./config.js";
+import { InitRefused, NoConfig, VaultRefused } from "./config.js";
 
 export type ErrorKind =
   /** No config yet. A first run, not a failure — route to setup, not an alert. */
@@ -23,6 +23,12 @@ export type ErrorKind =
   | "config"
   /** `init` refused to overwrite without --force. */
   | "init-refused"
+  /**
+   * A change to the vault list was declined: two vaults would overlap, the
+   * vault in use would be removed, or a sync is still running in the vault
+   * being left. The message says which, and the user can act on it.
+   */
+  | "refused"
   /**
    * The editor would not start — not installed, or the `editor` key is wrong.
    *
@@ -58,6 +64,8 @@ export function isBusy(err: unknown): boolean {
 
 /** Tag an error while it still has its prototype. */
 export function classify(err: unknown): ErrorKind {
+  if (err instanceof NoConfig) return "no-config";
+  if (err instanceof VaultRefused) return "refused";
   if (err instanceof ConfigError) return "config";
   if (err instanceof InitRefused) return "init-refused";
   return "internal";

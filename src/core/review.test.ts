@@ -95,7 +95,7 @@ describe("the order cards are served in", () => {
     expect(queue.map((c) => c.id)).toEqual(["sr-000000000001", "sr-000000000002"]);
   });
 
-  it("builds a locator from the vault-relative path and line", async () => {
+  it("builds a locator from the notes-relative path and line", async () => {
     await write("algorithms/Sorting.md", "intro\nQ :: A\n");
     await core.sync(T0);
     expect(core.getDueCards(T0)[0]!.locator).toBe("algorithms/Sorting.md:2");

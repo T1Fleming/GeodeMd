@@ -1,5 +1,5 @@
 /**
- * The Editor row on the Collection screen, as pure functions.
+ * The Editor row on the Vault screen, as pure functions.
  *
  * The same split as `run.ts` and `setup.ts`: no React, no IPC. The one real
  * decision here is what to show when the config names an editor that is not

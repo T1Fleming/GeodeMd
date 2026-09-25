@@ -69,10 +69,10 @@ The enumeration one is now written — `src/files/enumerate.bench.test.ts`, gate
 ```sh
 GEODE_BENCH=1 npx vitest run src/files/enumerate.bench.test.ts
 GEODE_BENCH=1 GEODE_BENCH_FILES=80000 npx vitest run src/files/enumerate.bench.test.ts
-GEODE_BENCH=1 GEODE_BENCH_TREE=/path/to/a/real/vault npx vitest run src/files/enumerate.bench.test.ts
+GEODE_BENCH=1 GEODE_BENCH_TREE=/path/to/a/real/notes-folder npx vitest run src/files/enumerate.bench.test.ts
 ```
 
-It runs every strategy in **one process against one tree**, because the figures that turned out to be wrong came from a different machine on a different day. It uses two tree shapes — 100 files per directory and 4 — because the narrow one is what a vault of topic folders looks like and is where per-directory concurrency collapses; reporting only the wide shape would be the flattering version of the benchmark. Median of five runs after a discarded warm-up, since one page-cache miss skews a mean.
+It runs every strategy in **one process against one tree**, because the figures that turned out to be wrong came from a different machine on a different day. It uses two tree shapes — 100 files per directory and 4 — because the narrow one is what a notes folder of topic folders looks like and is where per-directory concurrency collapses; reporting only the wide shape would be the flattering version of the benchmark. Median of five runs after a discarded warm-up, since one page-cache miss skews a mean.
 
 **One untestable surface was removed rather than tested**, and it is worth recording which way that went. The CLI's review loop needed a TTY, so nothing in the suite could enter it, and that is where the `escape` bug lived for months: `host` said escape quits, the app quit, and the terminal silently revealed the answer instead, because the one line translating readline's `(str, key)` pair into what `host` speaks was unreachable by any test. The fix was priced — a pseudo-terminal harness and a native dependency — and then the interface it protected was deleted instead ([ADR 0025](../decisions/0025-the-app-is-the-only-interface.md)). The coverage hole closed by subtraction.
 

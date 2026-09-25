@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  abandonAdd,
+  abandoned,
   back,
   begin,
   blockers,
@@ -7,6 +9,7 @@ import {
   canCancel,
   canSync,
   leavesCollectionBehind,
+  mode,
   next,
   picked,
   previewReport,
@@ -31,6 +34,8 @@ const folder = (over: Partial<FolderReport> = {}): FolderReport => ({
 });
 
 const proposal = (over: Partial<ConfigProposal> = {}): ConfigProposal => ({
+  mode: "point",
+  vault: "old00001",
   notesPath: "/notes",
   device: "laptop-ab12",
   dbPath: "/data/db.sqlite",
@@ -41,6 +46,8 @@ const proposal = (over: Partial<ConfigProposal> = {}): ConfigProposal => ({
 
 /** A config already on disk, which is what makes keep-or-replace a question. */
 const existing = (over: Partial<AppConfig> = {}): AppConfig => ({
+  id: "old00001",
+  name: "notes",
   notesPath: "/old/notes",
   device: "laptop-ab12",
   dbPath: "/data/db.sqlite",
@@ -191,7 +198,7 @@ describe("walking the steps", () => {
 });
 
 describe("pointing a working config at a different folder", () => {
-  const change = () => begin({ reason: "change", notesPath: "/old/notes" });
+  const change = () => begin({ reason: "change", notesPath: "/old/notes", vault: "old00001" });
 
   it("opens at the folder step, not the welcome", () => {
     const s = change();
@@ -216,7 +223,7 @@ describe("pointing a working config at a different folder", () => {
     // A repair has no working folder to go back to, and a first run has no
     // config to go back to at all.
     expect(canCancel(change())).toBe(true);
-    expect(canCancel(begin({ reason: "repair", notesPath: "/old/notes" }))).toBe(false);
+    expect(canCancel(begin({ reason: "repair", notesPath: "/old/notes", vault: "old00001" }))).toBe(false);
     expect(canCancel(begin())).toBe(false);
   });
 
@@ -240,14 +247,68 @@ describe("pointing a working config at a different folder", () => {
     expect(leavesCollectionBehind(picked(change(), folder({ path: "/new" })))).toBe(false);
     expect(leavesCollectionBehind(change())).toBe(false);
     expect(leavesCollectionBehind(picked(begin(), folder({ markdownFiles: 0 })))).toBe(false);
-    const repair = begin({ reason: "repair", notesPath: "/gone" });
+    const repair = begin({ reason: "repair", notesPath: "/gone", vault: "old00001" });
     expect(leavesCollectionBehind(picked(repair, folder({ markdownFiles: 0 })))).toBe(false);
   });
 
   it("restores for a repair too, and never for a first run", () => {
-    const repair = wroteConfig(begin({ reason: "repair", notesPath: "/gone" }));
+    const repair = wroteConfig(begin({ reason: "repair", notesPath: "/gone", vault: "old00001" }));
     expect(restoreTo(repair)).toBe("/gone");
     expect(restoreTo(wroteConfig(picked(begin(), folder())))).toBeNull();
+  });
+});
+
+describe("adding a vault beside the open one", () => {
+  const add = () => begin({ reason: "add", notesPath: "/home/notes", vault: "home0001" });
+
+  it("opens at the folder step, and ends in an add rather than a re-point", () => {
+    expect(add().step).toBe("confirm");
+    expect(back(add())).toEqual(add());
+    expect(mode(add())).toBe("add");
+    expect(mode(begin({ reason: "change", notesPath: "/n", vault: "home0001" }))).toBe("point");
+  });
+
+  it("asks for the new vault's folder first", () => {
+    expect(blockers(add())[0]).toContain("Choose the folder for the new vault");
+  });
+
+  it("refuses a folder that overlaps another vault, on the folder step", () => {
+    const s = picked(add(), folder({ path: "/home/notes/sub" }), "overlaps “notes”");
+    expect(canAdvance(s)).toBe(false);
+    expect(blockers(s)).toEqual(["overlaps “notes”"]);
+    // Picking again clears it: the overlap is about the folder, not the sequence.
+    expect(canAdvance(picked(s, folder({ path: "/work" })))).toBe(true);
+  });
+
+  it("has no keep-or-replace question, because nothing is replaced", () => {
+    let s = next(picked(add(), folder({ path: "/work" })));
+    expect(s.step).toBe("config");
+    s = proposed(s, proposal({ mode: "add", vault: "work0001" }));
+    expect(canAdvance(s)).toBe(true);
+  });
+
+  it("still goes through the preview, because the first sync of a new vault stamps its notes", () => {
+    let s = picked(add(), folder({ path: "/work" }));
+    s = proposed(next(s), proposal({ mode: "add", vault: "work0001" }));
+    s = next(setAcknowledged(next(s), true));
+    expect(s.step).toBe("preview");
+    expect(canSync(s)).toBe(false);
+    expect(canSync(previewed(s, summary()))).toBe(true);
+  });
+
+  it("can be cancelled", () => {
+    expect(canCancel(add())).toBe(true);
+  });
+
+  it("undoes the vault it added — the one written, even after picking again", () => {
+    let s = picked(add(), folder({ path: "/work" }));
+    expect(abandonAdd(s)).toBeNull();
+    s = wroteConfig(proposed(s, proposal({ mode: "add", vault: "work0001" })), "work0001");
+    s = picked(s, folder({ path: "/other" }));
+    expect(abandonAdd(s)).toEqual({ back: "home0001", remove: "work0001" });
+    // Never a re-point's restore: the open vault's folder was not changed.
+    expect(restoreTo(s)).toBeNull();
+    expect(abandonAdd(abandoned(s))).toBeNull();
   });
 });
 

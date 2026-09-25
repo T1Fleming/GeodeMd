@@ -13,7 +13,7 @@
  * that is exactly how a benchmark misleads.
  *
  * Two tree shapes on purpose. A wide tree (100 files per directory) is what
- * `scale.test.ts` builds; a narrow one (4 per directory) is what a real vault
+ * `scale.test.ts` builds; a narrow one (4 per directory) is what a real notes folder
  * of topic folders looks like, and it is where per-directory parallelism —
  * the obvious design — collapses to no concurrency at all.
  */

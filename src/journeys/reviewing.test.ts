@@ -74,7 +74,7 @@ describe("the guide's four ratings are the four the app honours", () => {
 
   it("offers the editors it says `o` can put on a line, and no terminal ones", async () => {
     const text = plain(await reviewing());
-    expect(text).toContain("Choose an editor on the Collection screen if you want the line jump.");
+    expect(text).toContain("Choose an editor on the Vault screen if you want the line jump.");
     expect(text).toContain("Open notes in");
 
     // Every editor installed, so the list is everything the screen could offer.

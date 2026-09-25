@@ -6,7 +6,7 @@ const detected = [
   { command: "zed", label: "Zed" },
 ];
 
-describe("the editor setting on the Collection screen", () => {
+describe("the editor setting on the Vault screen", () => {
   it("offers the system default, what is installed, and a typed command, in that order", () => {
     const v = editorView({ detected, current: null });
     expect(v.options.map((o) => o.label)).toEqual([

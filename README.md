@@ -79,8 +79,10 @@ A card rated anything but `easy` is usually due again within ten minutes, so it 
 Your editor is `editor` in the config file if you set it, then `$VISUAL`, then `$EDITOR`, and failing all three whatever your OS opens a `.md` with:
 
 ```json
-{ "notesPath": "/Users/you/notes", "device": "mac-k3f9", "dbPath": "...", "editor": "code" }
+{ "device": "mac-k3f9", "editor": "code", "active": "…", "vaults": [ … ] }
 ```
+
+— though it is normally set from **Open notes in** on the Vault screen, and the whole file is described in [the configuration reference](./docs/reference/configuration.md).
 
 It jumps to the line for the editors that can be told to (`vim +142`, `code --goto file:142`, `hx file:142`, and so on) and opens the file plainly for the ones that can't. Set a **GUI** editor: the app launches it and carries on rather than waiting, so a terminal editor would open somewhere you cannot type into it.
 
@@ -90,8 +92,10 @@ It jumps to the line for the editors that can be told to (`vim +142`, `code --go
 |---|---|
 | **Review** | The session. Keys as above; every rating is written to the log and flushed before anything else happens. |
 | **Sync** | Preview, sync, and `full` — which re-reads every file, ignoring the mtime cache. Rebuild lives here too, behind a confirmation: it drops the database and derives it again from your notes and logs. |
-| **Collection** | Total, due now, due before local midnight, new. |
+| **Vault** | Total, due now, due before local midnight, new — for the open vault — and the list of vaults. |
 | **Help** | The guides and the configuration reference, bundled into the app. |
+
+**Several sets of notes?** Each can be a **vault** — a notes folder with its own database — and the menu at the end of the tab bar switches between them. See [Keeping several vaults](./docs/guides/vaults.md).
 
 ## What it does to your notes
 
@@ -123,7 +127,7 @@ Guides: [reviewing](./docs/guides/reviewing.md) · [when something looks wrong](
 
 Built for up to roughly a million cards across a million files of mixed sizes. A sync costs what *changed*, not what exists — a sync that finds nothing changed reads no file and writes no database row at all. That property is asserted by the test suite rather than assumed, because it is the kind of thing that regresses silently.
 
-Enumeration is the cost that grows with the collection, because a deletion leaves no trace and the only way to notice one is to look. Measured on a 20,000-file tree, it runs at 4.4 µs per file in flat directories and 9.5 µs in a vault of small topic folders; the stats are issued through a bounded concurrent pool rather than one at a time. A **cold** cache costs 1.09× warm — barely more, on an SSD — which settled the question of whether this stays a plain walk.
+Enumeration is the cost that grows with the collection, because a deletion leaves no trace and the only way to notice one is to look. Measured on a 20,000-file tree, it runs at 4.4 µs per file in flat directories and 9.5 µs in a notes folder of small topic folders; the stats are issued through a bounded concurrent pool rather than one at a time. A **cold** cache costs 1.09× warm — barely more, on an SSD — which settled the question of whether this stays a plain walk.
 
 These are measurements rather than extrapolations, on local APFS; [`docs/design/sync.md`](./docs/design/sync.md#measurements) has the method and the limits.
 
