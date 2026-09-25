@@ -12,7 +12,7 @@
  * cache is intact, so the next sync of an unchanged vault reads no file.
  */
 
-import type { Core } from "../../core/index.js";
+import type { Core, Rescheduled } from "../../core/index.js";
 import type { Store } from "../../store/index.js";
 import { NoConfig, VaultRefused } from "../../host/config.js";
 import type { VaultConfig } from "../../host/config.js";
@@ -32,6 +32,11 @@ export interface Open {
    * the end-of-session answer possible.
    */
   opened: OpenedNotes;
+  /**
+   * Set when opening this vault re-derived its schedules under a different
+   * scheduler (ADR 0028), until the renderer has taken it to tell the user.
+   */
+  rescheduled: Rescheduled | null;
 }
 
 export interface ActiveDeps {
@@ -40,6 +45,12 @@ export interface ActiveDeps {
   finish: (f: RunFinished) => void;
   /** Injected for tests, as `Runner`'s are; defaults to the real clock. */
   now?: () => Date;
+  /**
+   * Injected for tests; defaults to `host`'s. The seam that lets a test hold
+   * an open part-way — between the Store opening and the reschedule finishing
+   * — and land a switch in the gap without a timer.
+   */
+  openCore?: typeof openCore;
 }
 
 /** What leaving a vault hands back: the notes edited since they were opened in it. */
@@ -56,6 +67,10 @@ export class Active {
    * during it — would be running on the Store about to be closed.
    */
   private changing = false;
+  /** An open in progress, joined by any `ensure` that lands during it. */
+  private opening: Promise<Open> | null = null;
+  /** Bumped by `reset`, so an open that straddles one knows it is stale. */
+  private generation = 0;
 
   constructor(private readonly deps: ActiveDeps) {}
 
@@ -73,16 +88,68 @@ export class Active {
   async ensure(): Promise<Open> {
     if (this.changing) throw new VaultRefused("switching vaults — try again in a moment");
     if (this.open) return this.open;
+    // Single-flight. Opening now awaits the reschedule below, and the review
+    // screen asks for the queue and the counts at once — two opens would be
+    // two Stores on one file, one of them never closed.
+    if (!this.opening) {
+      const generation = this.generation;
+      const opening = this.openVault(generation);
+      this.opening = opening;
+      const clear = (): void => {
+        if (this.opening === opening) this.opening = null;
+      };
+      opening.then(clear, clear);
+    }
+    return this.opening;
+  }
+
+  /**
+   * Why the open vault's schedules were re-derived, once, or null.
+   *
+   * Taken rather than read: the note is shown when the app arrives at the
+   * vault, and saying it again on every later visit would make a one-time
+   * event look like a recurring one.
+   */
+  takeRescheduled(): Rescheduled | null {
+    const r = this.open?.rescheduled ?? null;
+    if (this.open) this.open.rescheduled = null;
+    return r;
+  }
+
+  private async openVault(generation: number): Promise<Open> {
     const config = await readAppConfig(this.deps.configFile);
     if (!config) throw new NoConfig();
-    const { core, store } = openCore(config);
+    const { core, store } = (this.deps.openCore ?? openCore)(config);
+    let rescheduled: Rescheduled | null;
+    try {
+      // Before anything can read a due date: a database scheduled by a
+      // different scheduler is brought up to this one first (ADR 0028).
+      rescheduled = await core.adoptScheduler((this.deps.now ?? (() => new Date()))());
+    } catch (err) {
+      store.close();
+      throw err;
+    }
+    // A switch landed while this was opening: this Store belongs to a config
+    // that has since been replaced, and keeping it would be the memoized-Core
+    // bug `change` exists to prevent.
+    if (generation !== this.generation) {
+      store.close();
+      throw new VaultRefused("switching vaults — try again in a moment");
+    }
     const runner = new Runner({
       core,
       emit: this.deps.emit,
       finish: this.deps.finish,
       ...(this.deps.now ? { now: this.deps.now } : {}),
     });
-    this.open = { config, core, store, runner, opened: new OpenedNotes(config.notesPath) };
+    this.open = {
+      config,
+      core,
+      store,
+      runner,
+      opened: new OpenedNotes(config.notesPath),
+      rescheduled,
+    };
     return this.open;
   }
 
@@ -134,6 +201,8 @@ export class Active {
    * abandoned, because the next one may well be a different file.
    */
   reset(): void {
+    this.generation++;
+    this.opening = null;
     this.open?.store.close();
     this.open = null;
   }

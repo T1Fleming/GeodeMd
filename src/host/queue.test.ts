@@ -231,8 +231,10 @@ describe("the pinned parameters", () => {
       if (inShortTermSteps(next)) steps.push(minutesOut(next.due, T0));
       else expect(minutesOut(next.due, T0)).toBeGreaterThan(1440);
     }
-    // again 1, hard 5, good 10 — easy graduates and is not a step.
-    expect(steps).toEqual([1, 5, 10]);
+    // again 1, hard 6, good 10 — easy graduates and is not a step. FSRS-6's
+    // `learning_steps: ["1m", "10m"]`, where hard on the first step is the
+    // average of the two (ADR 0028); FSRS-5 said 5.
+    expect(steps).toEqual([1, 6, 10]);
   });
 
   it("puts a lapsed review card back on one", () => {
@@ -240,6 +242,7 @@ describe("the pinned parameters", () => {
     const reviewedAt = new Date(state.due);
     state = scheduler.next(state, 1, reviewedAt);
     expect(inShortTermSteps(state)).toBe(true);
-    expect(minutesOut(state.due, reviewedAt)).toBe(5);
+    // `relearning_steps: ["10m"]` (ADR 0028); FSRS-5 said 5.
+    expect(minutesOut(state.due, reviewedAt)).toBe(10);
   });
 });

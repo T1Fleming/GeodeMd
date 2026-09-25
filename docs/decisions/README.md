@@ -14,7 +14,7 @@ New decisions from here get an ADR when they are made, not in a later sweep — 
 | [0004](0004-twelve-character-ids.md) | Card IDs are twelve characters, not eight | Accepted |
 | [0005](0005-append-only-review-log.md) | Review history is an append-only JSONL log, sharded per device per month | Accepted |
 | [0006](0006-module-boundaries-enforced-by-test.md) | Module boundaries are enforced by test, not convention | Accepted |
-| [0007](0007-pin-fsrs-parameters-in-source.md) | FSRS parameters are pinned in source, not inherited | Accepted |
+| [0007](0007-pin-fsrs-parameters-in-source.md) | FSRS parameters are pinned in source, not inherited | Accepted; its version superseded by [0028](0028-move-to-fsrs-6.md) |
 | [0008](0008-incremental-sync-costs-what-changed.md) | A sync costs what changed, and a no-change sync writes nothing | Accepted |
 | [0009](0009-prune-by-bitmap-and-count-check.md) | Deletions are found by a count check and a bitmap | Accepted |
 | [0010](0010-absence-is-not-deletion.md) | Absence is not deletion: no tombstones | Accepted |
@@ -35,6 +35,7 @@ New decisions from here get an ADR when they are made, not in a later sweep — 
 | [0025](0025-the-app-is-the-only-interface.md) | The app is the only interface; the CLI is removed | Accepted |
 | [0026](0026-config-in-application-support-on-macos.md) | On macOS the config lives in Application Support | Accepted |
 | [0027](0027-vaults.md) | Vaults: several notes folders, each with its own database | Accepted |
+| [0028](0028-move-to-fsrs-6.md) | Move to FSRS-6, and re-derive schedules when the scheduler changes | Accepted |
 
 ## Writing one
 

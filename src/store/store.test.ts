@@ -55,6 +55,7 @@ describe("counting what is due", () => {
     lapses: 0,
     state: 2,
     last_review: "2026-09-01T00:00:00.000Z",
+    learning_steps: 0,
   });
 
   function seed(store: Store, n: number): void {

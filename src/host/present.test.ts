@@ -8,6 +8,7 @@ import {
   PHASE_LABEL,
   RATING_KEYS,
   ratingBreakdown,
+  rescheduledText,
   summaryFields,
 } from "./present.js";
 import type { SyncSummary } from "../core/index.js";
@@ -199,5 +200,16 @@ describe("what each sync phase is called", () => {
     // new phase would announce itself.
     expect(Object.keys(PHASE_LABEL).sort()).toEqual(["ingest", "prune", "scan"]);
     for (const label of Object.values(PHASE_LABEL)) expect(label).not.toBe("");
+  });
+});
+
+describe("what the app says when due dates were worked out again", () => {
+  it("says how many, and that the notes and the log were not touched", () => {
+    // Due dates moving without a word look like lost reviews (ADR 0028).
+    const text = rescheduledText({ cards: 1234 });
+    expect(text).toContain("1,234 cards");
+    expect(text).toContain("review history");
+    expect(text).toContain("Your notes and review log are unchanged");
+    expect(rescheduledText({ cards: 1 })).toContain("for 1 card ");
   });
 });

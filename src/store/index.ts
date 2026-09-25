@@ -36,6 +36,12 @@ export interface CardState {
   lapses: number;
   state: number;
   last_review: string | null;
+  /**
+   * Which short-term step the card is on. FSRS-6 counts them and the next
+   * interval depends on it — `1` on step two of `["1m", "10m"]` is not `1` on
+   * step one. Replayed from the log like every other column (ADR 0028).
+   */
+  learning_steps: number;
 }
 
 export interface ReviewRow {
@@ -96,12 +102,21 @@ CREATE TABLE IF NOT EXISTS card_state (
   reps        INTEGER NOT NULL DEFAULT 0,
   lapses      INTEGER NOT NULL DEFAULT 0,
   state       INTEGER NOT NULL,
-  last_review TEXT
+  last_review TEXT,
+  learning_steps INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_state_due ON card_state(due);
+
+-- Facts about the cache rather than the notes: today only which scheduler
+-- derived card_state (ADR 0028). Derived from the code, the way the schema is,
+-- so a rebuild writes the current one.
+CREATE TABLE IF NOT EXISTS meta (
+  key   TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+);
 `;
 
-const TABLES = ["cards", "files", "reviews", "log_files", "card_state"] as const;
+const TABLES = ["cards", "files", "reviews", "log_files", "card_state", "meta"] as const;
 
 export class Store {
   readonly db: Db;
@@ -120,6 +135,24 @@ export class Store {
     this.db.pragma("busy_timeout = 5000");
     this.db.pragma("cache_size = -32000");
     this.db.exec(SCHEMA);
+    this.addMissingColumns();
+  }
+
+  /**
+   * Bring a database from before a column existed up to the schema.
+   *
+   * `CREATE TABLE IF NOT EXISTS` leaves an existing table alone, so a database
+   * written by an older build keeps its old `card_state` — and every query
+   * naming `learning_steps` would fail before anything could re-derive it. The
+   * default is a placeholder, not a value: a database this adds the column to
+   * was scheduled by ts-fsrs 4, so its scheduler version differs and `core`
+   * re-derives every row before the app reads one (ADR 0028).
+   */
+  private addMissingColumns(): void {
+    const cols = this.db.pragma("table_info(card_state)") as Array<{ name: string }>;
+    if (!cols.some((c) => c.name === "learning_steps")) {
+      this.db.exec("ALTER TABLE card_state ADD COLUMN learning_steps INTEGER NOT NULL DEFAULT 0");
+    }
   }
 
   close(): void {
@@ -341,7 +374,7 @@ export class Store {
 
   getState(cardId: string): CardState | undefined {
     return this.one<CardState>(
-      `SELECT due, stability, difficulty, reps, lapses, state, last_review
+      `SELECT due, stability, difficulty, reps, lapses, state, last_review, learning_steps
          FROM card_state WHERE card_id = ?`,
       cardId,
     );
@@ -353,15 +386,50 @@ export class Store {
    */
   putState(cardId: string, s: CardState): void {
     this.stmt(
-      `INSERT INTO card_state (card_id, due, stability, difficulty, reps, lapses, state, last_review)
-       VALUES (@card_id, @due, @stability, @difficulty, @reps, @lapses, @state, @last_review)
+      `INSERT INTO card_state
+         (card_id, due, stability, difficulty, reps, lapses, state, last_review, learning_steps)
+       VALUES (@card_id, @due, @stability, @difficulty, @reps, @lapses, @state, @last_review,
+               @learning_steps)
        ON CONFLICT(card_id) DO UPDATE SET
          due = excluded.due, stability = excluded.stability,
          difficulty = excluded.difficulty, reps = excluded.reps,
          lapses = excluded.lapses, state = excluded.state,
-         last_review = excluded.last_review`,
+         last_review = excluded.last_review, learning_steps = excluded.learning_steps`,
     ).run({ card_id: cardId, ...s } as never);
     this.run("UPDATE cards SET reviewed = 1 WHERE id = ?", cardId);
+  }
+
+  /**
+   * Every id that has a schedule, in id order — including those whose card
+   * row is gone, because `card_state` outlives its card on purpose (see
+   * `upsertCard`). Re-deriving the schedule has to reach those too, or a
+   * restored card would come back on the old scheduler's numbers.
+   */
+  scheduledIds(): string[] {
+    return this.many<{ card_id: string }>("SELECT card_id FROM card_state ORDER BY card_id").map(
+      (r) => r.card_id,
+    );
+  }
+
+  /** Forget a schedule that no history supports any more. */
+  deleteState(cardId: string): void {
+    this.run("DELETE FROM card_state WHERE card_id = ?", cardId);
+    this.run("UPDATE cards SET reviewed = 0 WHERE id = ?", cardId);
+  }
+
+  // -- meta ----------------------------------------------------------------
+
+  getMeta(key: string): string | undefined {
+    return this.one<{ value: string }>("SELECT value FROM meta WHERE key = ?", key)?.value;
+  }
+
+  setMeta(key: string, value: string): void {
+    this.run(
+      `INSERT INTO meta (key, value) VALUES (?, ?)
+       ON CONFLICT(key) DO UPDATE SET value = excluded.value`,
+      key,
+      value,
+    );
   }
 
   // -- queue (section 9) ---------------------------------------------------

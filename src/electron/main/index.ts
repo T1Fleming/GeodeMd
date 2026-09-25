@@ -45,6 +45,7 @@ import type {
   Stats,
   SyncRequest,
   VaultList,
+  VaultOpened,
   VaultSwitched,
 } from "../ipc.js";
 import { Active } from "./active.js";
@@ -334,6 +335,21 @@ function register(): void {
    */
   ipcMain.handle(CH.setupWrite, (_e, folder: string, replace: boolean) =>
     guard<VaultSwitched>(() => switched(() => initConfig(configFile, folder, { force: replace }))),
+  );
+
+  /**
+   * Open the vault and hand over, once, whether its schedules were re-derived.
+   * Opening is where that happens (`Active.ensure`), so this is the first
+   * moment the answer exists — and asking for it here is what makes the
+   * renderer's arrival, rather than whichever read happened to come first,
+   * the moment the user is told.
+   */
+  ipcMain.handle(CH.vaultsOpen, () =>
+    guard<VaultOpened>(async () => {
+      await active.ensure();
+      const r = active.takeRescheduled();
+      return { rescheduled: r ? { cards: r.cards } : null };
+    }),
   );
 
   ipcMain.handle(CH.vaultsList, () =>
