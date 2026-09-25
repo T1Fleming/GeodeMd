@@ -11,12 +11,12 @@ app do*, and *where is that proven*. What it deliberately cannot tell you is wha
 app does **untested** — an area that looks thin here is thinly covered, and that is
 worth reading as a finding rather than a gap in the document.
 
-561 behaviours in 12 areas, which follow [the guides](../guides/) rather than the source tree.
+562 behaviours in 12 areas, which follow [the guides](../guides/) rather than the source tree.
 
 - [Reviewing](#reviewing) — 130
 - [Recognising a card](#recognising-a-card) — 57
 - [Syncing notes](#syncing-notes) — 73
-- [Recovery and the log](#recovery-and-the-log) — 41
+- [Recovery and the log](#recovery-and-the-log) — 42
 - [Moving between machines](#moving-between-machines) — 16
 - [Keeping several vaults](#keeping-several-vaults) — 44
 - [Setting up this machine](#setting-up-this-machine) — 77
@@ -578,7 +578,7 @@ _4 · `files/files.test.ts`_
 
 _The append-only review log, and rebuilding the database from nothing but notes and logs._
 
-**41 behaviours.**
+**42 behaviours.**
 
 ### what the app says when due dates were worked out again
 
@@ -661,10 +661,11 @@ _5 · `scheduler/scheduler.test.ts`_
 
 ### opening a vault another scheduler scheduled
 
-_2 · `electron/main/active.test.ts`_
+_3 · `electron/main/active.test.ts`_
 
 - re-derives its schedules before handing it over, and says so once
 - opens one Store however many reads arrive at once
+- closes a half-opened vault that a switch overtook, rather than keeping its Store
 
 ## Moving between machines
 

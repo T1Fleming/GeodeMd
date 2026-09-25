@@ -12,6 +12,8 @@ import { VaultRefused, addVault, chooseVault, initConfig, readConfig } from "../
 import type { RunFinished } from "../ipc.js";
 import { Active } from "./active.js";
 import { SCHEDULER_VERSION } from "../../scheduler/index.js";
+import { openCore } from "../../host/open.js";
+import type { Store } from "../../store/index.js";
 
 const T0 = new Date("2026-09-02T12:00:00.000Z");
 const MTIME = new Date("2026-09-01T00:00:00.000Z");
@@ -196,5 +198,47 @@ describe("opening a vault another scheduler scheduled", () => {
     // queue and the counts together.
     const [a, b] = await Promise.all([active.ensure(), active.ensure()]);
     expect(a).toBe(b);
+  });
+
+  it("closes a half-opened vault that a switch overtook, rather than keeping its Store", async () => {
+    // The open is held between its Store opening and the reschedule finishing,
+    // by a promise this test releases — so the switch lands in that gap every
+    // time, with no timer deciding the order.
+    let reached!: () => void;
+    const atGate = new Promise<void>((r) => (reached = r));
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    let held: Store | null = null;
+
+    active = new Active({
+      configFile,
+      emit: () => undefined,
+      finish: () => undefined,
+      now: () => T0,
+      openCore: (config) => {
+        const opened = openCore(config);
+        if (held) return opened; // only the first open is held
+        held = opened.store;
+        const adopt = opened.core.adoptScheduler.bind(opened.core);
+        opened.core.adoptScheduler = async (now) => {
+          reached();
+          await gate;
+          return adopt(now);
+        };
+        return opened;
+      },
+    });
+
+    const opening = active.ensure();
+    await atGate;
+    expect(held!.db.open).toBe(true);
+
+    await switchTo(homeId);
+    release();
+
+    await expect(opening).rejects.toBeInstanceOf(VaultRefused);
+    expect(held!.db.open).toBe(false);
+    expect(active.current).toBeNull();
+    expect((await active.ensure()).config.id).toBe(homeId);
   });
 });

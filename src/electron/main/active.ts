@@ -45,6 +45,12 @@ export interface ActiveDeps {
   finish: (f: RunFinished) => void;
   /** Injected for tests, as `Runner`'s are; defaults to the real clock. */
   now?: () => Date;
+  /**
+   * Injected for tests; defaults to `host`'s. The seam that lets a test hold
+   * an open part-way — between the Store opening and the reschedule finishing
+   * — and land a switch in the gap without a timer.
+   */
+  openCore?: typeof openCore;
 }
 
 /** What leaving a vault hands back: the notes edited since they were opened in it. */
@@ -113,7 +119,7 @@ export class Active {
   private async openVault(generation: number): Promise<Open> {
     const config = await readAppConfig(this.deps.configFile);
     if (!config) throw new NoConfig();
-    const { core, store } = openCore(config);
+    const { core, store } = (this.deps.openCore ?? openCore)(config);
     let rescheduled: Rescheduled | null;
     try {
       // Before anything can read a due date: a database scheduled by a
