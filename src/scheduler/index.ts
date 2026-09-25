@@ -14,6 +14,12 @@ export interface Scheduler {
   initial(now: Date): CardState;
   /** Next state given current state and a rating. */
   next(state: CardState, rating: 1 | 2 | 3 | 4, now: Date): CardState;
+  /**
+   * What derived a state. Two schedulers with the same version must produce
+   * the same state from the same history; `core` re-derives a database's
+   * schedule when the recorded one differs (ADR 0028).
+   */
+  readonly version: string;
 }
 
 /**
@@ -33,16 +39,46 @@ export interface Scheduler {
  * revises, so a minor bump would change what a rebuild produces from an
  * unchanged log. The vector is written out literally and the dependency is
  * pinned to an exact version, which makes that a change made on purpose.
+ *
+ * FSRS-6, and all 21 weights ([ADR 0028](../../docs/decisions/0028-move-to-fsrs-6.md)).
+ * These are ts-fsrs 5.4.2's `default_w`. Handing `generatorParameters` a
+ * 19-weight FSRS-5 vector would not fail: it pads it to 21 on its own, which
+ * is FSRS-5 running on FSRS-6's engine — so the length is part of the pin.
+ *
+ * The learning steps are parameters in 5.x, and they are what ADR 0023's
+ * same-sitting re-show is built on, so they are written out too — with
+ * `enable_short_term`, which decides whether they apply at all.
  */
 export const FSRS_PARAMS: FSRSParameters = generatorParameters({
   w: [
-    0.40255, 1.18385, 3.173, 15.69105, 7.1949, 0.5345, 1.4604, 0.0046, 1.54575, 0.1192, 1.01925,
-    1.9395, 0.11, 0.29605, 2.2698, 0.2315, 2.9898, 0.51655, 0.6621,
+    0.212, 1.2931, 2.3065, 8.2956, 6.4133, 0.8334, 3.0194, 0.001, 1.8722, 0.1666, 0.796, 1.4835,
+    0.0614, 0.2629, 1.6483, 0.6014, 1.8729, 0.5425, 0.0912, 0.0658, 0.1542,
   ],
   request_retention: 0.9,
   maximum_interval: 36500,
   enable_fuzz: false,
+  enable_short_term: true,
+  learning_steps: ["1m", "10m"],
+  relearning_steps: ["10m"],
 });
+
+/**
+ * The exact `ts-fsrs` this was measured against — the same string as the pin
+ * in package.json, which `scheduler.test.ts` checks, so a bump cannot land
+ * without changing it.
+ */
+export const TS_FSRS_VERSION = "5.4.2";
+
+/**
+ * Which scheduler derived a database's `card_state`: the library and every
+ * parameter, as one string.
+ *
+ * Recorded in the database and compared on open ([ADR 0028](../../docs/decisions/0028-move-to-fsrs-6.md)).
+ * Built from the parameters rather than bumped by hand, so changing any of
+ * them re-derives every schedule on the next launch without anyone having to
+ * remember to — the failure mode of a hand-kept version number.
+ */
+export const SCHEDULER_VERSION = `ts-fsrs@${TS_FSRS_VERSION} ${JSON.stringify(FSRS_PARAMS)}`;
 
 const RATINGS = {
   1: Rating.Again,
@@ -60,32 +96,47 @@ function toCardState(card: FsrsCard): CardState {
     lapses: card.lapses,
     state: card.state,
     last_review: card.last_review ? card.last_review.toISOString() : null,
+    learning_steps: card.learning_steps,
   };
 }
 
-function fromCardState(s: CardState): FsrsCard {
+/**
+ * The card as the engine reads it — everything but `elapsed_days`.
+ *
+ * `elapsed_days` is deprecated in 5.x and removed in 6.0. The engine does not
+ * read it on `next`: it computes the interval from `last_review` itself. This
+ * type is what makes every *other* field a compile error to leave out, which
+ * the old `as FsrsCard` on the whole literal did not — it let the new
+ * `learning_steps` go missing without a word from `tsc`.
+ */
+type EngineCard = Omit<FsrsCard, "elapsed_days">;
+
+function fromCardState(s: CardState): EngineCard {
   return {
     due: new Date(s.due),
     stability: s.stability,
     difficulty: s.difficulty,
-    elapsed_days: 0,
     scheduled_days: 0,
+    learning_steps: s.learning_steps,
     reps: s.reps,
     lapses: s.lapses,
     state: s.state as State,
     last_review: s.last_review ? new Date(s.last_review) : undefined,
-  } as FsrsCard;
+  };
 }
 
 export class FsrsScheduler implements Scheduler {
   private readonly engine = fsrs(FSRS_PARAMS);
+  readonly version = SCHEDULER_VERSION;
 
   initial(now: Date): CardState {
     return toCardState(createEmptyCard(now));
   }
 
   next(state: CardState, rating: 1 | 2 | 3 | 4, now: Date): CardState {
-    const result = this.engine.next(fromCardState(state), now, RATINGS[rating]);
+    // The one cast left, and it is narrower than the one it replaced: it
+    // admits only the missing `elapsed_days` (see `EngineCard`).
+    const result = this.engine.next(fromCardState(state) as FsrsCard, now, RATINGS[rating]);
     return toCardState(result.card);
   }
 }

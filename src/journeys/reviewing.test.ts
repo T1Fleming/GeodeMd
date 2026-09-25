@@ -214,13 +214,13 @@ describe("the intervals the guide quotes are the ones FSRS produces", () => {
     }
   });
 
-  it("is right that a long-standing card rated `1` comes back in five minutes", async () => {
-    expect(await reviewing()).toContain("rated `1`, comes back in 5 minutes");
+  it("is right that a long-standing card rated `1` comes back in ten minutes", async () => {
+    expect(await reviewing()).toContain("rated `1`, comes back in 10 minutes");
     const scheduler = new FsrsScheduler();
     const graduated = scheduler.next(scheduler.initial(T0), 4, T0);
     const reviewedAt = new Date(graduated.due);
     const lapsed = scheduler.next(graduated, 1, reviewedAt);
-    expect((new Date(lapsed.due).getTime() - reviewedAt.getTime()) / 60_000).toBe(5);
+    expect((new Date(lapsed.due).getTime() - reviewedAt.getTime()) / 60_000).toBe(10);
   });
 });
 

@@ -11,7 +11,7 @@
  * the module stays shareable.
  */
 
-import type { SyncPhase, SyncSummary } from "../core/index.js";
+import type { Rescheduled, SyncPhase, SyncSummary } from "../core/index.js";
 
 /**
  * The four FSRS ratings, and what they are called. Spec section 9: the numbers
@@ -340,3 +340,23 @@ export const PHASE_LABEL: Readonly<Record<SyncPhase, string>> = {
   prune: "checking for removed cards",
   ingest: "reading review history",
 };
+
+/**
+ * What to tell the user when opening a vault re-derived its schedules.
+ *
+ * Said at all because it changes what they see: due dates move, and a card
+ * reviewed yesterday may be due today, or a card due today may be gone until
+ * next week. A schedule that rearranges itself without a word reads as a bug,
+ * or worse, as lost reviews — so the note says which of their things were
+ * *not* touched, too ([ADR 0028](../../docs/decisions/0028-move-to-fsrs-6.md)).
+ *
+ * The scheduler's own version string is deliberately not shown: it is the
+ * library and every parameter, and none of it is actionable.
+ */
+export function rescheduledText(r: Pick<Rescheduled, "cards">): string {
+  const cards = r.cards === 1 ? "1 card" : `${r.cards.toLocaleString("en-US")} cards`;
+  return (
+    `The scheduler was updated, so due dates were worked out again for ${cards} ` +
+    `from your review history. Some may have moved. Your notes and review log are unchanged.`
+  );
+}

@@ -178,6 +178,24 @@ describe("recording a review", () => {
     expect(due).toBeGreaterThan(T0.getTime());
     expect(due - T0.getTime()).toBeLessThan(60 * 60 * 1000);
   });
+
+  it("keeps a card's learning step between ratings, so a second good graduates it", async () => {
+    // FSRS-6 counts the short-term steps (ADR 0028). `3` on a new card moves it
+    // to the second of `["1m", "10m"]`; `3` again from there graduates. A step
+    // lost on the way through the database would put it back on the first
+    // step, and it would be ten more minutes in Learning instead.
+    await write("a.md", "A :: 1\n");
+    await core.sync(T0);
+    const id = "sr-000000000001";
+    const first = await core.reviewCard(id, 3, T0);
+    expect(first.learning_steps).toBe(1);
+    expect(store.getState(id)!.learning_steps).toBe(1);
+
+    const then = new Date(first.due);
+    const second = await core.reviewCard(id, 3, then);
+    expect(second.state).toBe(2); // Review
+    expect((new Date(second.due).getTime() - then.getTime()) / 86_400_000).toBe(2);
+  });
 });
 
 describe("reporting what is due and what is new", () => {

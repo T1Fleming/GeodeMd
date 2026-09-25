@@ -18,7 +18,7 @@ import { Sync } from "./Sync.js";
 import type { OpenIn, Session } from "./model/session.js";
 import { choose, leftNote, switcherOptions } from "./model/vaults.js";
 import type { Scheduled } from "../../host/queue.js";
-import { backlogCapped } from "../../host/present.js";
+import { backlogCapped, rescheduledText } from "../../host/present.js";
 
 declare global {
   interface Window {
@@ -83,6 +83,13 @@ export function App(): React.JSX.Element {
     if (!folder.value.exists || !folder.value.isDirectory) {
       return setBoot({ at: "repair", config: c.value });
     }
+
+    // Open the vault before any screen reads it. If the scheduler changed since
+    // this database was last opened, every due date was just worked out again
+    // (ADR 0028), and the user hears why before seeing a queue that moved.
+    const opened = await window.geode.vaultsOpen();
+    if (!opened.ok) setNote(opened.message);
+    else if (opened.value.rescheduled) setNote(rescheduledText(opened.value.rescheduled));
     setBoot({ at: "ready", config: c.value });
   }, []);
 
