@@ -2,6 +2,7 @@
 
 - **Status:** Accepted
 - **Date:** 2026-09-19 (backfilled)
+- **Superseded in part by:** [0028](0028-move-to-fsrs-6.md), for the version only. That is `ts-fsrs` 5.4.2 and FSRS-6's 21 weights, which replace 4.6.1 and FSRS-5's 19. The rule stands: every parameter is written out literally, and the pin is exact.
 - **Source:** [phase-1 brief](../design/phase-1-brief.md) §2, §7
 
 ## Context

@@ -11,6 +11,9 @@ import * as path from "node:path";
 import { VaultRefused, addVault, chooseVault, initConfig, readConfig } from "../../host/config.js";
 import type { RunFinished } from "../ipc.js";
 import { Active } from "./active.js";
+import { SCHEDULER_VERSION } from "../../scheduler/index.js";
+import { openCore } from "../../host/open.js";
+import type { Store } from "../../store/index.js";
 
 const T0 = new Date("2026-09-02T12:00:00.000Z");
 const MTIME = new Date("2026-09-01T00:00:00.000Z");
@@ -176,5 +179,77 @@ describe("a write composed in a vault that has since been left", () => {
     await switchTo(homeId);
     await expect(active.ensureVault(workId)).rejects.toBeInstanceOf(VaultRefused);
     expect((await active.ensureVault(homeId)).config.id).toBe(homeId);
+  });
+});
+
+describe("opening a vault another scheduler scheduled", () => {
+  it("re-derives its schedules before handing it over, and says so once", async () => {
+    const w = await active.ensure();
+    await w.core.sync(T0);
+    await w.core.reviewCard(w.core.getDueCards(T0, 10)[0]!.id, 3, T0);
+    // A new vault has nothing to say.
+    expect(active.takeRescheduled()).toBeNull();
+
+    // As a database last opened by an older build would be.
+    w.store.setMeta("scheduler", "ts-fsrs@4.6.1");
+    active.reset();
+
+    await active.ensure();
+    expect(active.takeRescheduled()).toEqual({
+      from: "ts-fsrs@4.6.1",
+      to: SCHEDULER_VERSION,
+      cards: 1,
+    });
+    // Taken, not read: arriving at the vault again does not repeat it.
+    expect(active.takeRescheduled()).toBeNull();
+  });
+
+  it("opens one Store however many reads arrive at once", async () => {
+    // Opening awaits the re-derivation, and the review screen asks for the
+    // queue and the counts together.
+    const [a, b] = await Promise.all([active.ensure(), active.ensure()]);
+    expect(a).toBe(b);
+  });
+
+  it("closes a half-opened vault that a switch overtook, rather than keeping its Store", async () => {
+    // The open is held between its Store opening and the reschedule finishing,
+    // by a promise this test releases — so the switch lands in that gap every
+    // time, with no timer deciding the order.
+    let reached!: () => void;
+    const atGate = new Promise<void>((r) => (reached = r));
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    let held: Store | null = null;
+
+    active = new Active({
+      configFile,
+      emit: () => undefined,
+      finish: () => undefined,
+      now: () => T0,
+      openCore: (config) => {
+        const opened = openCore(config);
+        if (held) return opened; // only the first open is held
+        held = opened.store;
+        const adopt = opened.core.adoptScheduler.bind(opened.core);
+        opened.core.adoptScheduler = async (now) => {
+          reached();
+          await gate;
+          return adopt(now);
+        };
+        return opened;
+      },
+    });
+
+    const opening = active.ensure();
+    await atGate;
+    expect(held!.db.open).toBe(true);
+
+    await switchTo(homeId);
+    release();
+
+    await expect(opening).rejects.toBeInstanceOf(VaultRefused);
+    expect(held!.db.open).toBe(false);
+    expect(active.current).toBeNull();
+    expect((await active.ensure()).config.id).toBe(homeId);
   });
 });

@@ -149,6 +149,15 @@ describe("one module per external resource", () => {
     // The weight vector is written out literally, so a ts-fsrs bump cannot
     // silently change what a rebuild produces from an unchanged log.
     expect(scheduler).toMatch(/w:\s*\[/);
+    // All 21 of them (ADR 0028). Given 19, ts-fsrs 5 pads the vector itself —
+    // FSRS-5 on FSRS-6's engine — so the length is part of the pin.
+    const w = /w:\s*\[([^\]]*)\]/.exec(scheduler)?.[1] ?? "";
+    expect(w.split(",").filter((n) => /^\s*\d+(\.\d+)?\s*$/.test(n))).toHaveLength(21);
+    // The short-term steps are parameters in ts-fsrs 5, and ADR 0023's
+    // same-sitting re-show is built on them.
+    expect(scheduler).toMatch(/enable_short_term:\s*(true|false)/);
+    expect(scheduler).toMatch(/\blearning_steps:\s*\[/);
+    expect(scheduler).toMatch(/relearning_steps:\s*\[/);
   });
 });
 
@@ -266,7 +275,12 @@ describe("host, which the interface draws from", () => {
       expect(await readAll(dir), `${dir} names the phases itself`).not.toMatch(
         /reading review history/,
       );
+      // What a re-derived schedule is called (ADR 0028) is `rescheduledText`'s.
+      expect(await readAll(dir), `${dir} explains a reschedule itself`).not.toMatch(
+        /worked out again/,
+      );
     }
+    expect(host).toMatch(/worked out again/);
   });
 
   it("leaves the spawn to each interface, because the two are not the same", async () => {

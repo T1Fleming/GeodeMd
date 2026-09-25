@@ -72,6 +72,17 @@ export interface VaultSwitched {
   left: { vault: string; changed: string[] } | null;
 }
 
+/**
+ * What opening the active vault took — today, only whether its schedules had
+ * to be re-derived because the scheduler changed (ADR 0028).
+ *
+ * Facts rather than a sentence: the words are `host/present.ts`'s
+ * `rescheduledText`, like every other summary the app shows.
+ */
+export interface VaultOpened {
+  rescheduled: { cards: number } | null;
+}
+
 /** Why a folder is being picked, which decides the dialog's words. */
 export type PickPurpose = "first" | "repair" | "change" | "add";
 
@@ -253,6 +264,7 @@ export const CH = {
   vaultsSwitch: "geode:vaults/switch",
   vaultsRename: "geode:vaults/rename",
   vaultsRemove: "geode:vaults/remove",
+  vaultsOpen: "geode:vaults/open",
   linkOpen: "geode:link/open",
   editorsList: "geode:editors/list",
   editorsSet: "geode:editors/set",
@@ -326,6 +338,13 @@ export interface GeodeApi {
    * `deleteDatabase` also deletes its cache. The open vault cannot be removed.
    */
   vaultsRemove(id: string, deleteDatabase: boolean): Promise<Result<VaultList>>;
+  /**
+   * Open the active vault now, rather than on the first read, and say what
+   * that took. Asked once each time the app arrives at a vault, so a
+   * re-derived schedule is announced before the queue it changed is shown —
+   * and only then: the answer is handed over once.
+   */
+  vaultsOpen(): Promise<Result<VaultOpened>>;
   /**
    * Open a link in the user's browser.
    *
