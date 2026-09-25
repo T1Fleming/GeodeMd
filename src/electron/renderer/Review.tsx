@@ -16,6 +16,7 @@ import {
   editAnnotation,
   isOver,
   keyIsText,
+  mayLeave,
   owed,
   press,
   reviewed,
@@ -52,6 +53,11 @@ interface Props {
   onNote: (message: string) => void;
   onDone: (session: Session) => void;
   /**
+   * Hand the shell a way to save an open annotation before it switches vault.
+   * Called with null when this screen goes away.
+   */
+  onRegisterFlush?: ((flush: (() => Promise<boolean>) | null) => void) | undefined;
+  /**
    * Start another sitting, when the collection holds more than this one served.
    * Undefined when it does not, so the button is absent rather than disabled —
    * there is nothing to explain to someone who has finished everything.
@@ -70,6 +76,7 @@ export function Review({
   onAnnotationWrite,
   onNote,
   onDone,
+  onRegisterFlush,
   onMore,
 }: Props): React.JSX.Element {
   const [session, setSession] = useState<Session>(() => begin(queue));
@@ -86,6 +93,8 @@ export function Review({
   const live = useRef(session);
   /** `onDone` is worth saying once. Quitting and a last rating can both reach it. */
   const finished = useRef(false);
+  /** The annotation save in flight, if any — what `flush` waits on. */
+  const inFlight = useRef<Promise<void> | null>(null);
 
   const commit = useCallback(
     (next: Session) => {
@@ -116,8 +125,13 @@ export function Review({
       }
 
       if (effect.kind === "save-annotation") {
-        void onAnnotationWrite(effect.cardId, effect.text).then((r) => {
+        // Kept, so a vault switch can wait for a save already under way.
+        const done = onAnnotationWrite(effect.cardId, effect.text).then((r) => {
           commit(annotationSaved(live.current, effect.cardId, r.ok ? null : r.message));
+        });
+        inFlight.current = done;
+        void done.finally(() => {
+          if (inFlight.current === done) inFlight.current = null;
         });
         return;
       }
@@ -179,11 +193,35 @@ export function Review({
   }, [handle]);
 
   /**
+   * Save an open annotation and wait for it, answering whether the screen may
+   * now be left for another vault (`mayLeave`). The vault switcher calls this
+   * BEFORE switching, so the save lands in the vault the text was written in;
+   * a failed save answers false, the box stays open with its error, and the
+   * switch does not happen (ADR 0029).
+   */
+  const flush = useCallback(async (): Promise<boolean> => {
+    if (inFlight.current) await inFlight.current;
+    const { next, effect } = closeAnnotation(live.current);
+    commit(next);
+    perform(effect);
+    if (inFlight.current) await inFlight.current;
+    return mayLeave(live.current);
+  }, [commit, perform]);
+
+  useEffect(() => {
+    if (!onRegisterFlush) return;
+    onRegisterFlush(flush);
+    return () => onRegisterFlush(null);
+  }, [flush, onRegisterFlush]);
+
+  /**
    * Leaving the screen with the box open saves it, as Escape would. Switching
    * tab unmounts this component, and losing typed text to a tab click is the
-   * surprise the whole close-saves rule exists to avoid. After a vault switch
-   * main refuses the write rather than filing it in the wrong vault, and the
-   * note says so.
+   * surprise the whole close-saves rule exists to avoid.
+   *
+   * A vault switch never gets here with the box open — it flushes first. This
+   * is for a tab change, and main's refusal of a write naming a vault no
+   * longer open stays behind it as a backstop.
    */
   const leaving = useRef({ onAnnotationWrite, onNote });
   leaving.current = { onAnnotationWrite, onNote };

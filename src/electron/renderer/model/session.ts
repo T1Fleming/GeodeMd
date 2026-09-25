@@ -320,6 +320,20 @@ export function closeAnnotation(s: Session): { next: Session; effect?: Effect } 
 }
 
 /**
+ * Whether the screen may be left for another vault — true once no
+ * annotation is open.
+ *
+ * A vault switch saves an open box first (`closeAnnotation`), waits for
+ * `annotationSaved`, and asks this. A save that failed leaves the box open
+ * with its error and the draft, so this stays false and **the switch does not
+ * happen**: going ahead would unmount the box and lose the text, which is the
+ * one thing a failed save must never do (ADR 0029).
+ */
+export function mayLeave(s: Session): boolean {
+  return !annotating(s);
+}
+
+/**
  * How a `save-annotation` went: null for success, or the reason it failed.
  *
  * Success closes the box, and blank text leaves the card with no annotation

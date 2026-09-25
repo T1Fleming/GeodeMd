@@ -93,7 +93,7 @@ A vault is a notes folder together with its own database, and one is open at a t
 
 `vaults/rename` and `editors/set` do *not* go through it: neither changes which folder or database is open, so closing the Store would be all cost.
 
-**A write composed in one vault names it.** `annotation/set` carries the id of the vault the review was drawn from, and `Active.ensureVault` refuses it if another is open by then. The review screen saves an open annotation as it unmounts, and after a switch that save would otherwise land in the new vault's `.sr/annotations/` under an id from the old one ([ADR 0029](../decisions/0029-annotations.md)).
+**A write composed in one vault names it.** `annotation/set` carries the id of the vault the review was drawn from, and `Active.ensureVault` refuses it if another is open by then. That is a backstop: the switcher first asks the review screen to save an open annotation and waits for it, and a failed save stops the switch, so the text is neither lost nor filed under the wrong vault ([ADR 0029](../decisions/0029-annotations.md)).
 
 The switcher is a `<select>` at the end of the tab bar, and is blurred after every choice so the review screen's document-level keys are not typed into it. Its decisions — what the options are, what choosing one means, when **Remove…** is offered — are in `renderer/model/vaults.ts`. The repair screen shows it too, when there is another vault to go to: a vault on an unplugged drive must not trap the user in it.
 

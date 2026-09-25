@@ -80,7 +80,7 @@ Offered once the answer is showing. It opens a box under the answer for what rev
 
 **Never before the answer.** An annotation is free to give the answer away, so at the question `a` does nothing — it does not even reveal the card the way other keys do. When a card has an annotation, a small line under the answer says so; the annotation itself stays hidden until you press `a`.
 
-While the box is open, **everything you type is text**. `3` is part of "3 seconds", not a rating, and `q` is a letter, not a quit. Two keys close it, and **both save**: `Escape`, and ⌘↵ (Cmd+Enter). There is no key that closes without saving — losing what you typed would be the worse surprise — and leaving the Review tab with the box open saves it as well. Emptying the box and closing it removes the annotation.
+While the box is open, **everything you type is text**. `3` is part of "3 seconds", not a rating, and `q` is a letter, not a quit. Two keys close it, and **both save**: `Escape`, and ⌘↵ (Cmd+Enter). There is no key that closes without saving — losing what you typed would be the worse surprise — and leaving the Review tab or switching vault with the box open saves it as well. Emptying the box and closing it removes the annotation.
 
 If a save fails, the box stays open with your text in it and says why, so nothing you typed is lost.
 

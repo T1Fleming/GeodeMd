@@ -7,7 +7,7 @@
  * `core`.
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { DueCard } from "../../core/index.js";
 import type { AppConfig, GeodeApi, VaultList } from "../ipc.js";
 import { Help } from "./Help.js";
@@ -91,6 +91,27 @@ export function App(): React.JSX.Element {
   }, [check]);
 
   /**
+   * The review screen's way to save an open annotation, while it is mounted.
+   * A ref, not state: registering it must not re-render the shell.
+   */
+  const flushReview = useRef<(() => Promise<boolean>) | null>(null);
+  const registerFlush = useCallback((f: (() => Promise<boolean>) | null) => {
+    flushReview.current = f;
+  }, []);
+
+  /**
+   * Before anything leaves the open vault: save an open annotation into it,
+   * and wait. False when that save failed — the box is still open with the
+   * text and the reason, and the switch must not go ahead (ADR 0029).
+   */
+  const leaveReview = useCallback(async (): Promise<boolean> => {
+    const flush = flushReview.current;
+    if (!flush || (await flush())) return true;
+    setNote("annotation not saved, so the vault was not switched — see the note under the answer");
+    return false;
+  }, []);
+
+  /**
    * Open another vault. Every screen is remounted by the re-check, so each
    * reads the new vault from scratch — nothing drawn for the old one
    * survives. A review in progress simply ends: every rating was recorded
@@ -99,22 +120,25 @@ export function App(): React.JSX.Element {
    */
   const switchTo = useCallback(
     async (id: string) => {
+      if (!(await leaveReview())) return;
       const r = await window.geode.vaultsSwitch(id);
       if (!r.ok) return setNote(r.message);
       setNote(leftNote(r.value.left, vaults));
       await check();
     },
-    [check, vaults],
+    [check, vaults, leaveReview],
   );
 
   const onVault = useCallback(
-    (value: string) => {
+    async (value: string) => {
       if (!vaults || boot.at === "checking" || boot.at === "setup" || boot.at === "error") return;
       const c = choose(vaults, value);
       if (c.kind === "switch") void switchTo(c.id);
-      if (c.kind === "add") setBoot({ at: "add", config: boot.config });
+      // Adding leaves the review screen for the setup sequence, whose first
+      // write re-points the open vault — so an open annotation is saved first.
+      if (c.kind === "add" && (await leaveReview())) setBoot({ at: "add", config: boot.config });
     },
-    [vaults, boot, switchTo],
+    [vaults, boot, switchTo, leaveReview],
   );
 
   if (boot.at === "checking") return <p className="muted">loading…</p>;
@@ -171,7 +195,7 @@ export function App(): React.JSX.Element {
           review and coming back draws a fresh queue — no position is kept, and
           none needs to be, because every rating was recorded when it was
           given. */}
-      {tab === "review" && <ReviewScreen vault={boot.config.id} onNote={setNote} />}
+      {tab === "review" && <ReviewScreen vault={boot.config.id} onNote={setNote} onRegisterFlush={registerFlush} />}
       {tab === "sync" && <Sync />}
       {tab === "stats" && vaults && (
         <Stats
@@ -250,10 +274,13 @@ const LIMIT = 50;
 function ReviewScreen({
   vault,
   onNote,
+  onRegisterFlush,
 }: {
   /** The open vault's id, which every annotation write names (ADR 0029). */
   vault: string;
   onNote: (m: string) => void;
+  /** Passed through to `Review`, so a vault switch can save an open annotation first. */
+  onRegisterFlush: (flush: (() => Promise<boolean>) | null) => void;
 }): React.JSX.Element {
   const [screen, setScreen] = useState<Screen>({ at: "loading" });
   /** Notes edited during the session. Null until the session ends. */
@@ -383,6 +410,7 @@ function ReviewScreen({
       onAnnotationRead={onAnnotationRead}
       onAnnotationWrite={onAnnotationWrite}
       onNote={onNote}
+      onRegisterFlush={onRegisterFlush}
       onDone={onDone}
       // Offered only when the collection holds more than this sitting served —
       // the same condition as the backlog chip, and the replacement for the

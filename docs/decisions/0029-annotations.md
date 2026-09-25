@@ -40,7 +40,9 @@ Closing an unchanged box writes nothing, so a file syncer does not see an edit t
 
 **A failed save is reported and keeps the text in the box.** It is never silently dropped.
 
-**A save names its vault.** A save sent after a vault switch — the review screen closing with the box open is one way to cause one — is refused rather than written into the vault that is open by then, where it would sit under an id from another notes folder.
+**Switching vault with the box open saves it first, into the vault it was written in, and waits.** Unmounting the box without that save would lose the text, and saving after the switch would file it in the other vault's `.sr/annotations/`. **If that save fails, the switch does not happen**: the box stays open with the text and the reason, as any failed save leaves it. The same applies to adding a vault from the tab bar, which leaves the review screen for the setup sequence.
+
+**A save also names its vault**, as a backstop. One that arrives after a switch anyway is refused rather than written into the vault that is open by then, where it would sit under an id from another notes folder.
 
 ## Options rejected
 

@@ -11,9 +11,9 @@ app do*, and *where is that proven*. What it deliberately cannot tell you is wha
 app does **untested** — an area that looks thin here is thinly covered, and that is
 worth reading as a finding rather than a gap in the document.
 
-574 behaviours in 12 areas, which follow [the guides](../guides/) rather than the source tree.
+576 behaviours in 12 areas, which follow [the guides](../guides/) rather than the source tree.
 
-- [Reviewing](#reviewing) — 151
+- [Reviewing](#reviewing) — 153
 - [Recognising a card](#recognising-a-card) — 57
 - [Syncing notes](#syncing-notes) — 74
 - [Recovery and the log](#recovery-and-the-log) — 27
@@ -30,7 +30,7 @@ worth reading as a finding rather than a gap in the document.
 
 _A session: which card is next, what the keys mean, what a rating records, and what comes back before the sitting ends._
 
-**151 behaviours.**
+**153 behaviours.**
 
 ### the order cards are served in
 
@@ -285,7 +285,7 @@ _11 · `electron/renderer/model/session.test.ts`_
 
 ### annotating a card
 
-_13 · `electron/renderer/model/session.test.ts`_
+_15 · `electron/renderer/model/session.test.ts`_
 
 - asks whether the card has an annotation when it is revealed, not before
 - does nothing with `a` at the question stage, not even the reveal
@@ -299,6 +299,8 @@ _13 · `electron/renderer/model/session.test.ts`_
 - keeps the box open with the text in it when the save fails
 - clears the annotation when saved blank
 - still rates normally once the box is closed
+- lets a vault switch go ahead only once an open box has saved
+- refuses the vault switch when that save fails, keeping the text and the error
 - ignores an annotation that arrives for a card no longer on screen
 
 ### launching an editor without holding the app open

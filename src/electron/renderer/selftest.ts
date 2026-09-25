@@ -593,6 +593,42 @@ async function runVaultChecks(): Promise<void> {
   check("and switching again finds the second as it was", (await totalCards()) === secondTotal, text(".screen h2"));
   await choose(".vault-menu select", firstName);
   await until(".tabs");
+
+  // Switching vault with an annotation open saves it first, into the vault it
+  // was written in (ADR 0029). Unmounting the box without that save would
+  // lose the text, and saving after the switch would file it in the wrong
+  // notes folder.
+  await click(".tabs .tab", "Review");
+  if (!(await until(".question"))) {
+    check("the first vault has a card to annotate", false, text("main"));
+    return;
+  }
+  const question = text(".question");
+  const due = await window.geode.cardsDue(200);
+  const id = due.ok ? due.value.find((c) => c.question === question)?.id : undefined;
+  await key(" ");
+  for (let i = 0; i < 20 && !exists(".annotation textarea"); i++) await key("a");
+  const box = document.querySelector(".annotation textarea") as HTMLTextAreaElement | null;
+  check("an annotation can be opened in the first vault", box !== null && id !== undefined, question);
+  if (!box || !id) return;
+  const typed = "typed, then the vault was switched";
+  Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(box, typed);
+  box.dispatchEvent(new Event("input", { bubbles: true }));
+  await settle();
+
+  await choose(".vault-menu select", secondName);
+  await until(".tabs");
+  for (let i = 0; i < 40 && menu().selectedOptions[0]?.textContent !== secondName; i++) await settle(50);
+  check("switching vault with the box open still switches", menu().selectedOptions[0]?.textContent === secondName);
+  await choose(".vault-menu select", firstName);
+  await until(".tabs");
+  for (let i = 0; i < 40 && menu().selectedOptions[0]?.textContent !== firstName; i++) await settle(50);
+  const kept = await window.geode.annotationGet(id);
+  check(
+    "and saved the open annotation into the vault it was written in, first",
+    kept.ok && kept.value === typed,
+    kept.ok ? JSON.stringify(kept.value) : kept.message,
+  );
 }
 
 /** Pick the option whose text matches, as a person does with a real select. */

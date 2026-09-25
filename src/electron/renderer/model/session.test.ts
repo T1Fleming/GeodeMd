@@ -14,10 +14,12 @@ import {
   annotationFetched,
   annotationSaved,
   begin,
+  closeAnnotation,
   current,
   editAnnotation,
   isOver,
   keyIsText,
+  mayLeave,
   owed,
   press,
   reviewed,
@@ -472,6 +474,31 @@ describe("annotating a card", () => {
     expect(current(next)?.question).toBe("Q2");
     // The next card starts knowing nothing about its own annotation.
     expect(next.annotation).toEqual({ at: "unknown" });
+  });
+
+  it("lets a vault switch go ahead only once an open box has saved", () => {
+    // Nothing open: nothing to wait for.
+    expect(mayLeave(revealed())).toBe(true);
+
+    // Open with typed text: the switch saves first, and is held until it lands.
+    const typed = editAnnotation(writing(), "keep me");
+    expect(mayLeave(typed)).toBe(false);
+    const { next: saving, effect } = closeAnnotation(typed);
+    expect(effect).toEqual({ kind: "save-annotation", cardId: ID, text: "keep me" });
+    expect(mayLeave(saving)).toBe(false);
+    expect(mayLeave(annotationSaved(saving, ID, null))).toBe(true);
+
+    // Open and unchanged: closes with no write, and the switch proceeds.
+    const { next: unchanged, effect: none } = closeAnnotation(writing("same"));
+    expect(none).toBeUndefined();
+    expect(mayLeave(unchanged)).toBe(true);
+  });
+
+  it("refuses the vault switch when that save fails, keeping the text and the error", () => {
+    const saving = closeAnnotation(editAnnotation(writing(), "keep me")).next;
+    const failed = annotationSaved(saving, ID, "disk full");
+    expect(mayLeave(failed)).toBe(false);
+    expect(failed.annotation).toMatchObject({ at: "open", draft: "keep me", error: "disk full" });
   });
 
   it("ignores an annotation that arrives for a card no longer on screen", () => {
