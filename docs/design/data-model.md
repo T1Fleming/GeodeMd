@@ -18,7 +18,7 @@ flowchart LR
     end
 
     subgraph derived["DERIVABLE — outside the notes directory, delete freely"]
-        db["db.sqlite<br/>cards · files · reviews · log_files · card_state"]
+        db["db.sqlite<br/>cards · files · reviews · log_files · card_state · meta"]
     end
 
     notes -->|"sync steps 1-6: walk, stamp, reconcile"| db
@@ -92,9 +92,15 @@ CREATE TABLE card_state (         -- replay reviews through the scheduler
   reps        INTEGER NOT NULL DEFAULT 0,
   lapses      INTEGER NOT NULL DEFAULT 0,
   state       INTEGER NOT NULL,
-  last_review TEXT
+  last_review TEXT,
+  learning_steps INTEGER NOT NULL DEFAULT 0   -- which short-term step it is on
 );
 CREATE INDEX idx_state_due ON card_state(due);
+
+CREATE TABLE meta (               -- facts about the cache, derived from the code
+  key   TEXT PRIMARY KEY,         -- today only 'scheduler'
+  value TEXT NOT NULL
+);
 ```
 
 ### Why the tables are shaped this way
@@ -111,6 +117,10 @@ There is **no autoincrement id**, and its absence is load-bearing: such a column
 
 It must be set on insert from `EXISTS(SELECT 1 FROM card_state WHERE card_id = ?)`, never defaulted — a restored card has state and must not re-enter the queue as new.
 
+**`card_state.learning_steps` is FSRS-6's step counter.** Under `learning_steps: ["1m", "10m"]` a card rated `3` moves to the second step, and its next rating is scheduled from there — so without the column, a replayed card and an incrementally folded one would disagree. It is replayed from the log like every other column, so the rebuild guarantee holds. A database from before the column existed has it added on open (`addMissingColumns`) with a placeholder `0`, which the scheduler check below overwrites before anything reads it.
+
+**`meta` records which scheduler derived `card_state`.** See [Scheduler state](#scheduler-state).
+
 **`type` is defaulted to `'basic'` and nothing branches on it.** It exists so a future card taxonomy has somewhere to land without a migration.
 
 ## Connection settings
@@ -126,21 +136,34 @@ Every write path runs in a transaction with prepared statements, cached in `Stor
 
 ## Scheduler state
 
-`card_state` is a function of replaying `reviews` through `FsrsScheduler`, which implements a two-method interface:
+`card_state` is a function of replaying `reviews` through `FsrsScheduler`, which implements a two-method interface and names itself:
 
 ```ts
 interface Scheduler {
   initial(now: Date): CardState;
   next(state: CardState, rating: 1 | 2 | 3 | 4, now: Date): CardState;
+  readonly version: string;   // what derived a state; see "When the scheduler changes"
 }
 ```
 
-Its parameters — the full weight vector, `request_retention`, `maximum_interval`, and `enable_fuzz: false` — are written out literally in source rather than inherited from `ts-fsrs`, and the dependency is pinned to an exact version. This is what makes replay deterministic, and therefore what makes the rebuild test possible. See [ADR 0007](../decisions/0007-pin-fsrs-parameters-in-source.md).
+It is FSRS-6, from `ts-fsrs` 5.4.2. Its parameters — all 21 weights, `request_retention`, `maximum_interval`, `enable_fuzz: false`, `enable_short_term`, `learning_steps` and `relearning_steps` — are written out literally in source rather than inherited from `ts-fsrs`, and the dependency is pinned to an exact version. This is what makes replay deterministic, and therefore what makes the rebuild test possible. See [ADR 0007](../decisions/0007-pin-fsrs-parameters-in-source.md) for the rule and [ADR 0028](../decisions/0028-move-to-fsrs-6.md) for the version and the weights.
+
+The weight vector is 21 long on purpose. Given 19, `ts-fsrs` 5 does not fail: it pads the vector to 21 itself, which would be FSRS-5's weights on FSRS-6's engine.
+
+### When the scheduler changes
+
+`card_state` is a fold of the history *under a particular scheduler*, so a database only means what it says while the scheduler that derived it is the one running. `SCHEDULER_VERSION` in `src/scheduler/` names it — the `ts-fsrs` version plus every parameter, so any change to either changes it without anyone having to remember to — and `meta` holds the version that derived the database.
+
+`Core.adoptScheduler(now)` compares the two. When they differ it re-derives every row of `card_state` from zero, from that card's full history in `reviews`, and records the new version in the same transaction as the last batch. It runs in batches of 2,000 with the event loop let back in between, and a run cut short leaves the old version recorded, so the next open starts again rather than trusting half of one. A database with no version and no schedules is new, and only has the version recorded.
+
+It re-derives `card_state` only: not a rebuild. It walks no notes, rereads no log, and writes no stamps. What it produces for each card is what a rebuild's replay would, because both are the same fold over the same history. The rows for cards that have gone from `cards` are re-derived too — `card_state` outlives its card on purpose, and a restored card must come back with the new scheduler's schedule, not the old one's.
+
+The app runs it when it opens a vault (`Active.ensure`), before any read. The renderer asks for the result once, on arriving at a vault, and shows `host`'s `rescheduledText` as a note, because due dates that move without a word look like lost reviews. `rebuild` records the current version itself, since everything it derives is derived by that scheduler. Why a re-derivation and not an automatic rebuild is in [ADR 0028](../decisions/0028-move-to-fsrs-6.md).
 
 ## Rebuild
 
 `rebuild` drops every table and runs a full sync — steps 1 through 8, stamp writes included, so a card authored while the database was gone still gets its ID. It is a normal sync against an empty database, not a separate code path, which is the only reason it can be trusted to stay working.
 
-Because nothing in the schema is non-derivable, it recovers the database *completely*, which is why the rebuild test asserts full-table equality with no carve-outs.
+Because nothing in the schema is non-derivable, it recovers the database *completely*, which is why the rebuild test asserts full-table equality with no carve-outs. `meta` is derived from the code rather than from the notes or the log, like the schema itself; a rebuild writes the running scheduler's version into it.
 
 At the top of the scale range it is minutes, not milliseconds. It is the recovery path; the [incremental sync](sync.md) is the daily one.

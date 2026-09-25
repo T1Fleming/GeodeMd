@@ -34,6 +34,7 @@ const CH = {
   vaultsSwitch: "geode:vaults/switch",
   vaultsRename: "geode:vaults/rename",
   vaultsRemove: "geode:vaults/remove",
+  vaultsOpen: "geode:vaults/open",
   linkOpen: "geode:link/open",
   editorsList: "geode:editors/list",
   editorsSet: "geode:editors/set",
@@ -78,6 +79,7 @@ contextBridge.exposeInMainWorld("geode", {
   vaultsRename: (id: string, name: string) => ipcRenderer.invoke(CH.vaultsRename, id, name),
   vaultsRemove: (id: string, deleteDatabase: boolean) =>
     ipcRenderer.invoke(CH.vaultsRemove, id, deleteDatabase),
+  vaultsOpen: () => ipcRenderer.invoke(CH.vaultsOpen),
   linkOpen: (href: string) => ipcRenderer.invoke(CH.linkOpen, href),
   editorsList: () => ipcRenderer.invoke(CH.editorsList),
   editorsSet: (editor: string | null) => ipcRenderer.invoke(CH.editorsSet, editor),

@@ -103,6 +103,7 @@ export const BY_FILE: Readonly<Record<string, string>> = {
   "files/files.test.ts": "Syncing notes",
 
   "core/rebuild.test.ts": "Recovery and the log",
+  "scheduler/scheduler.test.ts": "Recovery and the log",
   "core/two-devices.test.ts": "Moving between machines",
 
   "host/vaults.test.ts": "Keeping several vaults",
@@ -145,6 +146,9 @@ export const BY_GROUP: Readonly<Record<string, string>> = {
   "host/present.test.ts:which counts a sync summary shows": "Syncing notes",
   "host/present.test.ts:why a freshly-edited file was left alone": "Syncing notes",
   "host/present.test.ts:what each sync phase is called": "Syncing notes",
+  "host/present.test.ts:what the app says when due dates were worked out again":
+    "Recovery and the log",
+  "electron/main/active.test.ts:opening a vault another scheduler scheduled": "Recovery and the log",
 
   "host/host.test.ts:keeping a list of vaults": "Keeping several vaults",
   "electron/renderer/model/setup.test.ts:adding a vault beside the open one": "Keeping several vaults",

@@ -11,12 +11,12 @@ app do*, and *where is that proven*. What it deliberately cannot tell you is wha
 app does **untested** — an area that looks thin here is thinly covered, and that is
 worth reading as a finding rather than a gap in the document.
 
-545 behaviours in 12 areas, which follow [the guides](../guides/) rather than the source tree.
+561 behaviours in 12 areas, which follow [the guides](../guides/) rather than the source tree.
 
-- [Reviewing](#reviewing) — 129
+- [Reviewing](#reviewing) — 130
 - [Recognising a card](#recognising-a-card) — 57
 - [Syncing notes](#syncing-notes) — 73
-- [Recovery and the log](#recovery-and-the-log) — 26
+- [Recovery and the log](#recovery-and-the-log) — 41
 - [Moving between machines](#moving-between-machines) — 16
 - [Keeping several vaults](#keeping-several-vaults) — 44
 - [Setting up this machine](#setting-up-this-machine) — 77
@@ -30,7 +30,7 @@ worth reading as a finding rather than a gap in the document.
 
 _A session: which card is next, what the keys mean, what a rating records, and what comes back before the sitting ends._
 
-**129 behaviours.**
+**130 behaviours.**
 
 ### the order cards are served in
 
@@ -46,12 +46,13 @@ _7 · `core/review.test.ts`_
 
 ### recording a review
 
-_4 · `core/review.test.ts`_
+_5 · `core/review.test.ts`_
 
 - writes the log BEFORE SQLite
 - omits elapsed and scheduled on a first review, and includes them after
 - recovers a review that reached the log but not the database
 - puts a lapsed card back within minutes, not the same session
+- keeps a card's learning step between ratings, so a second good graduates it
 
 ### reporting what is due and what is new
 
@@ -577,7 +578,13 @@ _4 · `files/files.test.ts`_
 
 _The append-only review log, and rebuilding the database from nothing but notes and logs._
 
-**26 behaviours.**
+**41 behaviours.**
+
+### what the app says when due dates were worked out again
+
+_1 · `host/present.test.ts`_
+
+- says how many, and that the notes and the log were not touched
 
 ### the review log
 
@@ -624,6 +631,40 @@ _11 · `core/rebuild.test.ts`_
 - reads only the appended bytes when a shard grows
 - re-reads from zero when a shard shrank
 - counts an unparseable line as skipped, never fatal
+
+### a database scheduled by a different scheduler
+
+_6 · `core/rebuild.test.ts`_
+
+- re-derives every schedule to exactly what a rebuild produces
+- records the scheduler, so the next open does nothing and writes nothing
+- reaches the schedule of a card whose line is gone, so a restored card comes back right
+- says nothing about a new database, and records the scheduler all the same
+- leaves the old scheduler recorded until the last schedule is re-derived
+- is recorded by a rebuild, which derives everything with the scheduler running
+
+### a database from before FSRS-6
+
+_1 · `core/rebuild.test.ts`_
+
+- opens, gains the column, and has every schedule re-derived
+
+### the scheduler is FSRS-6, pinned
+
+_5 · `scheduler/scheduler.test.ts`_
+
+- names the ts-fsrs that package.json pins, exactly, and the one installed
+- runs the 21 weights it writes down — FSRS-6's defaults, neither padded nor clipped
+- leaves ts-fsrs nothing to fill in, and so nothing to log
+- pins the short-term steps ADR 0023's same-sitting re-show is built on
+- calls itself by the library and every parameter, so changing either is noticed
+
+### opening a vault another scheduler scheduled
+
+_2 · `electron/main/active.test.ts`_
+
+- re-derives its schedules before handing it over, and says so once
+- opens one Store however many reads arrive at once
 
 ## Moving between machines
 
@@ -1240,7 +1281,7 @@ _4 · `journeys/reviewing.test.ts`_
 _2 · `journeys/reviewing.test.ts`_
 
 - matches every row of the table, against the real scheduler
-- is right that a long-standing card rated `1` comes back in five minutes
+- is right that a long-standing card rated `1` comes back in ten minutes
 
 ### a rating is safe the moment it is given
 

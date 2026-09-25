@@ -11,6 +11,7 @@ import * as path from "node:path";
 import { VaultRefused, addVault, chooseVault, initConfig, readConfig } from "../../host/config.js";
 import type { RunFinished } from "../ipc.js";
 import { Active } from "./active.js";
+import { SCHEDULER_VERSION } from "../../scheduler/index.js";
 
 const T0 = new Date("2026-09-02T12:00:00.000Z");
 const MTIME = new Date("2026-09-01T00:00:00.000Z");
@@ -165,5 +166,35 @@ describe("the end of a session a switch interrupted", () => {
 
   it("has nothing to answer when no vault was open", async () => {
     expect((await switchTo(homeId)).left).toBeNull();
+  });
+});
+
+describe("opening a vault another scheduler scheduled", () => {
+  it("re-derives its schedules before handing it over, and says so once", async () => {
+    const w = await active.ensure();
+    await w.core.sync(T0);
+    await w.core.reviewCard(w.core.getDueCards(T0, 10)[0]!.id, 3, T0);
+    // A new vault has nothing to say.
+    expect(active.takeRescheduled()).toBeNull();
+
+    // As a database last opened by an older build would be.
+    w.store.setMeta("scheduler", "ts-fsrs@4.6.1");
+    active.reset();
+
+    await active.ensure();
+    expect(active.takeRescheduled()).toEqual({
+      from: "ts-fsrs@4.6.1",
+      to: SCHEDULER_VERSION,
+      cards: 1,
+    });
+    // Taken, not read: arriving at the vault again does not repeat it.
+    expect(active.takeRescheduled()).toBeNull();
+  });
+
+  it("opens one Store however many reads arrive at once", async () => {
+    // Opening awaits the re-derivation, and the review screen asks for the
+    // queue and the counts together.
+    const [a, b] = await Promise.all([active.ensure(), active.ensure()]);
+    expect(a).toBe(b);
   });
 });

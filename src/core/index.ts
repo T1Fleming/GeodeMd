@@ -114,7 +114,30 @@ export interface DueCard {
   locator: string;
 }
 
+/**
+ * What `adoptScheduler` did when it had to do something: every schedule in
+ * the database was worked out again, because a different scheduler had
+ * derived them (ADR 0028).
+ */
+export interface Rescheduled {
+  /** The scheduler recorded before, or null for a database from before one was recorded. */
+  from: string | null;
+  to: string;
+  /** How many schedules were re-derived from their review history. */
+  cards: number;
+}
+
 export class ConfigError extends Error {}
+
+/** The `meta` key naming the scheduler that derived `card_state`. */
+const SCHEDULER_KEY = "scheduler";
+
+/**
+ * Schedules re-derived per transaction by `adoptScheduler`, with the event
+ * loop let back in between. The same shape as the rest of `core`'s long
+ * operations, which ADR 0017's main-process decision rests on.
+ */
+const RESCHEDULE_BATCH = 2000;
 
 function emptySummary(): SyncSummary {
   return {
@@ -700,7 +723,54 @@ export class Core {
    */
   async rebuild(now: Date, opts: SyncOptions = {}): Promise<SyncSummary> {
     this.store.dropAll();
+    // Everything the sync below derives, it derives with this scheduler.
+    this.store.setMeta(SCHEDULER_KEY, this.scheduler.version);
     return this.sync(now, opts);
+  }
+
+  /**
+   * Make every schedule in the database this scheduler's.
+   *
+   * `card_state` is a fold of the review history *under a particular
+   * scheduler*, so a database carries the answer of whichever one derived it.
+   * The version is recorded in the database, and when it differs from this
+   * scheduler's every schedule is re-derived from its full history — which is
+   * what a rebuild would produce for `card_state`, without a rebuild's walk,
+   * re-read of the log, or stamps written into notes (ADR 0028).
+   *
+   * Run by the app when it opens a vault, before anything reads a due date.
+   * A database with no version and no schedules is simply new, and has the
+   * version recorded without anything to report.
+   *
+   * The version is written in the last transaction, not the first: a run cut
+   * short leaves it unchanged, so the next open does the whole thing again
+   * rather than trusting a half-finished one. Every row is re-derived from
+   * zero, so doing it twice costs time and nothing else.
+   *
+   * Returns null when there was nothing to re-derive.
+   */
+  async adoptScheduler(now: Date): Promise<Rescheduled | null> {
+    const to = this.scheduler.version;
+    const from = this.store.getMeta(SCHEDULER_KEY) ?? null;
+    if (from === to) return null;
+
+    const ids = this.store.scheduledIds();
+    for (let i = 0; i < ids.length || i === 0; i += RESCHEDULE_BATCH) {
+      const batch = ids.slice(i, i + RESCHEDULE_BATCH);
+      const last = i + RESCHEDULE_BATCH >= ids.length;
+      this.store.transaction(() => {
+        for (const id of batch) {
+          const history = this.store.historyOf(id);
+          // A schedule is only ever written from a history, so none left means
+          // the log that justified it is gone. A rebuild would not recreate it.
+          if (history.length === 0) this.store.deleteState(id);
+          else this.store.putState(id, fold(this.scheduler, null, history, now));
+        }
+        if (last) this.store.setMeta(SCHEDULER_KEY, to);
+      });
+      if (!last) await new Promise<void>((resolve) => setImmediate(resolve));
+    }
+    return ids.length === 0 ? null : { from, to, cards: ids.length };
   }
 }
 
