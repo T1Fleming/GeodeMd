@@ -4,6 +4,7 @@ import {
   actionsAt,
   deferralReason,
   emptyCounts,
+  interpretAnnotatingKey,
   interpretKey,
   PHASE_LABEL,
   RATING_KEYS,
@@ -67,7 +68,31 @@ describe("the shared vocabulary", () => {
     // this", which stops being true the moment the answer is showing; `o`
     // needs the answer on screen to be worth offering.
     expect(actionsAt("question").map((a) => a.key)).toEqual(["0", "q"]);
-    expect(actionsAt("answer").map((a) => a.key)).toEqual(["o", "q"]);
+    expect(actionsAt("answer").map((a) => a.key)).toEqual(["o", "a", "q"]);
+  });
+
+  it("offers `annotate` at the answer only, because an annotation may restate it", () => {
+    // ADR 0029: showing annotations before the reveal would make the review a
+    // sham test, the mirror image of why `0` is question-only.
+    expect(ACTION_KEYS.find((a) => a.key === "a")).toEqual({
+      key: "a",
+      label: "annotate",
+      stage: "answer",
+    });
+    expect(actionsAt("question").map((a) => a.key)).not.toContain("a");
+    expect(interpretKey("a")).toEqual({ kind: "annotate" });
+    expect(interpretKey("A")).toEqual({ kind: "annotate" });
+  });
+
+  it("treats every key as text while an annotation is open, except the two that close it", () => {
+    // Typing "3 seconds, not quick" must not rate the card or quit the
+    // session, so nothing from the review table applies here.
+    for (const k of ["1", "3", "4", "0", "q", "Q", "o", "a", " ", "Enter", "Backspace"]) {
+      expect(interpretAnnotatingKey(k, false), k).toEqual({ kind: "type" });
+    }
+    // Escape saves and closes rather than quitting; so does Cmd/Ctrl+Enter.
+    expect(interpretAnnotatingKey("Escape", false)).toEqual({ kind: "close" });
+    expect(interpretAnnotatingKey("Enter", true)).toEqual({ kind: "close" });
   });
 
   it("offers quit at both stages, because a question you cannot leave is a trap", () => {

@@ -171,7 +171,7 @@ export function App(): React.JSX.Element {
           review and coming back draws a fresh queue — no position is kept, and
           none needs to be, because every rating was recorded when it was
           given. */}
-      {tab === "review" && <ReviewScreen onNote={setNote} />}
+      {tab === "review" && <ReviewScreen vault={boot.config.id} onNote={setNote} />}
       {tab === "sync" && <Sync />}
       {tab === "stats" && vaults && (
         <Stats
@@ -247,7 +247,14 @@ type Screen =
  */
 const LIMIT = 50;
 
-function ReviewScreen({ onNote }: { onNote: (m: string) => void }): React.JSX.Element {
+function ReviewScreen({
+  vault,
+  onNote,
+}: {
+  /** The open vault's id, which every annotation write names (ADR 0029). */
+  vault: string;
+  onNote: (m: string) => void;
+}): React.JSX.Element {
   const [screen, setScreen] = useState<Screen>({ at: "loading" });
   /** Notes edited during the session. Null until the session ends. */
   const [stale, setStale] = useState<string[] | null>(null);
@@ -320,6 +327,20 @@ function ReviewScreen({ onNote }: { onNote: (m: string) => void }): React.JSX.El
     [onNote],
   );
 
+  const onAnnotationRead = useCallback(
+    (cardId: string) => window.geode.annotationGet(cardId),
+    [],
+  );
+
+  /**
+   * Named with the vault the review was drawn from, so a save that arrives
+   * after a switch is refused rather than written into the other vault.
+   */
+  const onAnnotationWrite = useCallback(
+    (cardId: string, text: string) => window.geode.annotationSet(vault, cardId, text),
+    [vault],
+  );
+
   /**
    * At the end of the session, ask which of the opened notes actually changed.
    *
@@ -359,6 +380,9 @@ function ReviewScreen({ onNote }: { onNote: (m: string) => void }): React.JSX.El
       stale={stale}
       onRate={onRate}
       onOpen={onOpen}
+      onAnnotationRead={onAnnotationRead}
+      onAnnotationWrite={onAnnotationWrite}
+      onNote={onNote}
       onDone={onDone}
       // Offered only when the collection holds more than this sitting served —
       // the same condition as the backlog chip, and the replacement for the

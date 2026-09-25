@@ -48,6 +48,10 @@ export const ACTION_KEYS: readonly ActionKey[] = [
   // rather than a limitation — see `interpretKey` below.
   { key: "0", label: "later", stage: "question" },
   { key: "o", label: "open", stage: "answer" },
+  // `annotate` is offered ONLY at the answer: an annotation is free to restate
+  // the answer, so showing one at the question would make the review a sham —
+  // the mirror image of `later` (ADR 0029).
+  { key: "a", label: "annotate", stage: "answer" },
   { key: "q", label: "quit", stage: "both" },
 ];
 
@@ -62,6 +66,8 @@ export type KeyAction =
   | { kind: "open" }
   /** Put this card back in the queue, unanswered. */
   | { kind: "defer" }
+  /** Open the card's annotation for writing (ADR 0029). */
+  | { kind: "annotate" }
   | { kind: "ignore" };
 
 /** Ctrl-C as it arrives from a raw-mode keypress. Terminal-only, harmless here. */
@@ -100,7 +106,28 @@ export function interpretKey(key: string): KeyAction {
    * later. That is not a fact about your memory, so it is not recorded as one.
    */
   if (key === "0") return { kind: "defer" };
+  if (key === "a" || key === "A") return { kind: "annotate" };
   return { kind: "ignore" };
+}
+
+/**
+ * What a keypress means while an annotation is open for writing.
+ *
+ * A different table from `interpretKey`, and deliberately a tiny one: while
+ * the box is open **every key is text** — `3` is part of "3 seconds", not a
+ * rating, and `q` is a letter, not a quit. The only exits are:
+ *
+ * - `Escape`, which **saves** and closes. It would quit the session anywhere
+ *   else, and discarding typed text is the worse surprise of the two
+ *   directions it could have gone (ADR 0029).
+ * - Cmd+Enter (Ctrl+Enter off macOS), which saves and closes too.
+ *
+ * `command` is whether Cmd or Ctrl was held.
+ */
+export function interpretAnnotatingKey(key: string, command: boolean): { kind: "close" } | { kind: "type" } {
+  if (key === "Escape" || key === "escape") return { kind: "close" };
+  if (key === "Enter" && command) return { kind: "close" };
+  return { kind: "type" };
 }
 
 /**

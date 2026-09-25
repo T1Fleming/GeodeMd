@@ -93,6 +93,8 @@ A vault is a notes folder together with its own database, and one is open at a t
 
 `vaults/rename` and `editors/set` do *not* go through it: neither changes which folder or database is open, so closing the Store would be all cost.
 
+**A write composed in one vault names it.** `annotation/set` carries the id of the vault the review was drawn from, and `Active.ensureVault` refuses it if another is open by then. The review screen saves an open annotation as it unmounts, and after a switch that save would otherwise land in the new vault's `.sr/annotations/` under an id from the old one ([ADR 0029](../decisions/0029-annotations.md)).
+
 The switcher is a `<select>` at the end of the tab bar, and is blurred after every choice so the review screen's document-level keys are not typed into it. Its decisions — what the options are, what choosing one means, when **Remove…** is offered — are in `renderer/model/vaults.ts`. The repair screen shows it too, when there is another vault to go to: a vault on an unplugged drive must not trap the user in it.
 
 **Adding a vault is the setup sequence with `from.reason = "add"`.** It differs from a change in what it writes and what it undoes, both in `model/setup.ts`: `mode(s)` is `add`, so the proposal mints a vault id — passed back to `vaults/add`, so the database path shown is the one written — and asks no keep-or-replace question. Undoing is `abandonAdd`: switch back to `from.vault`, then remove the added vault *and* its database, since the only thing in it is the preview. The id to remove is the one recorded at the write, not the proposal's, because picking another folder replaces the proposal. A second preview after a change of folder undoes the first add before adding again, so the vault in the list is always the one being previewed.
@@ -116,6 +118,7 @@ A decision lives in `host`, not in the component that wanted it first. With two 
 | In `host` | Why it cannot be per-interface |
 |---|---|
 | `RATING_KEYS`, `interpretKey` | what `3` does, and whether `escape` quits |
+| `interpretAnnotatingKey` | which keys close an open annotation — and that `Escape` there saves rather than quits ([ADR 0029](../decisions/0029-annotations.md)) |
 | `resolveEditor`, `editorCommand`, `launchCommand`, `detectEditors` | which program `o` opens, how it is told a line, where it is installed, and which editors the Vault screen offers |
 | `OpenedNotes` | the mtime-at-open record behind "this note changed" |
 | `summaryFields` | which counts a sync reports, and in what order |

@@ -15,7 +15,13 @@
 import { afterEach, describe, expect, it } from "vitest";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import { ACTION_KEYS, RATING_KEYS, actionsAt, interpretKey } from "../host/present.js";
+import {
+  ACTION_KEYS,
+  RATING_KEYS,
+  actionsAt,
+  interpretAnnotatingKey,
+  interpretKey,
+} from "../host/present.js";
 import { detectEditors, editorCommand, launchCommand } from "../host/editor.js";
 import type { Machine } from "../host/editor.js";
 import { FsrsScheduler } from "../scheduler/index.js";
@@ -228,5 +234,70 @@ describe("the session's own claims about what you get", () => {
     const later = new Date(T0.getTime() + 60_000);
     await open.core.sync(later);
     expect(open.core.getDueCards(later, 10).map((c) => c.question)).toEqual(["Q1"]);
+  });
+});
+
+describe("annotations are where the guide says, and behave as it says", () => {
+  it("offers `a` once the answer is showing and never before", async () => {
+    const text = await reviewing();
+    expect(text).toContain("## `a` — annotate the card");
+    expect(text).toContain("at the question `a` does nothing");
+    expect(actionsAt("answer").map((a) => a.key)).toContain("a");
+    expect(actionsAt("question").map((a) => a.key)).not.toContain("a");
+  });
+
+  it("treats `3` and `q` as text while the box is open, and closes it on the two keys named", async () => {
+    const text = plain(await reviewing());
+    expect(text).toContain('3 is part of "3 seconds", not a rating, and q is a letter, not a quit');
+    expect(text).toContain("Two keys close it, and both save: Escape, and ⌘↵ (Cmd+Enter)");
+    expect(interpretAnnotatingKey("3", false).kind).toBe("type");
+    expect(interpretAnnotatingKey("q", false).kind).toBe("type");
+    expect(interpretAnnotatingKey("Escape", false).kind).toBe("close");
+    expect(interpretAnnotatingKey("Enter", true).kind).toBe("close");
+  });
+
+  it("keeps each one as a plain file in the notes folder, named by the card's id", async () => {
+    const text = await reviewing();
+    expect(text).toContain("one per card: `.sr/annotations/<card-id>.md`");
+    expect(text).toContain("Emptying the box and closing it removes the annotation.");
+
+    open = await newCollection();
+    await open.write("a.md", "Q1 :: A1\n");
+    await open.core.sync(T0);
+    const [card] = open.core.getDueCards(T0, 10);
+    await open.core.setAnnotation(card!.id, "mnemonic :: not a card\n");
+
+    const file = path.join(open.notes, ".sr", "annotations", `${card!.id}.md`);
+    expect(await fs.readFile(file, "utf8")).toBe("mnemonic :: not a card\n");
+    // It is in the notes folder but never read as a note.
+    const again = await open.core.sync(T0, { full: true });
+    expect(again.filesEnumerated).toBe(1);
+    expect(again.cardsFound).toBe(1);
+
+    await open.core.setAnnotation(card!.id, "");
+    await expect(fs.access(file)).rejects.toThrow();
+  });
+
+  it("keeps a deleted card's annotation, which comes back with the card", async () => {
+    expect(plain(await reviewing())).toContain(
+      "if the card comes back — restored from a backup, or the line undone — its annotation comes back with it",
+    );
+
+    open = await newCollection();
+    await open.write("a.md", "Q1 :: A1\n");
+    await open.core.sync(T0);
+    const stamped = await open.read("a.md");
+    const [card] = open.core.getDueCards(T0, 10);
+    await open.core.setAnnotation(card!.id, "source: chapter 3\n");
+
+    await open.write("a.md", "");
+    await open.core.sync(T0);
+    expect(open.core.getDueCards(T0, 10)).toHaveLength(0);
+    expect(await open.core.getAnnotation(card!.id)).toBe("source: chapter 3\n");
+
+    await open.write("a.md", stamped);
+    await open.core.sync(T0);
+    expect(open.core.getDueCards(T0, 10)[0]!.id).toBe(card!.id);
+    expect(await open.core.getAnnotation(card!.id)).toBe("source: chapter 3\n");
   });
 });

@@ -682,6 +682,23 @@ export class Core {
   }
 
   /**
+   * A card's annotation, or null when it has none ([ADR 0029](../../docs/decisions/0029-annotations.md)).
+   *
+   * Straight to `files/`, with no database involved: the file under
+   * `.sr/annotations/` is the whole store, which is why sync, `rebuild` and
+   * the schema know nothing about annotations. No `now` either — nothing
+   * about an annotation is timestamped.
+   */
+  async getAnnotation(cardId: string): Promise<string | null> {
+    return files.readAnnotation(this.config.notesPath, cardId);
+  }
+
+  /** Write a card's annotation; blank text removes it. See `getAnnotation`. */
+  async setAnnotation(cardId: string, text: string): Promise<void> {
+    await files.writeAnnotation(this.config.notesPath, cardId, text);
+  }
+
+  /**
    * Fold the write-ahead log back into the database.
    *
    * `sync` already does this before it returns (ADR 0024); this is for a caller

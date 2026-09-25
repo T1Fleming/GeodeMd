@@ -224,6 +224,25 @@ function register(): void {
   );
 
   /**
+   * A card's annotation, read from `.sr/annotations/` in the open vault's
+   * notes folder (ADR 0029). The file is the whole store; nothing here touches
+   * the database. `files/` refuses an id that is not a stamp before it becomes
+   * a path.
+   */
+  ipcMain.handle(CH.annotationGet, (_e, cardId: string) =>
+    guard<string | null>(async () => (await active.ensure()).core.getAnnotation(cardId)),
+  );
+
+  /**
+   * Write it — into the vault it was written in, or not at all. A failure
+   * crosses as a `Result` like any other, and the renderer keeps the text in
+   * the box rather than dropping it.
+   */
+  ipcMain.handle(CH.annotationSet, (_e, vault: string, cardId: string, text: string) =>
+    guard<void>(async () => (await active.ensureVault(vault)).core.setAnnotation(cardId, text)),
+  );
+
+  /**
    * The OS folder chooser. In **main** — not the renderer, which has no access
    * to it, and not a worker, which has no window to attach it to.
    *

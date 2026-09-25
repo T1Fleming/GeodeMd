@@ -282,3 +282,23 @@ describe("ingesting the log", () => {
     expect(r.reviewsIngested).toBe(1);
   });
 });
+
+describe("annotations and the database", () => {
+  it("stay out of it: a rebuild with annotations present reproduces it identically", async () => {
+    // Annotations are files under `.sr/annotations/` and nothing else (ADR
+    // 0029). If one ever reached a table, this total comparison would still
+    // pass only by accident — so the annotation is written BEFORE the first
+    // dump, and must survive the rebuild untouched as well.
+    await write("a.md", "A :: 1\nB :: 2\n");
+    await core.sync(T0);
+    await core.reviewCard("sr-000000000001", 3, new Date("2026-09-02T13:00:00.000Z"));
+    await core.setAnnotation("sr-000000000001", "remember :: this is not a card\n");
+    await core.setAnnotation("sr-000000000002", "second\r\n");
+
+    const before = dump(store);
+    await core.rebuild(new Date("2026-09-04T12:00:00.000Z"));
+    expect(dump(store)).toEqual(before);
+    expect(await core.getAnnotation("sr-000000000001")).toBe("remember :: this is not a card\n");
+    expect(await core.getAnnotation("sr-000000000002")).toBe("second\r\n");
+  });
+});

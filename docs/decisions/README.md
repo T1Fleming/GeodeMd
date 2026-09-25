@@ -35,6 +35,7 @@ New decisions from here get an ADR when they are made, not in a later sweep — 
 | [0025](0025-the-app-is-the-only-interface.md) | The app is the only interface; the CLI is removed | Accepted |
 | [0026](0026-config-in-application-support-on-macos.md) | On macOS the config lives in Application Support | Accepted |
 | [0027](0027-vaults.md) | Vaults: several notes folders, each with its own database | Accepted |
+| [0029](0029-annotations.md) | Annotations: one plain-text file per card, beside the log | Accepted |
 
 ## Writing one
 

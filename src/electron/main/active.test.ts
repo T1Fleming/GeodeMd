@@ -167,3 +167,14 @@ describe("the end of a session a switch interrupted", () => {
     expect((await switchTo(homeId)).left).toBeNull();
   });
 });
+
+describe("a write composed in a vault that has since been left", () => {
+  it("is refused rather than landing in the vault open now", async () => {
+    const open = await active.ensureVault(workId);
+    expect(open.config.id).toBe(workId);
+
+    await switchTo(homeId);
+    await expect(active.ensureVault(workId)).rejects.toBeInstanceOf(VaultRefused);
+    expect((await active.ensureVault(homeId)).config.id).toBe(homeId);
+  });
+});

@@ -74,9 +74,24 @@ Offered once the answer is showing. It opens the note the card lives in, at the 
 
 GeodeMD does not wait for the editor to close — it launches it and carries on, so you can keep reviewing with the note open beside you. At the end of the session it names the notes that changed while you were reviewing, because the cards on screen came from the last sync: **an edited note needs a sync** before the change reaches your queue.
 
+## `a` — annotate the card
+
+Offered once the answer is showing. It opens a box under the answer for what reviewing this card taught you: a mnemonic, why you keep mixing it up with another card, a source, an example. What is already written there is in the box when it opens.
+
+**Never before the answer.** An annotation is free to give the answer away, so at the question `a` does nothing — it does not even reveal the card the way other keys do. When a card has an annotation, a small line under the answer says so; the annotation itself stays hidden until you press `a`.
+
+While the box is open, **everything you type is text**. `3` is part of "3 seconds", not a rating, and `q` is a letter, not a quit. Two keys close it, and **both save**: `Escape`, and ⌘↵ (Cmd+Enter). There is no key that closes without saving — losing what you typed would be the worse surprise — and leaving the Review tab with the box open saves it as well. Emptying the box and closing it removes the annotation.
+
+If a save fails, the box stays open with your text in it and says why, so nothing you typed is lost.
+
+**Annotations are plain text files in your notes folder**, one per card: `.sr/annotations/<card-id>.md`, named by the id stamped on the card's line. So they are carried wherever your notes folder goes, and sync with it, like your review history. Two things follow:
+
+- **Obsidian does not show them.** It hides folders whose names start with a dot, and `.sr` is one. Any editor that shows hidden folders can open them; they are ordinary Markdown.
+- **Deleting a card keeps its annotation.** The file stays behind, and if the card comes back — restored from a backup, or the line undone — its annotation comes back with it. A card you copy gets a new id, so the copy starts with none.
+
 ## Quitting, and what is saved
 
-`q` quits, from the question or the answer. So does `Escape`, and so does Ctrl-C.
+`q` quits, from the question or the answer. So does `Escape` — except while an annotation is open, where it saves and closes the box instead — and so does Ctrl-C.
 
 **Every rating you have already given is saved.** Each one is written to the review log and flushed to disk before anything else happens, so quitting, closing the window, a crash, or a dead battery costs you nothing but the cards you had not answered yet. There is no "end session" step and nothing to commit.
 

@@ -24,6 +24,8 @@ const CH = {
   runStatus: "geode:run/status",
   noteOpen: "geode:note/open",
   noteChanged: "geode:note/changed",
+  annotationGet: "geode:annotation/get",
+  annotationSet: "geode:annotation/set",
   setupPick: "geode:setup/pick",
   setupInspect: "geode:setup/inspect",
   setupPropose: "geode:setup/propose",
@@ -66,6 +68,9 @@ contextBridge.exposeInMainWorld("geode", {
     // A plain array crosses; a readonly one is the same object to
     // `structuredClone`, and the annotation is only about this side.
     ipcRenderer.invoke(CH.noteChanged, [...filePaths]),
+  annotationGet: (cardId: string) => ipcRenderer.invoke(CH.annotationGet, cardId),
+  annotationSet: (vault: string, cardId: string, text: string) =>
+    ipcRenderer.invoke(CH.annotationSet, vault, cardId, text),
   setupPick: (purpose: string) => ipcRenderer.invoke(CH.setupPick, purpose),
   setupInspect: (folder: string) => ipcRenderer.invoke(CH.setupInspect, folder),
   setupPropose: (folder: string, mode: string) => ipcRenderer.invoke(CH.setupPropose, folder, mode),

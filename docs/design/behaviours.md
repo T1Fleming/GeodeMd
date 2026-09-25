@@ -11,26 +11,26 @@ app do*, and *where is that proven*. What it deliberately cannot tell you is wha
 app does **untested** — an area that looks thin here is thinly covered, and that is
 worth reading as a finding rather than a gap in the document.
 
-545 behaviours in 12 areas, which follow [the guides](../guides/) rather than the source tree.
+574 behaviours in 12 areas, which follow [the guides](../guides/) rather than the source tree.
 
-- [Reviewing](#reviewing) — 129
+- [Reviewing](#reviewing) — 151
 - [Recognising a card](#recognising-a-card) — 57
-- [Syncing notes](#syncing-notes) — 73
-- [Recovery and the log](#recovery-and-the-log) — 26
+- [Syncing notes](#syncing-notes) — 74
+- [Recovery and the log](#recovery-and-the-log) — 27
 - [Moving between machines](#moving-between-machines) — 16
-- [Keeping several vaults](#keeping-several-vaults) — 44
+- [Keeping several vaults](#keeping-several-vaults) — 45
 - [Setting up this machine](#setting-up-this-machine) — 77
 - [The app's long runs](#the-apps-long-runs) — 31
 - [The database as a cache](#the-database-as-a-cache) — 7
 - [At scale](#at-scale) — 9
 - [Rules the project enforces on itself](#rules-the-project-enforces-on-itself) — 34
-- [The documentation tells the truth](#the-documentation-tells-the-truth) — 42
+- [The documentation tells the truth](#the-documentation-tells-the-truth) — 46
 
 ## Reviewing
 
 _A session: which card is next, what the keys mean, what a rating records, and what comes back before the sitting ends._
 
-**129 behaviours.**
+**151 behaviours.**
 
 ### the order cards are served in
 
@@ -135,11 +135,13 @@ _4 · `host/present.test.ts`_
 
 ### the shared vocabulary
 
-_5 · `host/present.test.ts`_
+_7 · `host/present.test.ts`_
 
 - names all four FSRS ratings, in order
 - agrees with interpretKey about every key it advertises
 - offers `later` only at the question and `open` only at the answer
+- offers `annotate` at the answer only, because an annotation may restate it
+- treats every key as text while an annotation is open, except the two that close it
 - offers quit at both stages, because a question you cannot leave is a trap
 - maps 0 to defer, which records nothing
 
@@ -281,6 +283,24 @@ _11 · `electron/renderer/model/session.test.ts`_
 - does not lose a card that was deferred and then answered
 - works on a card that came back on a learning step
 
+### annotating a card
+
+_13 · `electron/renderer/model/session.test.ts`_
+
+- asks whether the card has an annotation when it is revealed, not before
+- does nothing with `a` at the question stage, not even the reveal
+- opens with `a` once the answer is showing, holding the existing text
+- does not open before the annotation has arrived, so it cannot be overwritten blank
+- gives 1-4, q, 0 and o no effect and records nothing while annotating
+- says which keys belong to the text box, so the screen does not swallow them
+- leaves annotating on Escape without quitting, and saves what was typed
+- saves and closes on Cmd+Enter too
+- closes without a write when nothing changed
+- keeps the box open with the text in it when the save fails
+- clears the annotation when saved blank
+- still rates normally once the box is closed
+- ignores an annotation that arrives for a card no longer on screen
+
 ### launching an editor without holding the app open
 
 _5 · `electron/main/open.test.ts`_
@@ -300,6 +320,18 @@ _5 · `electron/renderer/model/editor.test.ts`_
 - shows an installed editor as itself
 - shows an editor that is not installed as a typed command, not as the default
 - saves a choice at once, except a typed command, which waits to be typed
+
+### a card's annotation
+
+_7 · `files/files.test.ts`_
+
+- is null for a card that has none, and reads back what was written
+- is replaced whole by a second write
+- is removed by empty or blank text rather than left as an empty file
+- refuses an id that is not a stamp, before it becomes a path
+- leaves no partial or temporary file behind, whether the write succeeds or fails
+- comes back byte-identical, CRLF and missing final newline included
+- is never walked as a note, so a ` :: ` inside one is not a card
 
 ## Recognising a card
 
@@ -418,7 +450,7 @@ _2 · `parser/parser.test.ts`_
 
 _Finding what changed, stamping it, pruning what is gone, and saying what happened._
 
-**73 behaviours.**
+**74 behaviours.**
 
 ### which counts a sync summary shows
 
@@ -541,6 +573,12 @@ _8 · `core/sync.test.ts`_
 - does not read it, so its cards are not counted as found
 - leaves an ordinary file that merely looks similar alone
 
+### annotation files
+
+_1 · `core/sync.test.ts`_
+
+- are never enumerated or stamped, even with a card-shaped line in them
+
 ### walking the notes tree
 
 _9 · `files/files.test.ts`_
@@ -577,7 +615,7 @@ _4 · `files/files.test.ts`_
 
 _The append-only review log, and rebuilding the database from nothing but notes and logs._
 
-**26 behaviours.**
+**27 behaviours.**
 
 ### the review log
 
@@ -624,6 +662,12 @@ _11 · `core/rebuild.test.ts`_
 - reads only the appended bytes when a shard grows
 - re-reads from zero when a shard shrank
 - counts an unparseable line as skipped, never fatal
+
+### annotations and the database
+
+_1 · `core/rebuild.test.ts`_
+
+- stay out of it: a rebuild with annotations present reproduces it identically
 
 ## Moving between machines
 
@@ -681,7 +725,7 @@ _2 · `electron/main/reads.test.ts`_
 
 _Several notes folders, each with its own database, one open at a time — adding, switching, and the overlap that would split a card's history._
 
-**44 behaviours.**
+**45 behaviours.**
 
 ### refusing two vaults that share notes
 
@@ -719,6 +763,12 @@ _2 · `electron/main/active.test.ts`_
 
 - answers which notes changed in the vault being left, before it is closed
 - has nothing to answer when no vault was open
+
+### a write composed in a vault that has since been left
+
+_1 · `electron/main/active.test.ts`_
+
+- is refused rather than landing in the vault open now
 
 ### the vault switcher
 
@@ -1184,7 +1234,7 @@ _5 · `behaviours/areas.test.ts`_
 
 _Documents that make checkable claims, checked._
 
-**42 behaviours.**
+**46 behaviours.**
 
 ### the demo collection
 
@@ -1255,6 +1305,15 @@ _2 · `journeys/reviewing.test.ts`_
 
 - serves due cards before new ones, most overdue first
 - does not walk the notes, so a deleted card can still turn up
+
+### annotations are where the guide says, and behave as it says
+
+_4 · `journeys/reviewing.test.ts`_
+
+- offers `a` once the answer is showing and never before
+- treats `3` and `q` as text while the box is open, and closes it on the two keys named
+- keeps each one as a plain file in the notes folder, named by the card's id
+- keeps a deleted card's annotation, which comes back with the card
 
 ### what the guide says is durable, and where it says it lives
 

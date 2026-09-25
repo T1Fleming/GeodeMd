@@ -629,3 +629,26 @@ describe("sync conflict copies", () => {
     expect(store.countCards()).toBe(2);
   });
 });
+
+/**
+ * Annotations live in the notes folder (ADR 0029), so sync has to leave them
+ * alone as firmly as it leaves the log alone: one that contains ` :: ` is not
+ * a card, and stamping it would write an id into the user's annotation.
+ */
+describe("annotation files", () => {
+  it("are never enumerated or stamped, even with a card-shaped line in them", async () => {
+    await write("a.md", "Q :: A\n");
+    await core.sync(T0);
+    const [card] = core.getDueCards(T0, 10);
+    const text = "confused with :: the other card\n";
+    await core.setAnnotation(card!.id, text);
+    const rel = `.sr/annotations/${card!.id}.md`;
+    await fs.utimes(path.join(notes, rel), MTIME, MTIME);
+
+    const s = await core.sync(T0, { full: true });
+    expect(s.filesEnumerated).toBe(1);
+    expect(s.cardsFound).toBe(1);
+    expect(store.countCards()).toBe(1);
+    expect(await read(rel)).toBe(text);
+  });
+});

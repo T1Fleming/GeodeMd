@@ -7,6 +7,7 @@
  * `O_APPEND` in the module whose only job is SQLite.
  */
 
+import { randomBytes } from "node:crypto";
 import { closeSync, constants, fsyncSync, openSync, writeSync } from "node:fs";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
@@ -382,5 +383,97 @@ export async function readShardFrom(
     return { text: complete.toString("utf8"), consumed: offset + complete.length };
   } finally {
     await handle.close();
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Annotations (ADR 0029)
+// ---------------------------------------------------------------------------
+
+/**
+ * One Markdown file per card, named by its stamp: `.sr/annotations/<id>.md`.
+ *
+ * Inside `.sr/`, so `enumerate` never walks it — a dotted directory is skipped
+ * without being named — and a line in an annotation that happens to contain
+ * ` :: ` can never be read as a card or stamped. That skip is what lets this
+ * live in the notes folder at all, where it syncs with the notes.
+ */
+export const ANNOTATION_DIR = path.join(".sr", "annotations");
+
+/**
+ * The stamp's shape, and nothing else (ADR 0003). An id is checked against it
+ * before it becomes part of a path, so no string arriving over IPC can turn
+ * into `../` and write somewhere outside the annotations folder.
+ */
+const CARD_ID = /^sr-[A-Za-z0-9]{12}$/;
+
+export class NotACardId extends Error {}
+
+function annotationPath(root: string, id: string): string {
+  if (!CARD_ID.test(id)) throw new NotACardId(`not a card id: ${JSON.stringify(id)}`);
+  return path.join(root, ANNOTATION_DIR, `${id}.md`);
+}
+
+/** A card's annotation, exactly as written, or null when it has none. */
+export async function readAnnotation(root: string, id: string): Promise<string | null> {
+  const file = annotationPath(root, id);
+  try {
+    return await fs.readFile(file, "utf8");
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") return null;
+    throw err;
+  }
+}
+
+/** Whether a card has an annotation, without reading it. */
+export async function hasAnnotation(root: string, id: string): Promise<boolean> {
+  const file = annotationPath(root, id);
+  try {
+    return (await fs.stat(file)).isFile();
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") return false;
+    throw err;
+  }
+}
+
+/**
+ * Write a card's annotation, or remove it when `text` is blank.
+ *
+ * **Temp file, fsync, rename.** A rename within one directory replaces the
+ * old file in a single step, so a crash leaves either the previous annotation
+ * or the new one — never half of either. The temp file is fsynced first
+ * because a rename can otherwise reach the disk before the data it names. The
+ * temp name starts with a dot and does not end in `.md`, so even a stray one
+ * left by a power cut is not mistaken for an annotation.
+ *
+ * Blank means whitespace only. Such a file says nothing, and leaving a
+ * zero-byte file behind would make the card look annotated.
+ *
+ * The text is stored as given — no trimming, no newline added — so a CRLF
+ * annotation stays CRLF and one without a final newline keeps that too.
+ */
+export async function writeAnnotation(root: string, id: string, text: string): Promise<void> {
+  const file = annotationPath(root, id);
+
+  if (text.trim() === "") {
+    await fs.rm(file, { force: true });
+    return;
+  }
+
+  const dir = path.dirname(file);
+  await fs.mkdir(dir, { recursive: true });
+  const tmp = path.join(dir, `.${id}.${process.pid}.${randomBytes(4).toString("hex")}.tmp`);
+  try {
+    const handle = await fs.open(tmp, "w", 0o644);
+    try {
+      await handle.writeFile(text, "utf8");
+      await handle.sync();
+    } finally {
+      await handle.close();
+    }
+    await fs.rename(tmp, file);
+  } catch (err) {
+    await fs.rm(tmp, { force: true });
+    throw err;
   }
 }

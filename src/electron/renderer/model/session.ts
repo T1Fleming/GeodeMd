@@ -12,14 +12,36 @@
  * does, about whether `escape` quits, or about when a card comes back.
  *
  * What is left here is what a *screen* needs on top of a queue: whether the
- * answer is showing, what has been rated, which notes were opened.
+ * answer is showing, what has been rated, which notes were opened, and whether
+ * the card's annotation is open for writing.
  */
 
 import type { DueCard } from "../../../core/index.js";
-import { emptyCounts, interpretKey } from "../../../host/present.js";
+import { emptyCounts, interpretAnnotatingKey, interpretKey } from "../../../host/present.js";
 import type { KeyAction, RatingCounts } from "../../../host/present.js";
 import * as queue from "../../../host/queue.js";
 import type { ReviewQueue, Scheduled } from "../../../host/queue.js";
+
+/**
+ * The card on screen's annotation, as far as this screen knows it (ADR 0029).
+ *
+ * - `unknown` — the answer is hidden, or the fetch made on reveal has not
+ *   answered (or failed). `a` does nothing here, on purpose: opening an empty
+ *   box over an annotation that has not arrived yet, and saving it, would
+ *   overwrite the real one with whatever was typed.
+ * - `closed` — known; `text` is null when the card has none. The marker shows
+ *   when it is not.
+ * - `open` — the box is showing and **every key is text** (`annotating`).
+ *   `saving` while the write is in flight; `error` when it failed, in which
+ *   case the box stays open with the draft in it — a failed save never drops
+ *   what was typed.
+ */
+export type Annotation =
+  | { at: "unknown" }
+  | { at: "closed"; text: string | null }
+  | { at: "open"; text: string | null; draft: string; saving: boolean; error: string | null };
+
+const UNKNOWN: Annotation = { at: "unknown" };
 
 export interface Session {
   queue: ReviewQueue;
@@ -48,12 +70,23 @@ export interface Session {
    * you quit it, so a GUI editor would report nothing if asked immediately.
    */
   opened: readonly string[];
+  /** The card on screen's annotation. See `Annotation`. */
+  annotation: Annotation;
 }
 
 /** Effects the caller performs. The session itself touches nothing. */
 export type Effect =
   | { kind: "rate"; cardId: string; rating: 1 | 2 | 3 | 4 }
-  | { kind: "open"; card: DueCard };
+  | { kind: "open"; card: DueCard }
+  /**
+   * Find out whether the card just revealed has an annotation. A fetch on
+   * reveal rather than a field on `DueCard`, so building the queue does not
+   * cost a `stat` per card; the caller reports back through
+   * `annotationFetched`.
+   */
+  | { kind: "fetch-annotation"; cardId: string }
+  /** Write the annotation; the caller reports back through `annotationSaved`. */
+  | { kind: "save-annotation"; cardId: string; text: string };
 
 /**
  * No clock needed: every card in a fresh snapshot is due now by construction —
@@ -68,7 +101,27 @@ export function begin(cards: readonly DueCard[]): Session {
     counts: emptyCounts(),
     quit: false,
     opened: [],
+    annotation: UNKNOWN,
   };
+}
+
+/**
+ * Whether an annotation is open for writing — the state in which the review
+ * keys stop meaning anything and every key belongs to the text box.
+ */
+export function annotating(s: Session): boolean {
+  return s.annotation.at === "open";
+}
+
+/**
+ * Whether a keypress belongs to the annotation box rather than to the review.
+ *
+ * The screen asks this before it swallows a key: while annotating, only the
+ * keys that close the box are the session's, and everything else must reach
+ * the text box untouched — `preventDefault` on it would mean typing nothing.
+ */
+export function keyIsText(s: Session, key: string, command: boolean): boolean {
+  return annotating(s) && interpretAnnotatingKey(key, command).kind === "type";
 }
 
 export function current(s: Session): DueCard | null {
@@ -113,17 +166,52 @@ export function owed(s: Session): number {
  * - A rated card leaves the screen at once and comes back only if the
  *   scheduler says so, which the caller reports through `scheduled` — the
  *   session never guesses at an interval.
+ * - `a` opens the annotation, and only once the answer is showing (ADR 0029).
+ *   At the question it does nothing at all — not even the reveal every other
+ *   key performs, because someone reaching for their annotation must not be
+ *   shown the answer they had not tried yet.
+ * - **While annotating, nothing here applies.** No rating, no reveal, no
+ *   quit, no defer, no open: the keys are text. Only `Escape` and
+ *   Cmd+Enter mean anything, and both save and close (`closeAnnotation`).
+ *
+ * `command` is whether Cmd or Ctrl was held, which only the annotation box
+ * reads.
  */
-export function press(s: Session, key: string, now: Date): { next: Session; effect?: Effect } {
+export function press(
+  s: Session,
+  key: string,
+  now: Date,
+  command = false,
+): { next: Session; effect?: Effect } {
   if (isOver(s)) return { next: s };
   const card = s.card;
   // Nothing on screen: every remaining card is in flight. A keypress in that
   // window is a key pressed at no card, and must not land on the next one.
   if (!card) return { next: s };
 
+  if (annotating(s)) {
+    if (interpretAnnotatingKey(key, command).kind === "close") return closeAnnotation(s);
+    return { next: s };
+  }
+
   const action: KeyAction = interpretKey(key);
 
   if (action.kind === "quit") return { next: { ...s, quit: true } };
+
+  if (action.kind === "annotate") {
+    // Ignored at the question rather than treated as a reveal — see above.
+    if (!s.revealed) return { next: s };
+    // Ignored until the annotation is known, so a box can never open empty
+    // over text that has not arrived yet.
+    if (s.annotation.at !== "closed") return { next: s };
+    const text = s.annotation.text;
+    return {
+      next: {
+        ...s,
+        annotation: { at: "open", text, draft: text ?? "", saving: false, error: null },
+      },
+    };
+  }
 
   if (action.kind === "defer") {
     // Ignored once the answer is showing rather than treated as a reveal:
@@ -137,15 +225,26 @@ export function press(s: Session, key: string, now: Date): { next: Session; effe
 
   if (!s.revealed) {
     // Any other key reveals, including a digit — which is why rating is only
-    // honoured below, once `revealed` is already true.
-    return { next: { ...s, revealed: true } };
+    // honoured below, once `revealed` is already true. Revealing is also when
+    // the card's annotation is asked about, for the marker.
+    return {
+      next: { ...s, revealed: true, annotation: UNKNOWN },
+      effect: { kind: "fetch-annotation", cardId: card.id },
+    };
   }
 
   if (action.kind === "rate") {
     const counts = { ...s.counts, [action.rating]: s.counts[action.rating] + 1 };
     const q = queue.rated(s.queue, card);
     return {
-      next: { ...s, queue: q, card: queue.serve(q, now), revealed: false, counts },
+      next: {
+        ...s,
+        queue: q,
+        card: queue.serve(q, now),
+        revealed: false,
+        counts,
+        annotation: UNKNOWN,
+      },
       effect: { kind: "rate", cardId: card.id, rating: action.rating },
     };
   }
@@ -179,4 +278,59 @@ export function scheduled(
 ): Session {
   const q = queue.scheduled(s.queue, cardId, next, now);
   return { ...s, queue: q, card: s.card ?? queue.serve(q, now) };
+}
+
+/**
+ * The answer to a `fetch-annotation` effect: the card's annotation text, or
+ * null when it has none. Dropped unless that card is still the one on screen
+ * with its answer showing — a slow answer for a card already rated must not
+ * land on the next one.
+ */
+export function annotationFetched(s: Session, cardId: string, text: string | null): Session {
+  if (s.card?.id !== cardId || !s.revealed || s.annotation.at !== "unknown") return s;
+  return { ...s, annotation: { at: "closed", text } };
+}
+
+/** The text box changed. Ignored while a save is in flight. */
+export function editAnnotation(s: Session, draft: string): Session {
+  const a = s.annotation;
+  if (a.at !== "open" || a.saving) return s;
+  return { ...s, annotation: { ...a, draft } };
+}
+
+/**
+ * Close the annotation, **saving** what was typed — what `Escape`, Cmd+Enter
+ * and the Save button all do (ADR 0029).
+ *
+ * An unchanged draft closes without a write: rewriting the same bytes would
+ * touch the file's mtime for nothing, and a file syncer treats that as an
+ * edit. Otherwise the box stays open, marked `saving`, until
+ * `annotationSaved` reports how the write went.
+ */
+export function closeAnnotation(s: Session): { next: Session; effect?: Effect } {
+  const a = s.annotation;
+  if (a.at !== "open" || a.saving || !s.card) return { next: s };
+  if (a.draft === (a.text ?? "") || (a.text === null && a.draft.trim() === "")) {
+    return { next: { ...s, annotation: { at: "closed", text: a.text } } };
+  }
+  return {
+    next: { ...s, annotation: { ...a, saving: true, error: null } },
+    effect: { kind: "save-annotation", cardId: s.card.id, text: a.draft },
+  };
+}
+
+/**
+ * How a `save-annotation` went: null for success, or the reason it failed.
+ *
+ * Success closes the box, and blank text leaves the card with no annotation
+ * — the file is removed rather than left empty. **Failure keeps the box open
+ * with the draft in it** and says why: dropping text the user typed because a
+ * disk said no is the one outcome this must never have.
+ */
+export function annotationSaved(s: Session, cardId: string, error: string | null): Session {
+  const a = s.annotation;
+  if (s.card?.id !== cardId || a.at !== "open" || !a.saving) return s;
+  if (error !== null) return { ...s, annotation: { ...a, saving: false, error } };
+  const text = a.draft.trim() === "" ? null : a.draft;
+  return { ...s, annotation: { at: "closed", text } };
 }

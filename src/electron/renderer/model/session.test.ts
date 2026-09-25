@@ -9,7 +9,20 @@
 
 import { describe, expect, it } from "vitest";
 import type { DueCard } from "../../../core/index.js";
-import { begin, current, isOver, owed, press, reviewed, scheduled } from "./session.js";
+import {
+  annotating,
+  annotationFetched,
+  annotationSaved,
+  begin,
+  current,
+  editAnnotation,
+  isOver,
+  keyIsText,
+  owed,
+  press,
+  reviewed,
+  scheduled,
+} from "./session.js";
 import type { Session } from "./session.js";
 import type { Scheduled } from "../../../host/queue.js";
 
@@ -74,8 +87,10 @@ describe("rating", () => {
   it("does nothing before the answer is showing", () => {
     // The first press revealed; a rating here would be for an answer the user
     // has not seen, which is worse than ignoring the key.
+    // The only effect is the reveal's own: asking whether the card has an
+    // annotation, for the marker.
     const s = tap(begin(cards), "3");
-    expect(s.effect).toBeUndefined();
+    expect(s.effect).toEqual({ kind: "fetch-annotation", cardId: "sr-000000000001" });
     expect(reviewed(s.next)).toBe(0);
     expect(current(s.next)?.question).toBe("Q1");
   });
@@ -194,7 +209,7 @@ describe("a card on a learning step", () => {
 describe("opening the note", () => {
   it("is offered only once the answer is showing, like the CLI", () => {
     const hidden = tap(begin(cards), "o");
-    expect(hidden.effect).toBeUndefined();
+    expect(hidden.effect?.kind).toBe("fetch-annotation");
     expect(hidden.next.revealed).toBe(true); // it revealed instead
 
     const shown = tap(hidden.next, "o");
@@ -339,5 +354,128 @@ describe("deferring", () => {
     expect(current(s)?.question).toBe("Q2");
     expect(upcoming(s)).toEqual(["Q2", "Q1"]);
     expect(owed(s)).toBe(2);
+  });
+});
+
+/**
+ * Annotations — ADR 0029.
+ *
+ * The review screen is one keyboard surface, and a text box on it is a trap:
+ * `3` rates, `q` quits, `Escape` quits. So annotating is a session state, and
+ * while it holds, the review keys mean nothing at all.
+ */
+describe("annotating a card", () => {
+  const ID = "sr-000000000001";
+
+  /** Revealed, with the fetch-on-reveal answered. */
+  function revealed(text: string | null = null): Session {
+    return annotationFetched(after(begin(cards), " "), ID, text);
+  }
+  /** Revealed and annotating. */
+  const writing = (text: string | null = null): Session => after(revealed(text), "a");
+
+  it("asks whether the card has an annotation when it is revealed, not before", () => {
+    const s = begin(cards);
+    expect(s.annotation).toEqual({ at: "unknown" });
+    expect(tap(s, " ").effect).toEqual({ kind: "fetch-annotation", cardId: ID });
+    expect(revealed("mnemonic").annotation).toEqual({ at: "closed", text: "mnemonic" });
+  });
+
+  it("does nothing with `a` at the question stage, not even the reveal", () => {
+    // An annotation may restate the answer, so opening one here would make the
+    // review a sham test — and revealing instead would show the answer to
+    // someone who had not tried it yet.
+    const s = begin(cards);
+    const pressed = tap(s, "a");
+    expect(pressed.next).toBe(s);
+    expect(pressed.effect).toBeUndefined();
+    expect(annotating(pressed.next)).toBe(false);
+  });
+
+  it("opens with `a` once the answer is showing, holding the existing text", () => {
+    const s = writing("confused with Q7");
+    expect(annotating(s)).toBe(true);
+    expect(s.annotation).toMatchObject({ at: "open", draft: "confused with Q7" });
+  });
+
+  it("does not open before the annotation has arrived, so it cannot be overwritten blank", () => {
+    const unanswered = after(begin(cards), " ");
+    expect(annotating(after(unanswered, "a"))).toBe(false);
+  });
+
+  it("gives 1-4, q, 0 and o no effect and records nothing while annotating", () => {
+    const s = writing();
+    for (const key of ["1", "2", "3", "4", "q", "Q", "0", "o", "a", " ", "Enter"]) {
+      const pressed = tap(s, key);
+      expect(pressed.effect, key).toBeUndefined();
+      expect(pressed.next, key).toBe(s);
+    }
+    expect(reviewed(s)).toBe(0);
+    expect(isOver(s)).toBe(false);
+  });
+
+  it("says which keys belong to the text box, so the screen does not swallow them", () => {
+    const s = writing();
+    for (const key of ["3", "q", "Escape"]) expect(keyIsText(revealed(), key, false), key).toBe(false);
+    for (const key of ["3", "q", "a", "Enter", " "]) expect(keyIsText(s, key, false), key).toBe(true);
+    expect(keyIsText(s, "Escape", false)).toBe(false);
+    expect(keyIsText(s, "Enter", true)).toBe(false);
+  });
+
+  it("leaves annotating on Escape without quitting, and saves what was typed", () => {
+    const s = editAnnotation(writing(), "3 seconds, q for quick");
+    const { next, effect } = tap(s, "Escape");
+    expect(isOver(next)).toBe(false);
+    expect(next.quit).toBe(false);
+    expect(effect).toEqual({ kind: "save-annotation", cardId: ID, text: "3 seconds, q for quick" });
+
+    const saved = annotationSaved(next, ID, null);
+    expect(annotating(saved)).toBe(false);
+    expect(saved.annotation).toEqual({ at: "closed", text: "3 seconds, q for quick" });
+  });
+
+  it("saves and closes on Cmd+Enter too", () => {
+    const s = editAnnotation(writing(), "source: AWS docs");
+    const { effect } = press(s, "Enter", T0, true);
+    expect(effect).toEqual({ kind: "save-annotation", cardId: ID, text: "source: AWS docs" });
+  });
+
+  it("closes without a write when nothing changed", () => {
+    for (const s of [writing("same"), writing(), editAnnotation(writing(), "   ")]) {
+      const { next, effect } = tap(s, "Escape");
+      expect(effect).toBeUndefined();
+      expect(annotating(next)).toBe(false);
+    }
+  });
+
+  it("keeps the box open with the text in it when the save fails", () => {
+    const s = editAnnotation(writing(), "worth keeping");
+    const saving = tap(s, "Escape").next;
+    const failed = annotationSaved(saving, ID, "disk full");
+    expect(annotating(failed)).toBe(true);
+    expect(failed.annotation).toMatchObject({ draft: "worth keeping", error: "disk full", saving: false });
+    // And saving again is possible.
+    expect(tap(failed, "Escape").effect?.kind).toBe("save-annotation");
+  });
+
+  it("clears the annotation when saved blank", () => {
+    const s = editAnnotation(writing("old"), "");
+    const { next, effect } = tap(s, "Escape");
+    expect(effect).toEqual({ kind: "save-annotation", cardId: ID, text: "" });
+    expect(annotationSaved(next, ID, null).annotation).toEqual({ at: "closed", text: null });
+  });
+
+  it("still rates normally once the box is closed", () => {
+    const closed = annotationSaved(tap(editAnnotation(writing(), "note"), "Escape").next, ID, null);
+    const { next, effect } = tap(closed, "3");
+    expect(effect).toEqual({ kind: "rate", cardId: ID, rating: 3 });
+    expect(current(next)?.question).toBe("Q2");
+    // The next card starts knowing nothing about its own annotation.
+    expect(next.annotation).toEqual({ at: "unknown" });
+  });
+
+  it("ignores an annotation that arrives for a card no longer on screen", () => {
+    const s = after(after(begin(cards), " "), "3"); // Q1 rated before its fetch answered
+    expect(annotationFetched(s, ID, "late")).toBe(s);
   });
 });
