@@ -20,10 +20,13 @@ import {
   isOver,
   keyIsText,
   mayLeave,
+  noteRead,
   owed,
+  passesThrough,
   press,
   reviewed,
   scheduled,
+  viewing,
 } from "./session.js";
 import type { Session } from "./session.js";
 import type { Scheduled } from "../../../host/queue.js";
@@ -504,5 +507,108 @@ describe("annotating a card", () => {
   it("ignores an annotation that arrives for a card no longer on screen", () => {
     const s = after(after(begin(cards), " "), "3"); // Q1 rated before its fetch answered
     expect(annotationFetched(s, ID, "late")).toBe(s);
+  });
+});
+
+describe("reading the card's note inside the app", () => {
+  const ID = "sr-000000000001";
+  const NOTE = { text: "Intro\n\nQ1 :: A1 <!-- sr-000000000001 -->\n", line: 3 };
+
+  /** Revealed, with the annotation fetch answered, and `o` set to show the note here. */
+  function revealed(openIn: "editor" | "inside" = "inside", annotation: string | null = null): Session {
+    return annotationFetched(after(begin(cards, openIn), " "), ID, annotation);
+  }
+  /** The note showing over the card. */
+  const reading = (): Session => noteRead(after(revealed(), "o"), ID, NOTE);
+
+  it("shows the note with `o` rather than spawning an editor, when that is the choice", () => {
+    const pressed = tap(revealed(), "o");
+    expect(pressed.effect).toEqual({ kind: "read-note", card: cards[0] });
+    expect(pressed.next.viewer).toEqual({ at: "loading", cardId: ID });
+    // Reading cannot change a note, so it is not one to ask about at the end.
+    expect(pressed.next.opened).toEqual([]);
+
+    const s = noteRead(pressed.next, ID, NOTE);
+    expect(s.viewer).toEqual({ at: "open", cardId: ID, text: NOTE.text, line: 3, stored: 1 });
+    expect(viewing(s)).toBe(true);
+  });
+
+  it("still hands the note to an editor when the viewer is not the choice", () => {
+    expect(tap(revealed("editor"), "o").effect).toEqual({ kind: "open", card: cards[0] });
+    expect(viewing(after(revealed("editor"), "o"))).toBe(false);
+  });
+
+  it("reveals with `o` at the question, as before, rather than showing the note", () => {
+    const pressed = tap(begin(cards, "inside"), "o");
+    expect(pressed.next.revealed).toBe(true);
+    expect(viewing(pressed.next)).toBe(false);
+  });
+
+  it("gives the rating keys, q, 0 and a no effect while the note is showing, or on its way", () => {
+    for (const s of [reading(), after(revealed(), "o")]) {
+      for (const key of ["1", "2", "3", "4", "q", "Q", "0", "a", " ", "Enter", "ArrowDown"]) {
+        const pressed = tap(s, key);
+        expect(pressed.effect, key).toBeUndefined();
+        expect(pressed.next, key).toBe(s);
+      }
+      expect(reviewed(s)).toBe(0);
+      expect(isOver(s)).toBe(false);
+    }
+  });
+
+  it("goes back to the same card at the same stage on Escape, or on `o` again", () => {
+    const before = revealed("inside", "a mnemonic");
+    for (const key of ["Escape", "o"]) {
+      const back = after(noteRead(after(before, "o"), ID, NOTE), key);
+      expect(viewing(back), key).toBe(false);
+      expect(current(back), key).toBe(current(before));
+      expect(back.revealed, key).toBe(true);
+      expect(back.annotation, key).toEqual({ at: "closed", text: "a mnemonic" });
+      // And the review keys work again: the card can be rated.
+      expect(tap(back, "3").effect, key).toEqual({ kind: "rate", cardId: ID, rating: 3 });
+    }
+  });
+
+  it("hands the note to an editor on `e`, back at the card, and remembers it was opened", () => {
+    const pressed = tap(reading(), "e");
+    expect(pressed.effect).toEqual({ kind: "open", card: cards[0] });
+    expect(viewing(pressed.next)).toBe(false);
+    expect(pressed.next.opened).toEqual(["a.md"]);
+  });
+
+  it("does not open the note over the card after Escape, when the read answers late", () => {
+    const back = after(after(revealed(), "o"), "Escape");
+    expect(noteRead(back, ID, NOTE)).toBe(back);
+  });
+
+  it("goes back to the card when the read fails", () => {
+    const failed = noteRead(after(revealed(), "o"), ID, null);
+    expect(viewing(failed)).toBe(false);
+    expect(failed.revealed).toBe(true);
+  });
+
+  it("does not open the note while annotating — `o` is text there", () => {
+    const writing = after(revealed(), "a");
+    const pressed = tap(writing, "o");
+    expect(pressed.next).toBe(writing);
+    expect(pressed.effect).toBeUndefined();
+    expect(viewing(pressed.next)).toBe(false);
+  });
+
+  it("does not open the annotation while the note is showing", () => {
+    const s = reading();
+    expect(annotating(after(s, "a"))).toBe(false);
+    // Back at the card, `a` works again, and the note is not left open underneath.
+    const back = after(after(s, "Escape"), "a");
+    expect(annotating(back)).toBe(true);
+    expect(viewing(back)).toBe(false);
+  });
+
+  it("lets the keys it does not use through to the page, so the note can scroll", () => {
+    const s = reading();
+    for (const key of ["ArrowDown", "PageDown", " ", "3"]) expect(passesThrough(s, key, false), key).toBe(true);
+    for (const key of ["o", "Escape", "e"]) expect(passesThrough(s, key, false), key).toBe(false);
+    // At the card itself nothing passes: the whole screen is a keyboard surface.
+    expect(passesThrough(revealed(), "ArrowDown", false)).toBe(false);
   });
 });

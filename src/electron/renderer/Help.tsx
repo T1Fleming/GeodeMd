@@ -93,8 +93,8 @@ export function Help(): React.JSX.Element {
       </nav>
       {/*
         The Markdown is ours, shipped in the bundle — not user content — so
-        this is not an injection surface. If a note's text is ever rendered
-        this way that stops being true, and it would need sanitizing first.
+        this is not an injection surface. A note's text is not ours, which is
+        why the note viewer sanitises before it renders (`note.ts`, #51).
       */}
       <article className="doc" onClick={onClick} dangerouslySetInnerHTML={{ __html: html }} />
     </main>

@@ -172,6 +172,37 @@ body {
 .annotation-bar .spacer { flex: 1; }
 .annotation-error { color: #b91c1c; }
 
+/* --- the card's note, inside the app (#51) ------------------------------ */
+
+/* In the card's place, between the meta bar and the legend, and scrolling
+   inside itself so the legend — the way back — never leaves the screen. */
+.viewer {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding-top: 0.75rem;
+  min-height: 0;
+}
+.viewer-moved { margin: 0; font-size: 0.8125rem; color: #b45309; }
+.note {
+  max-height: calc(100vh - 15rem);
+  overflow-y: auto;
+  padding: 0 0.25rem 2rem 0;
+}
+.note:focus { outline: none; }
+/* The card's line. Only the viewer's own marker — a note's own <mark> keeps
+   the browser's default. */
+.note mark[id^="geode-card-"] {
+  background: #fde68a;
+  color: #16181d;
+  border-radius: 3px;
+  padding: 0.1rem 0.25rem;
+}
+@media (prefers-color-scheme: dark) {
+  .note mark[id^="geode-card-"] { background: #854d0e; color: #fef9c3; }
+  .viewer-moved { color: #fbbf24; }
+}
+
 /* --- the legend ------------------------------------------------------- */
 
 .legend {
@@ -372,6 +403,9 @@ button.quiet:hover { color: var(--ink); border-color: transparent; }
 }
 .editor-setting input { font-family: ui-monospace, monospace; width: 16rem; user-select: text; }
 .editor-setting .other { display: flex; gap: 0.5rem; }
+/* The note viewer's switch (#51): a checkbox, not a text box. */
+.editor-setting .view-inside { gap: 0.5rem; align-items: center; margin-top: 0.5rem; font-size: 0.9375rem; color: var(--ink); }
+.editor-setting .view-inside input { width: auto; padding: 0; margin: 0; }
 
 /* Every vault, one row each. Inside `.folder`: managing them is a setting,
    not something to glance at. */

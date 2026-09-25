@@ -17,7 +17,12 @@
  */
 
 import type { DueCard } from "../../../core/index.js";
-import { emptyCounts, interpretAnnotatingKey, interpretKey } from "../../../host/present.js";
+import {
+  emptyCounts,
+  interpretAnnotatingKey,
+  interpretKey,
+  interpretViewingKey,
+} from "../../../host/present.js";
 import type { KeyAction, RatingCounts } from "../../../host/present.js";
 import * as queue from "../../../host/queue.js";
 import type { ReviewQueue, Scheduled } from "../../../host/queue.js";
@@ -42,6 +47,36 @@ export type Annotation =
   | { at: "open"; text: string | null; draft: string; saving: boolean; error: string | null };
 
 const UNKNOWN: Annotation = { at: "unknown" };
+
+/**
+ * The card's note, shown inside the review window instead of an editor (#51).
+ *
+ * - `closed` — the card is on screen.
+ * - `loading` — `o` was pressed and the read has not answered. The review
+ *   keys are already off: a `3` pressed in that window must not rate a card
+ *   the user has just asked to look past.
+ * - `open` — the note is showing. `line` is where the card was found on disk,
+ *   null when it was not; `stored` is where the last sync put it, which the
+ *   viewer compares against to say so.
+ *
+ * `cardId` on both, so a slow read for a card that is no longer on screen is
+ * dropped rather than shown over the next one.
+ */
+export type Viewer =
+  | { at: "closed" }
+  | { at: "loading"; cardId: string }
+  | { at: "open"; cardId: string; text: string; line: number | null; stored: number | null };
+
+const CLOSED: Viewer = { at: "closed" };
+
+/**
+ * What `o` does, fixed for the sitting: hand the note to an editor, or show it
+ * here. Read from the config's `viewNotesInside` when the queue is drawn, so
+ * choosing on the Vault screen applies from the next sitting — which is also
+ * the next time the Review tab is opened. The viewer's `e` opens the editor
+ * the config names either way.
+ */
+export type OpenIn = "editor" | "inside";
 
 export interface Session {
   queue: ReviewQueue;
@@ -72,6 +107,10 @@ export interface Session {
   opened: readonly string[];
   /** The card on screen's annotation. See `Annotation`. */
   annotation: Annotation;
+  /** What `o` does this sitting. See `OpenIn`. */
+  openIn: OpenIn;
+  /** The card's note, when it is showing inside the app. See `Viewer`. */
+  viewer: Viewer;
 }
 
 /** Effects the caller performs. The session itself touches nothing. */
@@ -86,13 +125,19 @@ export type Effect =
    */
   | { kind: "fetch-annotation"; cardId: string }
   /** Write the annotation; the caller reports back through `annotationSaved`. */
-  | { kind: "save-annotation"; cardId: string; text: string };
+  | { kind: "save-annotation"; cardId: string; text: string }
+  /**
+   * Read the card's note for the viewer; the caller reports back through
+   * `noteRead`. Nothing is spawned and nothing is recorded as opened —
+   * reading a note cannot change it.
+   */
+  | { kind: "read-note"; card: DueCard };
 
 /**
  * No clock needed: every card in a fresh snapshot is due now by construction —
  * `getDueCards` returns what is due and what is new, and nothing else.
  */
-export function begin(cards: readonly DueCard[]): Session {
+export function begin(cards: readonly DueCard[], openIn: OpenIn = "editor"): Session {
   const q = queue.openQueue(cards);
   return {
     queue: q,
@@ -102,7 +147,31 @@ export function begin(cards: readonly DueCard[]): Session {
     quit: false,
     opened: [],
     annotation: UNKNOWN,
+    openIn,
+    viewer: CLOSED,
   };
+}
+
+/**
+ * Whether the card's note is showing, or on its way — the state in which the
+ * review keys stop meaning anything and only the viewer's own do.
+ */
+export function viewing(s: Session): boolean {
+  return s.viewer.at !== "closed";
+}
+
+/**
+ * Whether the screen should let a keypress through to the page rather than
+ * swallow it.
+ *
+ * Text typed into an open annotation (`keyIsText`), and, while the note is
+ * showing, every key the viewer does not use — so the arrows, Space and Page
+ * Down scroll the note. Either way the session has already decided the key
+ * means nothing to it; this only says whether the page may have it.
+ */
+export function passesThrough(s: Session, key: string, command: boolean): boolean {
+  if (viewing(s)) return interpretViewingKey(key).kind === "ignore";
+  return keyIsText(s, key, command);
 }
 
 /**
@@ -173,6 +242,14 @@ export function owed(s: Session): number {
  * - **While annotating, nothing here applies.** No rating, no reveal, no
  *   quit, no defer, no open: the keys are text. Only `Escape` and
  *   Cmd+Enter mean anything, and both save and close (`closeAnnotation`).
+ *   So `o` while annotating is text, and does not open the note.
+ * - With the viewer chosen, `o` shows the card's note inside the app rather
+ *   than spawning an editor (#51). **While it is showing, nothing above
+ *   applies either**: `3` does not rate the card behind it, `q` does not quit,
+ *   `a` does not open the annotation. `o` or `Escape` goes back to the card as
+ *   it was, and `e` hands the note to an editor (`interpretViewingKey`). The
+ *   viewer and the annotation box are never both open: each one's keys are
+ *   checked before the other's can be reached.
  *
  * `command` is whether Cmd or Ctrl was held, which only the annotation box
  * reads.
@@ -191,6 +268,15 @@ export function press(
 
   if (annotating(s)) {
     if (interpretAnnotatingKey(key, command).kind === "close") return closeAnnotation(s);
+    return { next: s };
+  }
+
+  if (viewing(s)) {
+    const v = interpretViewingKey(key);
+    // Back to the card exactly as it was: same card, answer still showing,
+    // annotation as it was left.
+    if (v.kind === "close") return { next: { ...s, viewer: CLOSED } };
+    if (v.kind === "editor") return openInEditor({ ...s, viewer: CLOSED }, card);
     return { next: s };
   }
 
@@ -250,11 +336,45 @@ export function press(
   }
 
   if (action.kind === "open") {
-    const opened = s.opened.includes(card.filePath) ? s.opened : [...s.opened, card.filePath];
-    return { next: { ...s, opened }, effect: { kind: "open", card } };
+    if (s.openIn === "inside") {
+      return {
+        next: { ...s, viewer: { at: "loading", cardId: card.id } },
+        effect: { kind: "read-note", card },
+      };
+    }
+    return openInEditor(s, card);
   }
 
   return { next: s };
+}
+
+/** Hand the card's note to an editor, and remember it for the end-of-session check. */
+function openInEditor(s: Session, card: DueCard): { next: Session; effect: Effect } {
+  const opened = s.opened.includes(card.filePath) ? s.opened : [...s.opened, card.filePath];
+  return { next: { ...s, opened }, effect: { kind: "open", card } };
+}
+
+/**
+ * The answer to a `read-note` effect: the note's text and the line the card
+ * was found on, or null when the read failed — which closes the viewer and
+ * leaves the card as it was, the same way a failed `open` leaves it.
+ *
+ * Dropped unless the viewer is still waiting for this card: `Escape` pressed
+ * before a slow read answered means the user has gone back to the card, and
+ * the note must not open over it afterwards.
+ */
+export function noteRead(
+  s: Session,
+  cardId: string,
+  note: { text: string; line: number | null } | null,
+): Session {
+  const v = s.viewer;
+  if (v.at !== "loading" || v.cardId !== cardId) return s;
+  if (note === null) return { ...s, viewer: CLOSED };
+  return {
+    ...s,
+    viewer: { at: "open", cardId, text: note.text, line: note.line, stored: s.card?.lineNo ?? null },
+  };
 }
 
 /**

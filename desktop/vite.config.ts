@@ -89,6 +89,7 @@ export default defineConfig({
       "react/jsx-runtime": fromDesktop("react/jsx-runtime"),
       "react/jsx-dev-runtime": fromDesktop("react/jsx-dev-runtime"),
       marked: fromDesktop("marked"),
+      dompurify: fromDesktop("dompurify"),
     },
   },
   build: {

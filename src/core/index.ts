@@ -699,6 +699,25 @@ export class Core {
   }
 
   /**
+   * A note's text as it is on disk now, and the 1-based line the card is on
+   * in it — null when it is not there any more (#51).
+   *
+   * Found by its **stamp**, not by the line the last sync stored: the note
+   * may have been edited since, and the stored line would then hold something
+   * else. Read-only, and nothing is written to the database: the viewer shows
+   * what is on disk, and bringing the cache up to date is sync's job.
+   *
+   * `relPath` is relative to the notes folder, as stored. Confining it there
+   * is the caller's job (`electron/main/note.ts`); a path is not something
+   * `core` second-guesses anywhere else either.
+   */
+  async readNote(relPath: string, cardId: string): Promise<{ text: string; line: number | null }> {
+    const text = await files.readFile(this.config.notesPath, relPath);
+    const card = parse(text).find((c) => c.id === cardId);
+    return { text, line: card ? card.lineIndex + 1 : null };
+  }
+
+  /**
    * Fold the write-ahead log back into the database.
    *
    * `sync` already does this before it returns (ADR 0024); this is for a caller

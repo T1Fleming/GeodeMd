@@ -21,8 +21,11 @@ import {
   actionsAt,
   interpretAnnotatingKey,
   interpretKey,
+  interpretViewingKey,
 } from "../host/present.js";
-import { detectEditors, editorCommand, launchCommand } from "../host/editor.js";
+import { detectEditors, editorCommand, launchCommand, resolveEditor } from "../host/editor.js";
+import { cardLineNote, noteMarkdown } from "../host/note.js";
+import { initConfig, readConfig, setEditor, setViewNotesInside } from "../host/config.js";
 import type { Machine } from "../host/editor.js";
 import { FsrsScheduler } from "../scheduler/index.js";
 import { codeSpans, guide, plain, tableAfter } from "./guide.js";
@@ -58,7 +61,10 @@ describe("the guide's four ratings are the four the app honours", () => {
     );
     expect(keys.size).toBeGreaterThan(4);
     for (const key of keys) {
-      expect(interpretKey(key).kind, `the guide advertises \`${key}\``).not.toBe("ignore");
+      // A key the review ignores may still be one the note viewer honours —
+      // `e` is only ever pressed over a note.
+      const honoured = interpretKey(key).kind !== "ignore" || interpretViewingKey(key).kind !== "ignore";
+      expect(honoured, `the guide advertises \`${key}\``).toBe(true);
     }
   });
 
@@ -112,6 +118,76 @@ describe("the guide's four ratings are the four the app honours", () => {
     expect(text).toContain("says it was not found rather than quietly opening the note at the top");
     const gone = launchCommand("cursor", "/n/a.md", 142, { ...everything, isExecutable: () => false });
     expect(gone.ok).toBe(false);
+  });
+});
+
+describe("reading the note inside the app does what the guide says", () => {
+  const HEADING = "### Reading the note without leaving the review";
+
+  it("offers the three keys in its table, and they do what the table says", async () => {
+    const rows = tableAfter(await reviewing(), HEADING).map((cells) => [plain(cells[0]!), plain(cells[1]!)]);
+    expect(rows).toEqual([
+      ["o", "back to the card"],
+      ["Escape", "back to the card"],
+      ["e", "open in editor"],
+    ]);
+    // The two that are buttons are labelled as the table words them.
+    expect(actionsAt("note").map((a) => [a.key, a.label])).toEqual([rows[0], rows[2]]);
+    expect(interpretViewingKey("o").kind).toBe("close");
+    expect(interpretViewingKey("Escape").kind).toBe("close");
+    expect(interpretViewingKey("e").kind).toBe("editor");
+  });
+
+  it("gives the review keys nothing to do while the note is showing", async () => {
+    const text = plain(await reviewing());
+    expect(text).toContain(
+      "the review keys do nothing: 3 does not rate the card behind it, q does not quit, and a does not open the annotation",
+    );
+    for (const key of ["1", "2", "3", "4", "q", "a", "0"]) {
+      expect(interpretViewingKey(key).kind, key).toBe("ignore");
+    }
+  });
+
+  it("is a setting of its own, so `e` still opens the editor chosen under Open notes in", async () => {
+    const text = plain(await reviewing());
+    expect(text).toContain("Tick Read notes inside GeodeMD first on the Vault screen, under Open notes in");
+    expect(text).toContain("e opens the note in the editor chosen under Open notes in");
+
+    open = await newCollection();
+    const file = path.join(path.dirname(open.dbPath), "config.json");
+    await initConfig(file, open.notes, { dbPath: open.dbPath });
+    await setEditor(file, "code");
+    await setViewNotesInside(file, true);
+    const config = await readConfig(file);
+    expect(config?.viewNotesInside).toBe(true);
+    // The editor is untouched, and it is what `e` hands the note to.
+    expect(resolveEditor(config?.editor, {} as NodeJS.ProcessEnv)).toBe("code");
+  });
+
+  it("finds the card by its id when the note has changed, and says so rather than highlighting the wrong line", async () => {
+    const text = plain(await reviewing());
+    expect(text).toContain("the card is looked for by its id rather than its old line number");
+    expect(text).toContain("if it is not in the note any more, nothing is highlighted and that line says why");
+
+    open = await newCollection();
+    await open.write("a.md", "Intro.\nQ1 :: A1\n");
+    await open.core.sync(T0);
+    const [card] = open.core.getDueCards(T0, 10);
+    expect(card!.lineNo).toBe(2);
+
+    // Moved: two lines added above it since the sync.
+    await open.write("a.md", `New.\nLines.\n${await open.read("a.md")}`);
+    const moved = await open.core.readNote(card!.filePath, card!.id);
+    expect(moved.line).toBe(4);
+    expect(cardLineNote(card!.lineNo, moved.line)).toContain("now on line 4");
+    expect(noteMarkdown(moved.text, moved.line, "m").split("\n")[3]).toBe('<mark id="m">Q1 :: A1</mark>');
+
+    // Gone: nothing is marked, and the viewer says why.
+    await open.write("a.md", "Intro.\nRewritten.\n");
+    const gone = await open.core.readNote(card!.filePath, card!.id);
+    expect(gone.line).toBeNull();
+    expect(noteMarkdown(gone.text, gone.line, "m")).not.toContain("<mark");
+    expect(cardLineNote(card!.lineNo, gone.line)).toContain("nothing is highlighted");
   });
 });
 

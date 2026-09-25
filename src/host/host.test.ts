@@ -15,6 +15,7 @@ import {
   readConfig,
   readSettings,
   setEditor,
+  setViewNotesInside,
   addVault,
   chooseVault,
   renameVault,
@@ -244,6 +245,52 @@ describe("choosing an editor from the app", () => {
 
   it("is null when there is no config to set it in", async () => {
     expect(await setEditor(path.join(dir, "nope.json"), "code")).toBeNull();
+  });
+});
+
+describe("choosing to read notes inside the app", () => {
+  it("is its own key, and leaves the chosen editor where it was", async () => {
+    // #51: the viewer's `e` opens the editor, so choosing the viewer must not
+    // cost the editor it hands on to.
+    const file = path.join(dir, "config.json");
+    const first = await initConfig(file, dir);
+    await setEditor(file, "code");
+    await setViewNotesInside(file, true);
+    expect(await readConfig(file)).toEqual({ ...first, editor: "code", viewNotesInside: true });
+    await setEditor(file, "zed");
+    expect(await readConfig(file)).toMatchObject({ editor: "zed", viewNotesInside: true });
+  });
+
+  it("removes the key when turned off, rather than writing false", async () => {
+    const file = path.join(dir, "config.json");
+    await initConfig(file, dir);
+    await setViewNotesInside(file, true);
+    await setViewNotesInside(file, false);
+    const raw = JSON.parse(await fs.readFile(file, "utf8")) as Record<string, unknown>;
+    expect("viewNotesInside" in raw).toBe(false);
+    expect((await readConfig(file))!.viewNotesInside).toBeUndefined();
+  });
+
+  it("is on only for a literal true, so a hand-edited string does not replace the editor", async () => {
+    const file = path.join(dir, "config.json");
+    await initConfig(file, dir);
+    const raw = JSON.parse(await fs.readFile(file, "utf8")) as Record<string, unknown>;
+    await fs.writeFile(file, JSON.stringify({ ...raw, viewNotesInside: "yes" }), "utf8");
+    expect((await readConfig(file))!.viewNotesInside).toBeUndefined();
+  });
+
+  it("survives re-pointing the vault, like the editor", async () => {
+    const file = path.join(dir, "config.json");
+    await initConfig(file, dir);
+    await setViewNotesInside(file, true);
+    const other = await fs.mkdtemp(path.join(os.tmpdir(), "geode-other-"));
+    await initConfig(file, other, { force: true });
+    expect((await readConfig(file))!.viewNotesInside).toBe(true);
+    await fs.rm(other, { recursive: true, force: true });
+  });
+
+  it("is null when there is no config to set it in", async () => {
+    expect(await setViewNotesInside(path.join(dir, "nope.json"), true)).toBeNull();
   });
 });
 

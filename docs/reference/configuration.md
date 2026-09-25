@@ -49,6 +49,7 @@ A **vault** is a notes folder together with its own database ([ADR 0027](../deci
 | `active` | no | the first vault | The `id` of the open vault. |
 | `vaults` | yes | — | At least one. A config with no usable vault is treated as unreadable. |
 | `editor` | no | *(absent)* | Machine-wide. What `o` opens a card's note in during review. Normally set from the app's Vault screen. |
+| `viewNotesInside` | no | *(absent — off)* | Machine-wide. `true` makes `o` show the note read-only in the review window, with `e` there opening it in `editor`. Normally set from the app's Vault screen. |
 
 Each vault:
 
@@ -71,7 +72,7 @@ Only a config with **no** `device` mints one. Adding a vault does not, convertin
 
 ### `editor`
 
-The only optional key, and **first-run setup never writes one.** Absent means "fall through to `$VISUAL`, then `$EDITOR`, then the OS opener" — a better answer than any value setup could invent on a machine it knows nothing about.
+Optional, and **first-run setup never writes one.** Absent means "fall through to `$VISUAL`, then `$EDITOR`, then the OS opener" — a better answer than any value setup could invent on a machine it knows nothing about.
 
 It is normally set from **Open notes in** on the Vault screen, which lists the editors installed here and writes their plain command name — `"code"`, not a path. The name is looked up each time `o` is pressed: on your `PATH` first, then, on macOS, inside the editor's app bundle in `/Applications` or `~/Applications`. That second step is what makes it work in an app opened from Finder, which does not get your shell's `PATH`. A named editor that is found nowhere is reported as not found; it does not fall back to the OS opener.
 
@@ -82,6 +83,12 @@ Re-pointing a vault preserves it for the same reason it preserves `device`: fixi
 Line-jumping is applied only for editors that are recognised — `vim +142`, `code --goto file:142`, `hx file:142` and similar. An unrecognised editor is handed the file alone, because passing an unknown program `+142` risks creating a file by that name.
 
 **Set a GUI editor.** GeodeMD launches it and carries on rather than waiting for it to close, so you can keep reviewing with the note open beside you — but `"editor": "vim"` therefore starts a `vim` in a window you have no terminal to type into.
+
+### `viewNotesInside`
+
+Whether `o` shows the card's note inside GeodeMD — read-only, in the review window, scrolled to the card — instead of launching `editor`. Set from **Read notes inside GeodeMD first** on the Vault screen, under **Open notes in**.
+
+Only `true` turns it on; anything else, including the key being absent, leaves `o` opening the editor. Turning it off removes the key rather than writing `false`. It is a key of its own rather than a value of `editor`, so choosing it does not cost the editor: **open in editor** (`e`) in the viewer opens the note in `editor`, exactly as `o` would with this off. Like `editor`, it is kept when a vault is re-pointed. A change applies from the next review sitting. See [reading the note without leaving the review](../guides/reviewing.md#reading-the-note-without-leaving-the-review).
 
 ## Where the config comes from
 

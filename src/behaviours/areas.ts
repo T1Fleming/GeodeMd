@@ -98,6 +98,8 @@ export const BY_FILE: Readonly<Record<string, string>> = {
   "electron/renderer/model/session.test.ts": "Reviewing",
   "electron/main/open.test.ts": "Reviewing",
   "electron/renderer/model/editor.test.ts": "Reviewing",
+  "host/note.test.ts": "Reviewing",
+  "electron/main/note.test.ts": "Reviewing",
 
   "core/sync.test.ts": "Syncing notes",
   "files/files.test.ts": "Syncing notes",

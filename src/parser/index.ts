@@ -34,7 +34,7 @@ const TRAILING_COMMENT = /<!--[\s\S]*?-->[ \t]*$/;
  * box. Section 3 — `- foo :: bar` is how people actually write these and the
  * marker must not end up on the front of the flashcard.
  */
-const LIST_MARKER = /^(?:[-*+]|\d+[.)])[ \t]+(?:\[[ xX]\][ \t]+)?/;
+export const LIST_MARKER = /^(?:[-*+]|\d+[.)])[ \t]+(?:\[[ xX]\][ \t]+)?/;
 
 /** `::` with whitespace on both sides, so `foo::bar` is not a card. */
 const SEPARATOR = /(?<=\s)::(?=\s)/;
@@ -132,6 +132,21 @@ export function parseLine(raw: string, lineIndex: number): ParsedCard | null {
 }
 
 /**
+ * The index of the line closing a YAML frontmatter block, or -1 when the note
+ * has none.
+ *
+ * Frontmatter only counts when `---` opens line 1. Without a closing
+ * delimiter the file has no frontmatter — do not swallow the whole note.
+ */
+export function frontmatterEndOf(lines: readonly string[]): number {
+  if (lines.length === 0 || body(lines[0]!).trim() !== "---") return -1;
+  for (let i = 1; i < lines.length; i++) {
+    if (body(lines[i]!).trim() === "---") return i;
+  }
+  return -1;
+}
+
+/**
  * Parse a whole document.
  *
  * The skip list in section 3 is longer than a card parser looks like it needs,
@@ -143,20 +158,8 @@ export function parse(text: string): ParsedCard[] {
   const cards: ParsedCard[] = [];
 
   let fence: string | null = null;
-  let inFrontmatter = false;
-  let frontmatterEnd = -1;
-
-  // Frontmatter only counts when `---` opens line 1. Without a closing
-  // delimiter the file has no frontmatter — do not swallow the whole note.
-  if (lines.length > 0 && body(lines[0]!).trim() === "---") {
-    for (let i = 1; i < lines.length; i++) {
-      if (body(lines[i]!).trim() === "---") {
-        frontmatterEnd = i;
-        break;
-      }
-    }
-    if (frontmatterEnd !== -1) inFrontmatter = true;
-  }
+  const frontmatterEnd = frontmatterEndOf(lines);
+  let inFrontmatter = frontmatterEnd !== -1;
 
   for (let i = 0; i < lines.length; i++) {
     const line = body(lines[i]!);

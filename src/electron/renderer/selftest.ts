@@ -11,6 +11,8 @@
  * forwards to stdout and acts on.
  */
 
+import { renderNote } from "./note.js";
+
 const results: string[] = [];
 
 /** True when this run wrote the config it is using — see `runSelfTest`. */
@@ -242,6 +244,8 @@ export async function runSelfTest(): Promise<void> {
     await runStatsChecks();
     await runChangeFolderChecks();
     await runEditorChecks();
+    await runSanitiserChecks();
+    await runViewerChecks();
     await runVaultChecks();
     await runHelpChecks();
 
@@ -494,8 +498,8 @@ async function runEditorChecks(): Promise<void> {
   if (!ownsConfig) return;
 
   await choose(".editor-setting select", "Other…");
-  check("choosing Other… asks for a command", exists(".editor-setting input"), "");
-  await type(".editor-setting input", "code -w");
+  check("choosing Other… asks for a command", exists(".editor-setting .other input"), "");
+  await type(".editor-setting .other input", "code -w");
   await click(".editor-setting button", "Save");
   const typed = await window.geode.editorsList();
   check(
@@ -512,7 +516,187 @@ async function runEditorChecks(): Promise<void> {
     back.ok && back.value.current === null,
     back.ok ? String(back.value.current) : back.message,
   );
-  check("and the command box goes away", !exists(".editor-setting input"), "");
+  check("and the command box goes away", !exists(".editor-setting .other input"), "");
+}
+
+/**
+ * A hostile note through the viewer's own render, in the real Chromium the app
+ * ships (#51).
+ *
+ * Here rather than under vitest because the sanitiser needs a DOM, and the one
+ * that matters is this one. Mounted, not just inspected: an `onerror` that
+ * survived would fire on insertion, and the flag says whether anything ran.
+ * Writes nothing, so it runs against a real config too.
+ */
+async function runSanitiserChecks(): Promise<void> {
+  const w = window as unknown as { __geodePwned?: string };
+  delete w.__geodePwned;
+  const hostile = [
+    "Before :: after",
+    "<script>window.__geodePwned = 'script'</script>",
+    `<img src="x" onerror="window.__geodePwned = 'onerror'">`,
+    "[a markdown link](javascript:window.__geodePwned='markdown-link')",
+    `<a href="javascript:window.__geodePwned='html-link'">an html link</a>`,
+    `<div style="position:fixed;inset:0;background:red">a cover</div>`,
+    `<style>body { display: none }</style>`,
+    `<form action="https://example.com"><button>go</button></form>`,
+    `<button onclick="window.__geodePwned = 'button'">looks like ours</button>`,
+    `<iframe src="https://example.com"></iframe>`,
+    `<svg><script>window.__geodePwned = 'svg'</script></svg>`,
+  ].join("\n\n");
+  const { html, markerId } = renderNote(hostile, 1);
+  const shown = html.replace(/\s+/g, " ");
+  const box = document.createElement("div");
+  box.innerHTML = html;
+  document.body.appendChild(box);
+  await settle(200);
+
+  const elements = Array.from(box.querySelectorAll("*"));
+  check("a note's <script> is not rendered", !box.querySelector("script"), shown);
+  check(
+    "nor any on* attribute",
+    !elements.some((el) => Array.from(el.attributes).some((a) => a.name.toLowerCase().startsWith("on"))),
+    shown,
+  );
+  check(
+    "nor any javascript: link",
+    !Array.from(box.querySelectorAll("a")).some((a) => /^\s*javascript:/i.test(a.getAttribute("href") ?? "")),
+    shown,
+  );
+  check(
+    "nor style, form, button, iframe or svg",
+    !box.querySelector("style, form, button, iframe, svg, [style]"),
+    shown,
+  );
+  check("and nothing in the note ran", w.__geodePwned === undefined, String(w.__geodePwned));
+  check(
+    "while the rest of it still renders, card line marked",
+    box.textContent?.includes("a markdown link") === true && box.querySelector(`#${markerId}`) !== null,
+    (box.textContent ?? "").replace(/\s+/g, " "),
+  );
+  box.remove();
+}
+
+/**
+ * The note viewer (#51): turn on **Read notes inside GeodeMD first**, press
+ * `o` at a revealed card, and read the note there — with the review keys off
+ * while it shows.
+ *
+ * Only when this run wrote its own config: the toggle writes
+ * `viewNotesInside`, and a plain run's config is the user's. An editor is
+ * chosen first, to show the toggle leaves it alone. Both are put back
+ * afterwards, to what `runEditorChecks` left.
+ */
+async function runViewerChecks(): Promise<void> {
+  if (!ownsConfig) return;
+  await click(".tabs .tab", "Vault");
+  await until(".editor-setting select");
+  await choose(".editor-setting select", "Other…");
+  await type(".editor-setting .other input", "code -w");
+  await click(".editor-setting button", "Save");
+  const toggle = (): HTMLInputElement | null => document.querySelector(".editor-setting .view-inside input");
+  check("the vault screen offers reading notes inside the app, off by default", toggle()?.checked === false);
+  toggle()?.click();
+  await settle(250);
+  const chosen = await window.geode.editorsList();
+  check(
+    "turning it on saves the viewer as the choice",
+    chosen.ok && chosen.value.viewNotesInside,
+    chosen.ok ? String(chosen.value.viewNotesInside) : chosen.message,
+  );
+  check(
+    "and leaves the chosen editor alone, for e to open",
+    chosen.ok && chosen.value.current === "code -w",
+    chosen.ok ? String(chosen.value.current) : chosen.message,
+  );
+  check("and says what o will do", all(".editor-setting .blocker").join(" ").includes("shows the note here"), all(".editor-setting .blocker").join(" / "));
+  window.scrollTo(0, document.body.scrollHeight);
+  await settle(100);
+  await shot("viewer-00-setting");
+
+  await click(".tabs .tab", "Review");
+  if (!(await until(".question"))) {
+    check("a card to read the note of", false, text("main"));
+    return;
+  }
+  const question = text(".question");
+  const counter = text(".meta span");
+  await key(" ");
+  await key("o");
+  const mark = "mark[id^='geode-card-']";
+  const shown = await until(`.viewer .note ${mark}`);
+  check("o shows the card's note inside the app", exists(".viewer .note") && !exists(".card"), text(".meta .locator"));
+  check("with the card where the last sync left it, so nothing to say about that", !exists(".viewer-moved"), text(".viewer-moved"));
+  const plainQuestion = question.replace(/[`*_]/g, "");
+  check(
+    "with the card's line highlighted",
+    shown && text(`.note ${mark}`).includes(plainQuestion),
+    `${text(`.note ${mark}`)} / ${plainQuestion}`,
+  );
+  const el = document.querySelector<HTMLElement>(`.note ${mark}`);
+  const note = document.querySelector<HTMLElement>(".note");
+  const r = el?.getBoundingClientRect();
+  const n = note?.getBoundingClientRect();
+  check(
+    "scrolled into view",
+    !!r && !!n && r.top >= n.top && r.bottom <= n.bottom && r.height > 0,
+    r && n ? `${Math.round(r.top)}-${Math.round(r.bottom)} in ${Math.round(n.top)}-${Math.round(n.bottom)}` : "",
+  );
+  const bg = el ? getComputedStyle(el).backgroundColor : "";
+  check("and drawn in a colour of its own", bg !== "" && bg !== "rgba(0, 0, 0, 0)", bg);
+  check("no stamp shows", !/sr-[A-Za-z0-9]{12}/.test(note?.innerHTML ?? ""), "");
+  check(
+    "the viewer offers its own keys and not the review's",
+    all(".legend .action").join(" / ").includes("open in editor") && !exists(".legend .rating"),
+    all(".legend button").join(" / "),
+  );
+  await shot("viewer-01-note");
+
+  await key("3");
+  await settle(200);
+  check("3 over the note rates nothing", exists(".viewer") && text(".meta span") === counter, text(".meta span"));
+  await key("q");
+  check("q over the note does not end the session", exists(".viewer") && !exists(".done"));
+  await key("a");
+  check("a over the note opens no annotation", exists(".viewer") && !exists(".annotation textarea"));
+
+  await key("Escape");
+  check(
+    "Escape goes back to the same card, answer still showing",
+    !exists(".viewer") && text(".question") === question && exists(".answer"),
+    text(".question"),
+  );
+  check("with nothing rated on the way", text(".meta span") === counter, text(".meta span"));
+  await shot("viewer-02-back");
+
+  await key("o");
+  await until(`.viewer .note ${mark}`);
+  await key("o");
+  check("o again goes back too", !exists(".viewer") && text(".question") === question);
+
+  await key("o");
+  await until(`.viewer .note ${mark}`);
+  await click(".legend .action", "open in editor");
+  await settle(400);
+  check(
+    "open in editor hands it on and returns to the card",
+    !exists(".viewer") && exists(".answer") && !text(".toast").includes("could not"),
+    text(".toast"),
+  );
+
+  await key("q");
+  await settle(200);
+  await click(".tabs .tab", "Vault");
+  await until(".editor-setting .view-inside input");
+  toggle()?.click();
+  await settle(250);
+  await choose(".editor-setting select", "System default");
+  const back = await window.geode.editorsList();
+  check(
+    "turning it off again leaves the config as it was",
+    back.ok && !back.value.viewNotesInside && back.value.current === null,
+    back.ok ? JSON.stringify({ inside: back.value.viewNotesInside, editor: back.value.current }) : back.message,
+  );
 }
 
 /** The vault screen's total, which is the one count that is never capped. */

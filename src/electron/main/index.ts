@@ -24,6 +24,7 @@ import {
   removeVault,
   renameVault,
   setEditor,
+  setViewNotesInside,
   settleConfigPath,
 } from "../../host/config.js";
 import type { Settings, VaultConfig } from "../../host/config.js";
@@ -48,6 +49,7 @@ import type {
   VaultSwitched,
 } from "../ipc.js";
 import { Active } from "./active.js";
+import { outside, readNote, withinNotes } from "./note.js";
 import { openDetached } from "./open.js";
 import { counts, dueCards } from "./reads.js";
 
@@ -86,7 +88,25 @@ const active = new Active({
 });
 
 function wire(c: VaultConfig): AppConfig {
-  return { id: c.id, name: c.name, notesPath: c.notesPath, device: c.device, dbPath: c.dbPath };
+  return {
+    id: c.id,
+    name: c.name,
+    notesPath: c.notesPath,
+    device: c.device,
+    dbPath: c.dbPath,
+    // The review screen reads it to know whether `o` shows the note inside
+    // the app (#51). Machine-wide, so every vault's copy carries the same one.
+    ...(c.viewNotesInside ? { viewNotesInside: true } : {}),
+  };
+}
+
+/** What the Vault screen's Open notes in row shows: the editors here, and both machine-wide choices. */
+function choices(c: { editor?: string; viewNotesInside?: boolean }): EditorChoices {
+  return {
+    detected: detectEditors(thisMachine()),
+    current: c.editor ?? null,
+    viewNotesInside: c.viewNotesInside === true,
+  };
 }
 
 function list(s: Settings): VaultList {
@@ -197,11 +217,8 @@ function register(): void {
       // Resolve, then check the prefix. `filePath` comes from a card row and is
       // relative by construction, but a stored `..` must not be able to reach
       // out of the notes directory and hand an arbitrary file to a spawn.
-      const root = path.resolve(c.notesPath);
-      const abs = path.resolve(root, filePath);
-      if (!abs.startsWith(root + path.sep)) {
-        return { ok: false, kind: "config", message: `${filePath} is outside your notes folder` };
-      }
+      const abs = withinNotes(c.notesPath, filePath);
+      if (abs === null) return outside(filePath);
       // Recorded before the spawn: afterwards the editor may already have
       // touched the file, and the baseline would be the edited mtime.
       await opened.opened(filePath);
@@ -222,6 +239,17 @@ function register(): void {
   ipcMain.handle(CH.noteChanged, (_e, filePaths: string[]) =>
     guard<string[]>(async () => active.current?.opened.changed(filePaths) ?? []),
   );
+
+  /**
+   * A card's note, for the viewer inside the app (#51). Confined to the notes
+   * folder the same way `note/open` is, and only answered for the vault the
+   * review was drawn from. Not recorded in `OpenedNotes`: reading a note
+   * cannot change it.
+   */
+  ipcMain.handle(CH.noteRead, async (_e, vault: string, filePath: string, cardId: string) => {
+    const r = await guard(async () => readNote(await active.ensureVault(vault), filePath, cardId));
+    return r.ok ? r.value : r;
+  });
 
   /**
    * A card's annotation, read from `.sr/annotations/` in the open vault's
@@ -320,7 +348,7 @@ function register(): void {
     guard<EditorChoices>(async () => {
       const c = await readAppConfig(configFile);
       if (!c) throw new NoConfig();
-      return { detected: detectEditors(thisMachine()), current: c.editor ?? null };
+      return choices(c);
     }),
   );
 
@@ -339,7 +367,26 @@ function register(): void {
         if (written.editor === undefined) delete config.editor;
         else config.editor = written.editor;
       }
-      return { detected: detectEditors(thisMachine()), current: written.editor ?? null };
+      return choices(written);
+    }),
+  );
+
+  /**
+   * Read notes inside the app, or not (#51). Its own key, so the editor stays
+   * chosen for the viewer's `e`. Nothing in main acts on it — the review
+   * screen reads it from the config when it draws a sitting — so the
+   * memoized config is updated only to keep it the same as the file.
+   */
+  ipcMain.handle(CH.editorsViewInside, (_e, on: boolean) =>
+    guard<EditorChoices>(async () => {
+      const written = await setViewNotesInside(configFile, on === true);
+      if (!written) throw new NoConfig();
+      const config = active.current?.config;
+      if (config) {
+        if (written.viewNotesInside) config.viewNotesInside = true;
+        else delete config.viewNotesInside;
+      }
+      return choices(written);
     }),
   );
 
@@ -504,6 +551,14 @@ async function createWindow(): Promise<void> {
       sandbox: true,
     },
   });
+  // The window never leaves the renderer. Links are opened through
+  // `link/open`, which hands only http(s) to the shell; this is the lock
+  // behind that door, for the one thing the renderer shows that it did not
+  // write — a note (#51). A link or form that slipped past the viewer's own
+  // handling would otherwise navigate the `app://` page away, or open a
+  // second window with the preload in it.
+  win.webContents.on("will-navigate", (e) => e.preventDefault());
+  win.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
   // The renderer's console is otherwise invisible from a terminal, which makes
   // a failing self-test look like a silent hang.
   win.webContents.on("console-message", (_e, _level, message) => {

@@ -33,8 +33,12 @@ export const RATING_KEYS: ReadonlyArray<readonly [key: string, label: string]> =
  * the answer's legend. Carrying the stage in the table is what lets each of
  * them draw the right keys at the right moment without either one deciding
  * for itself which those are.
+ *
+ * `note` is not a stage of the card but a place over it: the card's note,
+ * shown inside the app (#51). Its keys are its own, and `both` does not reach
+ * it — `q` there would end a session the user cannot see.
  */
-export type KeyStage = "question" | "answer" | "both";
+export type KeyStage = "question" | "answer" | "both" | "note";
 
 export interface ActionKey {
   key: string;
@@ -53,11 +57,17 @@ export const ACTION_KEYS: readonly ActionKey[] = [
   // the mirror image of `later` (ADR 0029).
   { key: "a", label: "annotate", stage: "answer" },
   { key: "q", label: "quit", stage: "both" },
+  // The note viewer's own keys (#51). The key that opened the note closes it,
+  // and `e` is the one way on to an editor.
+  { key: "o", label: "back to the card", stage: "note" },
+  { key: "e", label: "open in editor", stage: "note" },
 ];
 
 /** The actions to advertise at one stage of a card, in table order. */
-export function actionsAt(stage: "question" | "answer"): ActionKey[] {
-  return ACTION_KEYS.filter((a) => a.stage === stage || a.stage === "both");
+export function actionsAt(stage: "question" | "answer" | "note"): ActionKey[] {
+  return ACTION_KEYS.filter(
+    (a) => a.stage === stage || (a.stage === "both" && stage !== "note"),
+  );
 }
 
 export type KeyAction =
@@ -128,6 +138,26 @@ export function interpretAnnotatingKey(key: string, command: boolean): { kind: "
   if (key === "Escape" || key === "escape") return { kind: "close" };
   if (key === "Enter" && command) return { kind: "close" };
   return { kind: "type" };
+}
+
+/**
+ * What a keypress means while a card's note is showing inside the app (#51).
+ *
+ * The third table, and as small as the annotation box's. **The review keys do
+ * nothing here**: `3` must not rate a card hidden behind the note, and `q`
+ * must not end the session from behind it. Two ways back to the card — `o`,
+ * the key that opened the note, and `Escape` — and one way on: `e`, to the
+ * editor that `o` opens when the viewer is not chosen.
+ *
+ * `ignore` is not "swallow". An arrow key or Page Down means nothing to the
+ * session, which is exactly what lets it scroll the note.
+ */
+export function interpretViewingKey(
+  key: string,
+): { kind: "close" } | { kind: "editor" } | { kind: "ignore" } {
+  if (key === "o" || key === "O" || key === "Escape" || key === "escape") return { kind: "close" };
+  if (key === "e" || key === "E") return { kind: "editor" };
+  return { kind: "ignore" };
 }
 
 /**

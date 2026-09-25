@@ -15,7 +15,7 @@ import { Review } from "./Review.js";
 import { Setup } from "./Setup.js";
 import { Stats } from "./Stats.js";
 import { Sync } from "./Sync.js";
-import type { Session } from "./model/session.js";
+import type { OpenIn, Session } from "./model/session.js";
 import { choose, leftNote, switcherOptions } from "./model/vaults.js";
 import type { Scheduled } from "../../host/queue.js";
 import { backlogCapped } from "../../host/present.js";
@@ -258,7 +258,7 @@ type Screen =
   | { at: "loading" }
   | { at: "error"; message: string }
   | { at: "empty"; total: number }
-  | { at: "review"; queue: DueCard[]; backlog: number; capped: boolean };
+  | { at: "review"; queue: DueCard[]; backlog: number; capped: boolean; openIn: OpenIn };
 
 /**
  * How many cards one sitting materialises.
@@ -299,9 +299,12 @@ function ReviewScreen({
     setScreen({ at: "loading" });
     setStale(null);
     setSitting((n) => n + 1);
-    const [due, stats] = await Promise.all([
+    const [due, stats, config] = await Promise.all([
       window.geode.cardsDue(LIMIT),
       window.geode.statsRead(),
+      // Read per sitting rather than taken from the shell's copy, which is
+      // from startup: the choice under Open notes in can change since (#51).
+      window.geode.configRead(),
     ]);
     if (!due.ok) return setScreen({ at: "error", message: due.message });
     if (!stats.ok) return setScreen({ at: "error", message: stats.message });
@@ -309,7 +312,10 @@ function ReviewScreen({
     // A floor when the due count stopped at the cap (ADR 0024); the chip says so.
     const backlog = stats.value.dueNow + stats.value.newCards;
     if (due.value.length === 0) return setScreen({ at: "empty", total: stats.value.total });
-    setScreen({ at: "review", queue: due.value, backlog, capped: backlogCapped(stats.value) });
+    // A config that cannot be read now was readable a moment ago, when the
+    // app opened; falling back to the editor is what `o` did before #51.
+    const openIn = config.ok && config.value?.viewNotesInside === true ? "inside" : "editor";
+    setScreen({ at: "review", queue: due.value, backlog, capped: backlogCapped(stats.value), openIn });
   }, []);
 
   useEffect(() => {
@@ -352,6 +358,12 @@ function ReviewScreen({
       if (!r.ok) onNote(r.message);
     },
     [onNote],
+  );
+
+  /** The note for the viewer, from the vault the review was drawn from. */
+  const onNoteRead = useCallback(
+    (card: DueCard) => window.geode.noteRead(vault, card.filePath, card.id),
+    [vault],
   );
 
   const onAnnotationRead = useCallback(
@@ -407,6 +419,8 @@ function ReviewScreen({
       stale={stale}
       onRate={onRate}
       onOpen={onOpen}
+      openIn={screen.openIn}
+      onNoteRead={onNoteRead}
       onAnnotationRead={onAnnotationRead}
       onAnnotationWrite={onAnnotationWrite}
       onNote={onNote}
