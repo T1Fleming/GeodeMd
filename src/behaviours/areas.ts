@@ -155,6 +155,7 @@ export const BY_GROUP: Readonly<Record<string, string>> = {
 
   "files/files.test.ts:the review log": "Recovery and the log",
   "files/files.test.ts:reading a log shard from where it left off": "Recovery and the log",
+  "files/files.test.ts:a card's annotation": "Reviewing",
 };
 
 /**

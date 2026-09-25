@@ -252,6 +252,8 @@ export const CH = {
   runStatus: "geode:run/status",
   noteOpen: "geode:note/open",
   noteChanged: "geode:note/changed",
+  annotationGet: "geode:annotation/get",
+  annotationSet: "geode:annotation/set",
   setupPick: "geode:setup/pick",
   setupInspect: "geode:setup/inspect",
   setupPropose: "geode:setup/propose",
@@ -287,6 +289,22 @@ export interface GeodeApi {
    * has been typed, so asking sooner reports nothing (ADR 0012).
    */
   noteChanged(filePaths: readonly string[]): Promise<Result<string[]>>;
+  /**
+   * A card's annotation, or null when it has none ([ADR
+   * 0029](../../docs/decisions/0029-annotations.md)). Asked when a card is
+   * revealed, for the marker, and never at the question.
+   */
+  annotationGet(cardId: string): Promise<Result<string | null>>;
+  /**
+   * Write a card's annotation into the vault named by `vault`; blank text
+   * removes it.
+   *
+   * `vault` is the vault the text was written in, and main refuses the write
+   * if another one is open by now. A review that is closed with the box open
+   * saves on the way out, and after a vault switch that would otherwise land
+   * the annotation in the wrong notes folder.
+   */
+  annotationSet(vault: string, cardId: string, text: string): Promise<Result<void>>;
   /**
    * Open the OS folder chooser. Null when the user cancelled — which is an
    * ordinary answer, not a failure, and must not look like one.

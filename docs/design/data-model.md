@@ -1,14 +1,15 @@
 # Data model
 
-Three stores, only two of which are durable.
+Four stores, only three of which are durable.
 
 | Store | Location | Durable? |
 |---|---|---|
 | Card content | the user's notes, as the lines they wrote | yes |
 | Review history | `<notes>/.sr/log/<device>-YYYY-MM.jsonl` | yes |
+| Annotations | `<notes>/.sr/annotations/<card-id>.md`, one per annotated card — never read into the database ([ADR 0029](../decisions/0029-annotations.md)) | yes |
 | Everything else | the vault's `dbPath` — `~/.local/share/geodemd/db.sqlite` for the first vault | no — a cache |
 
-**All three are per vault** ([ADR 0027](../decisions/0027-vaults.md)). A vault is one notes folder and one database, and nothing crosses between vaults: a card's history is in its own vault's `.sr/log/`, and its database never holds another vault's rows. That is why two vaults may not overlap — the same stamped line in two vaults would split its history across two logs — and why `core` and `store` did not change when vaults arrived. A `Core` was always one folder and one database; there is simply one per vault now, one open at a time.
+**All four are per vault** ([ADR 0027](../decisions/0027-vaults.md)). A vault is one notes folder and one database, and nothing crosses between vaults: a card's history is in its own vault's `.sr/log/`, and its database never holds another vault's rows. That is why two vaults may not overlap — the same stamped line in two vaults would split its history across two logs — and why `core` and `store` did not change when vaults arrived. A `Core` was always one folder and one database; there is simply one per vault now, one open at a time.
 
 ```mermaid
 flowchart LR

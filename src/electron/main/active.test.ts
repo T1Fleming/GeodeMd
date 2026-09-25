@@ -171,6 +171,17 @@ describe("the end of a session a switch interrupted", () => {
   });
 });
 
+describe("a write composed in a vault that has since been left", () => {
+  it("is refused rather than landing in the vault open now", async () => {
+    const open = await active.ensureVault(workId);
+    expect(open.config.id).toBe(workId);
+
+    await switchTo(homeId);
+    await expect(active.ensureVault(workId)).rejects.toBeInstanceOf(VaultRefused);
+    expect((await active.ensureVault(homeId)).config.id).toBe(homeId);
+  });
+});
+
 describe("opening a vault another scheduler scheduled", () => {
   it("re-derives its schedules before handing it over, and says so once", async () => {
     const w = await active.ensure();

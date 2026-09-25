@@ -95,6 +95,8 @@ A vault is a notes folder together with its own database, and one is open at a t
 
 **Opening a vault brings its schedules up to the running scheduler first.** `Active.ensure` calls `core.adoptScheduler` before it hands the vault over. That call re-derives every schedule from the review history when the database was scheduled by a different `ts-fsrs` or different parameters ([ADR 0028](../decisions/0028-move-to-fsrs-6.md)). Because opening now awaits, `ensure` is single-flight, and an open overtaken by a switch closes its Store instead of keeping it. `App.tsx` asks `vaults/open` each time it arrives at a vault, before any screen reads, and shows `rescheduledText` when something was re-derived. The answer is handed over once, so due dates that moved are explained once and not on every visit.
 
+**A write composed in one vault names it.** `annotation/set` carries the id of the vault the review was drawn from, and `Active.ensureVault` refuses it if another is open by then. That is a backstop: the switcher first asks the review screen to save an open annotation and waits for it, and a failed save stops the switch, so the text is neither lost nor filed under the wrong vault ([ADR 0029](../decisions/0029-annotations.md)).
+
 The switcher is a `<select>` at the end of the tab bar, and is blurred after every choice so the review screen's document-level keys are not typed into it. Its decisions — what the options are, what choosing one means, when **Remove…** is offered — are in `renderer/model/vaults.ts`. The repair screen shows it too, when there is another vault to go to: a vault on an unplugged drive must not trap the user in it.
 
 **Adding a vault is the setup sequence with `from.reason = "add"`.** It differs from a change in what it writes and what it undoes, both in `model/setup.ts`: `mode(s)` is `add`, so the proposal mints a vault id — passed back to `vaults/add`, so the database path shown is the one written — and asks no keep-or-replace question. Undoing is `abandonAdd`: switch back to `from.vault`, then remove the added vault *and* its database, since the only thing in it is the preview. The id to remove is the one recorded at the write, not the proposal's, because picking another folder replaces the proposal. A second preview after a change of folder undoes the first add before adding again, so the vault in the list is always the one being previewed.
@@ -118,6 +120,7 @@ A decision lives in `host`, not in the component that wanted it first. With two 
 | In `host` | Why it cannot be per-interface |
 |---|---|
 | `RATING_KEYS`, `interpretKey` | what `3` does, and whether `escape` quits |
+| `interpretAnnotatingKey` | which keys close an open annotation — and that `Escape` there saves rather than quits ([ADR 0029](../decisions/0029-annotations.md)) |
 | `resolveEditor`, `editorCommand`, `launchCommand`, `detectEditors` | which program `o` opens, how it is told a line, where it is installed, and which editors the Vault screen offers |
 | `OpenedNotes` | the mtime-at-open record behind "this note changed" |
 | `summaryFields` | which counts a sync reports, and in what order |

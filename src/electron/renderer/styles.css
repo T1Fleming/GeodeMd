@@ -137,6 +137,41 @@ body {
 
 .prompt { margin: 0; color: var(--muted); font-size: 0.9375rem; }
 
+/* --- the card's annotation (ADR 0029) ------------------------------------ */
+
+/* Quieter than the answer: it is a remark about the card, not the card. */
+.annotation-marker { margin: 0; color: var(--muted); font-size: 0.875rem; }
+
+.annotation { display: flex; flex-direction: column; gap: 0.5rem; }
+
+.annotation textarea {
+  font: inherit;
+  font-size: 0.9375rem;
+  line-height: 1.5;
+  color: var(--ink);
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 0.6rem 0.75rem;
+  resize: vertical;
+  min-height: 6rem;
+  /* The body turns selection off for the keyboard surface; a text box needs
+     it back. */
+  user-select: text;
+}
+
+.annotation textarea:focus { outline: none; border-color: var(--accent); }
+.annotation textarea[readonly] { color: var(--muted); }
+
+.annotation-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  font-size: 0.8125rem;
+}
+.annotation-bar .spacer { flex: 1; }
+.annotation-error { color: #b91c1c; }
+
 /* --- the legend ------------------------------------------------------- */
 
 .legend {

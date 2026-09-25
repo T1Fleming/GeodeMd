@@ -132,8 +132,9 @@ export async function runSelfTest(): Promise<void> {
     const actions = Array.from(document.querySelectorAll('.legend .action')).map((b) =>
       b.textContent?.trim(),
     );
-    check('every action key is advertised', actions.length === 2, actions.join(' / '));
+    check('every action key is advertised', actions.length === 3, actions.join(' / '));
     check('open is one of them', actions.some((a) => a?.includes('open')), actions.join(' / '));
+    check('annotate is one of them', actions.some((a) => a?.includes('annotate')), actions.join(' / '));
     check(
       'and later is NOT, because the answer is already showing',
       !actions.some((a) => a?.includes('later')),
@@ -158,6 +159,8 @@ export async function runSelfTest(): Promise<void> {
       !text(".toast").includes("not wired up"),
       text(".toast"),
     );
+
+    await runAnnotationChecks();
 
     // Whether the collection holds more than this sitting serves. The backlog
     // chip is the app's own answer to that, so the check below can hold the
@@ -250,6 +253,91 @@ export async function runSelfTest(): Promise<void> {
     // which is how this harness has failed before.
     console.log(["SELFTEST", ...results].join("\n"));
     console.log(`SELFTEST done — FAIL: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
+/**
+ * Annotating the card on screen (ADR 0029), with the answer already showing.
+ *
+ * The trap this exists for is that the review screen is one keyboard surface:
+ * `3` rates and `q` quits. Typing both into the box must do neither — which
+ * only a real keydown reaching the real document listener can show, because
+ * the model's own tests cannot see whether the screen swallowed the key.
+ *
+ * A plain run's config is the user's own, so whatever this writes is put back
+ * as it was afterwards. A first-run harness's folder is a copy, and the
+ * annotation is left there to be looked at.
+ */
+async function runAnnotationChecks(): Promise<void> {
+  const question = text(".question");
+  const due = await window.geode.cardsDue(200);
+  const id = due.ok ? due.value.find((c) => c.question === question)?.id : undefined;
+  const config = await window.geode.configRead();
+  if (!id || !config.ok || !config.value) {
+    check("the card on screen can be found for the annotation checks", false, question);
+    return;
+  }
+  const vault = config.value.id;
+  const before = await window.geode.annotationGet(id);
+  check("the annotation channel answers", before.ok, before.ok ? "" : before.message);
+
+  await key("a");
+  const box = (): HTMLTextAreaElement | null => document.querySelector(".annotation textarea");
+  check("a opens the annotation box under the answer", box() !== null && exists(".answer"));
+  check("with the cursor in it", document.activeElement === box());
+  check(
+    "and the rating buttons out of reach while it is open",
+    Array.from(document.querySelectorAll<HTMLButtonElement>(".legend .rating")).every((b) => b.disabled),
+  );
+
+  // Keys typed into the box reach the document listener too — that is where
+  // `3` would rate and `q` would quit.
+  for (const k of ["3", " ", "q"]) {
+    box()?.dispatchEvent(new KeyboardEvent("keydown", { key: k, bubbles: true }));
+  }
+  await settle();
+  const typed = "3 seconds — q for quick";
+  const setter = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!;
+  setter.call(box(), typed);
+  box()?.dispatchEvent(new Event("input", { bubbles: true }));
+  await settle();
+  check("typing 3 into it records no rating", text(".meta").startsWith("1 /"), text(".meta"));
+  check("typing q into it does not end the session", !exists(".done") && box() !== null);
+  check("and the box holds what was typed", box()?.value === typed, box()?.value ?? "");
+  await shot("review-annotation-01-open");
+
+  // Escape saves and closes; it does not quit (ADR 0029).
+  box()?.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+  for (let i = 0; i < 40 && box() !== null; i++) await settle(50);
+  check("escape closes the box", box() === null);
+  check("without ending the session", exists(".question") && exists(".answer") && !exists(".done"));
+  const saved = await window.geode.annotationGet(id);
+  check(
+    "and saves it to the card's file under .sr/annotations/",
+    saved.ok && saved.value === typed,
+    saved.ok ? JSON.stringify(saved.value) : saved.message,
+  );
+  check("the answer now says the card has an annotation", exists(".annotation-marker"), text(".annotation-marker"));
+  await shot("review-annotation-02-marker");
+
+  // Reopened, it holds the saved text; the Save button is the other way out.
+  await key("a");
+  check("reopening shows the saved text", box()?.value === typed, box()?.value ?? "");
+  const more = `${typed}\nsecond line`;
+  setter.call(box(), more);
+  box()?.dispatchEvent(new Event("input", { bubbles: true }));
+  await settle();
+  await click(".annotation button", "Save");
+  for (let i = 0; i < 40 && box() !== null; i++) await settle(50);
+  const again = await window.geode.annotationGet(id);
+  check(
+    "the Save button saves and closes too",
+    box() === null && again.ok && again.value === more,
+    again.ok ? JSON.stringify(again.value) : again.message,
+  );
+
+  if (!ownsConfig && before.ok) {
+    await window.geode.annotationSet(vault, id, before.value ?? "");
   }
 }
 
@@ -505,6 +593,42 @@ async function runVaultChecks(): Promise<void> {
   check("and switching again finds the second as it was", (await totalCards()) === secondTotal, text(".screen h2"));
   await choose(".vault-menu select", firstName);
   await until(".tabs");
+
+  // Switching vault with an annotation open saves it first, into the vault it
+  // was written in (ADR 0029). Unmounting the box without that save would
+  // lose the text, and saving after the switch would file it in the wrong
+  // notes folder.
+  await click(".tabs .tab", "Review");
+  if (!(await until(".question"))) {
+    check("the first vault has a card to annotate", false, text("main"));
+    return;
+  }
+  const question = text(".question");
+  const due = await window.geode.cardsDue(200);
+  const id = due.ok ? due.value.find((c) => c.question === question)?.id : undefined;
+  await key(" ");
+  for (let i = 0; i < 20 && !exists(".annotation textarea"); i++) await key("a");
+  const box = document.querySelector(".annotation textarea") as HTMLTextAreaElement | null;
+  check("an annotation can be opened in the first vault", box !== null && id !== undefined, question);
+  if (!box || !id) return;
+  const typed = "typed, then the vault was switched";
+  Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(box, typed);
+  box.dispatchEvent(new Event("input", { bubbles: true }));
+  await settle();
+
+  await choose(".vault-menu select", secondName);
+  await until(".tabs");
+  for (let i = 0; i < 40 && menu().selectedOptions[0]?.textContent !== secondName; i++) await settle(50);
+  check("switching vault with the box open still switches", menu().selectedOptions[0]?.textContent === secondName);
+  await choose(".vault-menu select", firstName);
+  await until(".tabs");
+  for (let i = 0; i < 40 && menu().selectedOptions[0]?.textContent !== firstName; i++) await settle(50);
+  const kept = await window.geode.annotationGet(id);
+  check(
+    "and saved the open annotation into the vault it was written in, first",
+    kept.ok && kept.value === typed,
+    kept.ok ? JSON.stringify(kept.value) : kept.message,
+  );
 }
 
 /** Pick the option whose text matches, as a person does with a real select. */

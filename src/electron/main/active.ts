@@ -153,6 +153,23 @@ export class Active {
     return this.open;
   }
 
+  /**
+   * The open vault, but only if it is `vault`.
+   *
+   * For a write the renderer composed while looking at one vault and sends
+   * after it may have been left — an annotation saved as the review screen
+   * closes, which a vault switch is one way to cause (ADR 0029). Refused
+   * rather than written to whichever vault is open now, where it would sit
+   * under an id that belongs to another notes folder.
+   */
+  async ensureVault(vault: string): Promise<Open> {
+    const open = await this.ensure();
+    if (open.config.id !== vault) {
+      throw new VaultRefused(`that vault is no longer open, so the change was not saved`);
+    }
+    return open;
+  }
+
   status(): RunStatus {
     return this.open?.runner.status() ?? { state: "never" };
   }

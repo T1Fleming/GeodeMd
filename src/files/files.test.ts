@@ -5,11 +5,15 @@ import * as path from "node:path";
 import {
   appendLog,
   enumerate,
+  hasAnnotation,
   isSyncConflict,
   listShards,
+  NotACardId,
+  readAnnotation,
   readShardFrom,
   shardName,
   statFile,
+  writeAnnotation,
   writeIfUnchanged,
 } from "./index.js";
 
@@ -295,5 +299,80 @@ describe("recognising a syncer's conflict copy", () => {
     // A directory that matches must not condemn the notes inside it.
     expect(isSyncConflict("lambda (conflicted copy 2026-01-01)/notes.md")).toBe(false);
     expect(isSyncConflict("archive/lambda (conflicted copy 2026-01-01).md")).toBe(true);
+  });
+});
+
+/**
+ * A card's annotation (ADR 0029): one file per card under `.sr/annotations/`,
+ * which is the whole store — no database row stands behind it.
+ */
+describe("a card's annotation", () => {
+  const ID = "sr-a7Kd9mQ2xR4v";
+  const dir = (): string => path.join(root, ".sr", "annotations");
+
+  it("is null for a card that has none, and reads back what was written", async () => {
+    expect(await readAnnotation(root, ID)).toBeNull();
+    expect(await hasAnnotation(root, ID)).toBe(false);
+
+    await writeAnnotation(root, ID, "mnemonic: three seconds, like a short breath\n");
+    expect(await readAnnotation(root, ID)).toBe("mnemonic: three seconds, like a short breath\n");
+    expect(await hasAnnotation(root, ID)).toBe(true);
+    expect(await fs.readdir(dir())).toEqual([`${ID}.md`]);
+  });
+
+  it("is replaced whole by a second write", async () => {
+    await writeAnnotation(root, ID, "a long first version of the annotation\n");
+    await writeAnnotation(root, ID, "short\n");
+    expect(await readAnnotation(root, ID)).toBe("short\n");
+  });
+
+  it("is removed by empty or blank text rather than left as an empty file", async () => {
+    for (const blank of ["", "  \n\t\n"]) {
+      await writeAnnotation(root, ID, "something\n");
+      await writeAnnotation(root, ID, blank);
+      expect(await readAnnotation(root, ID), JSON.stringify(blank)).toBeNull();
+      expect(await fs.readdir(dir())).toEqual([]);
+    }
+    // Removing one that was never there is not an error.
+    await expect(writeAnnotation(root, "sr-000000000009", "")).resolves.toBeUndefined();
+  });
+
+  it("refuses an id that is not a stamp, before it becomes a path", async () => {
+    for (const bad of ["../../etc/passwd", "sr-short", "sr-a7Kd9mQ2xR4v/../x", "a7Kd9mQ2xR4v", ""]) {
+      await expect(writeAnnotation(root, bad, "x"), bad).rejects.toBeInstanceOf(NotACardId);
+      await expect(readAnnotation(root, bad), bad).rejects.toBeInstanceOf(NotACardId);
+      await expect(hasAnnotation(root, bad), bad).rejects.toBeInstanceOf(NotACardId);
+    }
+    // Nothing was created anywhere under the root on the way.
+    expect(await fs.readdir(root)).toEqual([]);
+  });
+
+  it("leaves no partial or temporary file behind, whether the write succeeds or fails", async () => {
+    await writeAnnotation(root, ID, "first\n");
+    await writeAnnotation(root, ID, "second\n");
+    expect(await fs.readdir(dir())).toEqual([`${ID}.md`]);
+
+    // A rename that cannot land — the target is a directory — must fail
+    // loudly and take its temp file with it.
+    const other = "sr-000000000002";
+    await fs.mkdir(path.join(dir(), `${other}.md`));
+    await expect(writeAnnotation(root, other, "never lands\n")).rejects.toThrow();
+    expect((await fs.readdir(dir())).sort()).toEqual([`${ID}.md`, `${other}.md`].sort());
+    expect(await readAnnotation(root, ID)).toBe("second\n");
+  });
+
+  it("comes back byte-identical, CRLF and missing final newline included", async () => {
+    for (const text of ["line one\r\nline two\r\n", "no newline at the end", "ünïcödé — ok\n"]) {
+      await writeAnnotation(root, ID, text);
+      expect(await readAnnotation(root, ID)).toBe(text);
+      expect(await fs.readFile(path.join(dir(), `${ID}.md`))).toEqual(Buffer.from(text, "utf8"));
+    }
+  });
+
+  it("is never walked as a note, so a ` :: ` inside one is not a card", async () => {
+    await write("a.md", "Q :: A\n");
+    await writeAnnotation(root, ID, "compare :: the other card\n");
+    const { candidates } = await enumerate(root);
+    expect(candidates.map((c) => c.relPath)).toEqual(["a.md"]);
   });
 });
