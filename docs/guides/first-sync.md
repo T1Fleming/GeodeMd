@@ -48,6 +48,8 @@ Default Lambda timeout :: 3 seconds
 - [ ] Cold start cause :: a new execution environment
 ```
 
+A bullet nested under another bullet is a card at any depth. Other indented lines are read as code and skipped.
+
 `foo::bar` is **not** a card — the spaces are required, which is what keeps `key::value` fields and most code out of it.
 
 Deliberately skipped: fenced and indented code blocks, inline code spans (`` `foo :: bar` `` is prose *about* a syntax), table rows, YAML frontmatter, blockquotes, and headings.

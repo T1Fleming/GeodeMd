@@ -175,6 +175,77 @@ describe("skipped contexts", () => {
   });
 });
 
+describe("bullets nested under other bullets are cards at any depth", () => {
+  const questions = (text: string) => parse(text).map((c) => c.question);
+
+  it("reads a card four spaces deep under a parent bullet", () => {
+    const note = "- Cell\n  - Nucleus :: holds DNA\n    - Nucleolus :: makes ribosomes\n";
+    expect(questions(note)).toEqual(["Nucleus", "Nucleolus"]);
+  });
+
+  it("reads a card a tab deep under a parent bullet", () => {
+    expect(questions("- Cell\n\t- Nucleus :: holds DNA\n")).toEqual(["Nucleus"]);
+  });
+
+  it("reads cards several levels deep, with tabs and spaces mixed", () => {
+    const note = "- a\n\t- b\n\t  - c\n\t\t- d\n\t\t\t- deep :: yes\n";
+    expect(questions(note)).toEqual(["deep"]);
+  });
+
+  it("reads nested ordered items and task boxes", () => {
+    const note = "1. Cell\n   1. Nucleus\n      - [ ] Nucleolus :: makes ribosomes\n";
+    expect(questions(note)).toEqual(["Nucleolus"]);
+  });
+
+  it("keeps the list open across blank lines between items", () => {
+    expect(questions("- Cell\n\n    - Nucleus :: holds DNA\n")).toEqual(["Nucleus"]);
+  });
+
+  it("returns to a shallower level after a deep one", () => {
+    const note = "- a\n  - b\n    - deep :: 1\n  - mid :: 2\n    - deep again :: 3\n";
+    expect(questions(note)).toEqual(["deep", "mid", "deep again"]);
+  });
+});
+
+describe("indented code near a list stays skipped", () => {
+  const questions = (text: string) => parse(text).map((c) => c.question);
+
+  it("skips a marker line indented four or more columns past its parent's text", () => {
+    // `- ` puts the parent's text at column 2; column 6 is code inside the item.
+    expect(questions("- Haskell example\n\n      - f :: Int\n")).toEqual([]);
+  });
+
+  it("skips indented lines that are not bullets, even inside a list", () => {
+    expect(questions("- Cell\n    Nucleus :: holds DNA\n")).toEqual([]);
+  });
+
+  it("skips an indented bullet once a paragraph has ended the list", () => {
+    expect(questions("- Cell\n\nA paragraph.\n\n    - Nucleus :: holds DNA\n")).toEqual([]);
+  });
+
+  it("skips an indented bullet once a heading has ended the list", () => {
+    expect(questions("- Cell\n# Next\n    - Nucleus :: holds DNA\n")).toEqual([]);
+  });
+
+  it("skips an indented bullet once a fence at the margin has ended the list", () => {
+    expect(questions("- Cell\n```\nx\n```\n    - Nucleus :: holds DNA\n")).toEqual([]);
+  });
+
+  it("does not mistake a horizontal rule for a bullet", () => {
+    expect(questions("* * *\n    - Nucleus :: holds DNA\n")).toEqual([]);
+    expect(questions("- - -\n    - Nucleus :: holds DNA\n")).toEqual([]);
+  });
+
+  it("skips an indented bullet with no list above it", () => {
+    expect(questions("Intro\n\n    - Nucleus :: holds DNA\n")).toEqual([]);
+  });
+
+  it("leaves every shallower line as it was", () => {
+    const note = "- Cell\n  continued :: text\nplain :: card\n  - two :: deep\n";
+    expect(questions(note)).toEqual(["continued", "plain", "two"]);
+  });
+});
+
 describe("splitLines keeps each terminator", () => {
   it("preserves LF", () => {
     expect(splitLines("a\nb\n")).toEqual(["a\n", "b\n"]);

@@ -11,10 +11,10 @@ app do*, and *where is that proven*. What it deliberately cannot tell you is wha
 app does **untested** — an area that looks thin here is thinly covered, and that is
 worth reading as a finding rather than a gap in the document.
 
-631 behaviours in 12 areas, which follow [the guides](../guides/) rather than the source tree.
+646 behaviours in 12 areas, which follow [the guides](../guides/) rather than the source tree.
 
 - [Reviewing](#reviewing) — 183
-- [Recognising a card](#recognising-a-card) — 57
+- [Recognising a card](#recognising-a-card) — 71
 - [Syncing notes](#syncing-notes) — 74
 - [Recovery and the log](#recovery-and-the-log) — 43
 - [Moving between machines](#moving-between-machines) — 16
@@ -24,7 +24,7 @@ worth reading as a finding rather than a gap in the document.
 - [The database as a cache](#the-database-as-a-cache) — 7
 - [At scale](#at-scale) — 9
 - [Rules the project enforces on itself](#rules-the-project-enforces-on-itself) — 34
-- [The documentation tells the truth](#the-documentation-tells-the-truth) — 50
+- [The documentation tells the truth](#the-documentation-tells-the-truth) — 51
 
 ## Reviewing
 
@@ -394,7 +394,7 @@ _7 · `files/files.test.ts`_
 
 _Text in, cards out. Also — and mostly — the shapes that are deliberately NOT cards, because a false positive writes a stamp into someone's note._
 
-**57 behaviours.**
+**71 behaviours.**
 
 ### the basic form
 
@@ -474,6 +474,30 @@ _14 · `parser/parser.test.ts`_
 - parses cards after frontmatter closes
 - does not swallow the note when frontmatter is never closed
 - treats `---` below line 1 as ordinary text, not frontmatter
+
+### bullets nested under other bullets are cards at any depth
+
+_6 · `parser/parser.test.ts`_
+
+- reads a card four spaces deep under a parent bullet
+- reads a card a tab deep under a parent bullet
+- reads cards several levels deep, with tabs and spaces mixed
+- reads nested ordered items and task boxes
+- keeps the list open across blank lines between items
+- returns to a shallower level after a deep one
+
+### indented code near a list stays skipped
+
+_8 · `parser/parser.test.ts`_
+
+- skips a marker line indented four or more columns past its parent's text
+- skips indented lines that are not bullets, even inside a list
+- skips an indented bullet once a paragraph has ended the list
+- skips an indented bullet once a heading has ended the list
+- skips an indented bullet once a fence at the margin has ended the list
+- does not mistake a horizontal rule for a bullet
+- skips an indented bullet with no list above it
+- leaves every shallower line as it was
 
 ### splitLines keeps each terminator
 
@@ -1342,7 +1366,7 @@ _5 · `behaviours/areas.test.ts`_
 
 _Documents that make checkable claims, checked._
 
-**50 behaviours.**
+**51 behaviours.**
 
 ### the demo collection
 
@@ -1363,10 +1387,11 @@ _5 · `demo.test.ts`_
 
 ### the examples the guide shows a reader
 
-_4 · `journeys/first-sync.test.ts`_
+_5 · `journeys/first-sync.test.ts`_
 
 - shows a stamped line that really is one
 - shows three shapes that are cards, and they all are
+- is right that a nested bullet is a card at any depth
 - is right that `foo::bar` is not one
 - is right about every context it says is skipped
 
