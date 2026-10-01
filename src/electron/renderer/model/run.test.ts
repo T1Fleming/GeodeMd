@@ -20,6 +20,8 @@ const summary = (over: Partial<SyncSummary> = {}): SyncSummary => ({
   reviewsIngested: 0,
   filesSkippedOnError: 0,
   logLinesSkipped: 0,
+  cardLinesUnnested: 0,
+  unnestedAt: [],
   elapsedMs: 7,
   ...over,
 });

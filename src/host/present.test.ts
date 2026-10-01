@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  unnestedReason,
   breadcrumb,
   CRUMB_MAX,
   syntaxChangedText,
@@ -161,6 +162,8 @@ const summary = (over: Partial<SyncSummary> = {}): SyncSummary => ({
   reviewsIngested: 0,
   filesSkippedOnError: 0,
   logLinesSkipped: 0,
+  cardLinesUnnested: 0,
+  unnestedAt: [],
   elapsedMs: 4,
   ...over,
 });
@@ -286,5 +289,22 @@ describe("what the app says when the card syntax changed", () => {
   it("names both separators, the one that stopped, and the preview", () => {
     const text = syntaxChangedText();
     for (const part of [">>", "==", "::", "preview"]) expect(text).toContain(part);
+  });
+});
+
+describe("what the app says about card lines that are not nested", () => {
+  it("says nothing when there are none", () => {
+    expect(unnestedReason({ cardLinesUnnested: 0, unnestedAt: [] })).toBeNull();
+  });
+
+  it("names where they are, why, and the fix", () => {
+    const text = unnestedReason({ cardLinesUnnested: 1, unnestedAt: ["a.md:4"] })!;
+    for (const part of ["a.md:4", "list marker", "Markdown", '"- "']) expect(text).toContain(part);
+  });
+
+  it("says how many more there are than it names", () => {
+    const text = unnestedReason({ cardLinesUnnested: 12, unnestedAt: ["a.md:1", "a.md:2"] })!;
+    expect(text).toContain("12 lines look like cards");
+    expect(text).toContain("a.md:1, a.md:2, and 10 more");
   });
 });

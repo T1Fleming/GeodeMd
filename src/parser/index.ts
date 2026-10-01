@@ -256,8 +256,30 @@ export function frontmatterEndOf(lines: readonly string[]): number {
  * produce a junk card, it writes a stamp into the user's note.
  */
 export function parse(text: string): ParsedCard[] {
+  return parseNote(text).cards;
+}
+
+/** What a whole note holds: its cards, and the card-shaped lines it skipped. */
+export interface ParsedNote {
+  cards: ParsedCard[];
+  /**
+   * 0-based indexes of lines that read as cards but are indented without a
+   * list marker, directly under a line of text. Markdown reads such a line as
+   * more of that text, not as an outline, so it is not a card — but it is
+   * almost certainly someone nesting the RemNote way, and skipping it without
+   * a word would lose the card silently. A line indented the same way after a
+   * blank line is an indented code block, and is not counted.
+   */
+  unnested: number[];
+}
+
+export function parseNote(text: string): ParsedNote {
   const lines = splitLines(text);
   const cards: ParsedCard[] = [];
+  const unnested: number[] = [];
+  // Whether the last non-blank line was text that an indented line would
+  // continue. CommonMark: an indented code block cannot interrupt a paragraph.
+  let textOpen = false;
 
   let fence: string | null = null;
   // The column each open list item's text starts at, outermost first. A line
@@ -282,7 +304,10 @@ export function parse(text: string): ParsedCard[] {
 
     const lead = /^[ \t]*/.exec(line)![0];
     const rest = line.slice(lead.length);
-    if (rest === "" && fence === null) continue;
+    if (rest === "" && fence === null) {
+      textOpen = false;
+      continue;
+    }
     const indent = columnAfter(lead, 0);
 
     // A line closes every open list item whose text starts to its right.
@@ -295,6 +320,7 @@ export function parse(text: string): ParsedCard[] {
 
     const fenceMatch = FENCE.exec(line);
     if (fenceMatch) {
+      textOpen = false;
       const marker = fenceMatch[1]!;
       if (fence === null) {
         fence = marker[0]!;
@@ -305,19 +331,32 @@ export function parse(text: string): ParsedCard[] {
       continue;
     }
     if (fence !== null) continue;
+    // Skipped as indented, the one case that may be text rather than code.
+    const skipIndented = (): void => {
+      if (textOpen && parseLine(lines[i]!, i)) unnested.push(i);
+    };
 
     // Indented code block: four or more columns past the text of the list
     // item it sits in, or past the margin outside a list (ADR 0030). Deeper
     // than that is code to Markdown too, so it is never read as a card.
     const container = open.length > 0 ? open[open.length - 1]! : 0;
-    if (indent - container >= 4) continue;
+    if (indent - container >= 4) {
+      skipIndented();
+      continue;
+    }
     const contentColumn = listContentColumn(rest, indent);
     // A list item may sit four or more columns from the margin, nested under
     // another one (#60). Anything else that deep stays skipped, as it always
     // was: when it is unclear whether a line is code, it is not a card.
-    if (indent >= 4 && contentColumn === null) continue;
+    if (indent >= 4 && contentColumn === null) {
+      skipIndented();
+      continue;
+    }
     // Table row.
-    if (/^[ \t]*\|/.test(line)) continue;
+    if (/^[ \t]*\|/.test(line)) {
+      textOpen = false;
+      continue;
+    }
     // A heading outside any list is context for every card below it, until a
     // heading at its level or above replaces it. One inside a list item is not:
     // it belongs to that item, and the item is already on the path.
@@ -329,7 +368,11 @@ export function parse(text: string): ParsedCard[] {
       headings[level - 1] = text === "" ? null : { text };
     }
     // Blockquote or heading.
-    if (/^[ \t]*[>#]/.test(line)) continue;
+    if (/^[ \t]*[>#]/.test(line)) {
+      textOpen = false;
+      continue;
+    }
+    textOpen = true;
 
     const card = parseLine(lines[i]!, i);
     if (card) {
@@ -342,5 +385,5 @@ export function parse(text: string): ParsedCard[] {
     }
   }
 
-  return cards;
+  return { cards, unnested };
 }

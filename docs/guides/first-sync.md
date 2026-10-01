@@ -48,7 +48,25 @@ Default Lambda timeout >> 3 seconds
 - [ ] Cold start cause >> a new execution environment
 ```
 
-A bullet nested under another bullet is a card at any depth. Other indented lines are read as code and skipped.
+A bullet nested under another bullet is a card at any depth, indented with spaces or tabs. **Only list items nest.** GeodeMD follows Markdown here rather than RemNote, which nests by indentation alone, so this is **one** card, not two:
+
+```markdown
+Now we are >> Going to see
+    If we can look at
+    Nested things
+    Like >> This
+```
+
+Markdown reads the indented lines as more of the first line's text, and so does GeodeMD: `Like >> This` is not a card. Sync says so, naming the line, so it does not go missing quietly. With list markers it is two cards, and `Like` is shown under `Now we are → Going to see`:
+
+```markdown
+- Now we are >> Going to see
+    - If we can look at
+    - Nested things
+    - Like >> This
+```
+
+Other indented lines, after a blank line, are code blocks and are skipped without a word.
 
 `a>>b` is **not** a card — the spaces are required, which is what keeps most code out of it.
 

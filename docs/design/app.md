@@ -151,6 +151,7 @@ A decision lives in `host`, not in the component that wanted it first. With two 
 | `resolveEditor`, `editorCommand`, `launchCommand`, `detectEditors` | which program `o` opens, how it is told a line, where it is installed, and which editors the Vault screen offers |
 | `OpenedNotes` | the mtime-at-open record behind "this note changed" |
 | `summaryFields` | which counts a sync reports, and in what order |
+| `unnestedReason` | what to say about card-shaped lines indented without a list marker, and where they are |
 | `deferralReason` | why a freshly-edited file was left alone |
 | `PHASE_LABEL` | what `scan` / `prune` / `ingest` are called |
 | `rescheduledText` | what the app says when opening a vault re-derived its due dates |

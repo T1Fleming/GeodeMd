@@ -69,6 +69,26 @@ describe("the examples the guide shows a reader", () => {
     expect(parse("Intro\n\n    plain indented >> code\n")).toEqual([]);
   });
 
+  it("is right that only list items nest, and that the RemNote-style outline is one card", async () => {
+    const text = await firstSync();
+    expect(text).toContain("**Only list items nest.**");
+    const outlines = fences(text, "markdown").filter((b) => b.includes("Like >> This"));
+    expect(outlines, "the guide no longer shows both outlines").toHaveLength(2);
+    const [bare, bulleted] = outlines;
+
+    expect(parse(bare!).map((c) => c.question)).toEqual(["Now we are"]);
+    const cards = parse(bulleted!);
+    expect(cards.map((c) => c.question)).toEqual(["Now we are", "Like"]);
+    expect(cards[1]!.context).toEqual([{ text: "Now we are", answer: "Going to see" }]);
+
+    // "Sync says so, naming the line."
+    open = await newCollection();
+    await open.write("outline.md", bare!);
+    const s = await open.core.sync(T0, { dryRun: true });
+    expect(s.unnestedAt).toEqual(["outline.md:4"]);
+    expect(summaryFields(s).map((f) => f.label)).toContain("card lines not nested");
+  });
+
   it("is right that `a>>b` is not one", async () => {
     expect(await firstSync()).toContain("`a>>b` is **not** a card");
     expect(parse("a>>b")).toEqual([]);

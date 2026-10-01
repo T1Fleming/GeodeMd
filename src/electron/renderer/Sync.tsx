@@ -7,7 +7,7 @@
  */
 
 import { useCallback, useEffect, useState } from "react";
-import { deferralReason, summaryFields } from "../../host/present.js";
+import { deferralReason, summaryFields, unnestedReason } from "../../host/present.js";
 import type { SummaryField } from "../../host/present.js";
 import type { SyncSummary } from "../ipc.js";
 import { fromStatus, idle, isRunning, onFinished, onProgress, percent } from "./model/run.js";
@@ -137,6 +137,7 @@ function Summary({
 }): React.JSX.Element {
   const fields = summaryFields(summary);
   const deferred = deferralReason(summary);
+  const unnested = unnestedReason(summary);
 
   return (
     <section className="summary">
@@ -157,6 +158,7 @@ function Summary({
           {deferred} Sync again to pick them up.
         </p>
       )}
+      {unnested && <p className="deferred">{unnested}</p>}
     </section>
   );
 }
