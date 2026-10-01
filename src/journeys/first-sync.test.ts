@@ -62,6 +62,13 @@ describe("the examples the guide shows a reader", () => {
     ]);
   });
 
+  it("is right that a nested bullet is a card at any depth", async () => {
+    expect(await firstSync()).toContain("A bullet nested under another bullet is a card at any depth");
+    const outline = "- Cell\n  - Nucleus\n    - Nucleolus\n      - Fibrillar centre :: holds rDNA\n";
+    expect(parse(outline).map((c) => c.question)).toEqual(["Fibrillar centre"]);
+    expect(parse("Intro\n\n    plain indented :: code\n")).toEqual([]);
+  });
+
   it("is right that `foo::bar` is not one", async () => {
     expect(await firstSync()).toContain("`foo::bar` is **not** a card");
     expect(parse("foo::bar")).toEqual([]);

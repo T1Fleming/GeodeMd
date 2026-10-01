@@ -25,11 +25,13 @@ Six shapes are never read as cards. Each is one line-level predicate:
 | Shape | Test |
 |---|---|
 | Fenced code block | ` ``` ` or `~~~`, 3+ chars; a closing fence must use the same character, length may differ |
-| Indented code block | `/^(?: {4}|\t)/` |
+| Indented code block | 4+ columns past the text of the list item it sits in, or past the margin outside a list |
 | Inline code span | odd number of backticks before the separator |
 | Table row | `/^[ \t]*\|/` |
 | YAML frontmatter | between `---` on line 1 and the next `---` |
 | Blockquote or heading | `/^[ \t]*[>#]/` |
+
+A line 4+ columns from the margin is read only when it opens a list item, nested under another one. The parser keeps the column at which each open item's text starts. Tabs advance to the next multiple of four, as in CommonMark. A heading, paragraph, fence or horizontal rule at the margin closes the list, and blank lines between items do not. Indented text that is not a bullet stays skipped, and so does a bullet deep enough that Markdown renders it as code inside the item. Where CommonMark is more permissive, for example a lazy continuation line, the parser closes the list instead. The rule and the simpler one it rejected are [ADR 0030](../decisions/0030-nested-bullets-are-not-code.md).
 
 Frontmatter only counts when `---` opens line 1 **and** a closing delimiter exists; without one, the file has no frontmatter and the parser does not swallow the whole note.
 

@@ -37,6 +37,7 @@ New decisions from here get an ADR when they are made, not in a later sweep — 
 | [0027](0027-vaults.md) | Vaults: several notes folders, each with its own database | Accepted |
 | [0028](0028-move-to-fsrs-6.md) | Move to FSRS-6, and re-derive schedules when the scheduler changes | Accepted |
 | [0029](0029-annotations.md) | Annotations: one plain-text file per card, beside the log | Accepted |
+| [0030](0030-nested-bullets-are-not-code.md) | A bullet nested under another bullet is not code | Accepted |
 
 ## Writing one
 
