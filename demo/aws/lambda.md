@@ -26,8 +26,9 @@ The first invocation after a deploy is always cold. So is the first after a
 period of no traffic, and so is any invocation that has to scale out past the
 number of warm environments.
 
-- Which language runtimes have the worst cold starts >> JVM and .NET, because the runtime itself has to initialise
-- What runs during a cold start but not a warm one >> the init phase — module imports and anything at the top level of your handler file
+- Cold starts come from creating a new execution environment
+  - Which language runtimes have the worst cold starts >> JVM and .NET, because the runtime itself has to initialise
+  - What runs during a cold start but not a warm one >> the init phase — module imports and anything at the top level of your handler file
 
 Anything expensive at module scope is paid once per *environment*, not once
 per request. That is the whole trick behind putting a database connection

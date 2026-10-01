@@ -64,14 +64,14 @@ This list is longer than a card parser looks like it needs. The reason is that a
 
 ## Context
 
-Each card carries `context`: the headings above it, then the list items it is nested under, outermost first. It is what the review screen shows above the question, so `Nucleolus >> makes ribosomes` arrives under `Biology › Cell › Nucleus`. The note's name is added by `host`, which knows the path.
+Each card carries `context`: the headings above it, then the list items it is nested under, outermost first. Each entry says which it is, `kind: "heading"` or `"item"`, because the review screen puts headings on the path line and items in the outline above the question ([ADR 0032](../decisions/0032-show-parents-as-remnote-does.md)). The note's name is added by `host`, which knows the path.
 
 - **Headings form a stack.** A heading at level *n* replaces the previous one at *n* and clears everything deeper. Only a heading outside a list counts — the open-item stack is empty after the margin check. One inside a list item belongs to that item.
 - **Parent bullets are the open list items**, from the same stack ADR 0030 keeps for the indentation rule, so a sibling is never a parent and a paragraph, heading or fence at the margin ends the path.
 - **What an ancestor shows:** a forward card, its question and its answer, as RemNote shows a Basic parent; a ` :: ` line, only what is before the `::`, as RemNote shows a Concept parent; anything else, its text. Each is cleaned the way a question is — marker, task box, trailing comments and stamps off, trimmed — and an empty one is left out.
 - **Nothing in a skipped context is context**: a heading in a fence, a blockquote or frontmatter is not one, and `#tag` with no space after the `#` is not a heading.
 
-`SYNTAX_VERSION` names these rules, together with the separator. Bump it whenever the same note would parse differently: a sync against an older version reads every note once ([data model](data-model.md)).
+Two versions name the rules. `SYNTAX_VERSION` covers which lines are cards: bump it when the same note would yield different cards. `CONTEXT_VERSION` covers context alone: bump it when the cards stay the same but their context does not. Either makes the next sync read every note once ([data model](data-model.md)). Only a syntax bump makes the app warn first, because only that kind can stamp new lines.
 
 ## Stamps
 

@@ -115,6 +115,20 @@ export async function runSelfTest(): Promise<void> {
     check("a deferred card comes back later in the session", seen, deferred);
     check("and the session has recorded nothing on the way round", text(".meta").startsWith("1 /"), text(".meta"));
 
+    // A card nested under a bullet is drawn under its parents, as RemNote
+    // draws it (ADR 0032): the note on the path line, the parent as a bullet,
+    // and the question as the last bullet. The demo nests two cards in
+    // aws/lambda.md for this.
+    let nested = false;
+    for (let i = 0; i < 60 && !nested; i++) {
+      if (exists(".parents .parent")) nested = true;
+      else await key("0");
+    }
+    check("a nested card is drawn under its parent bullets", nested, text(".parents"));
+    check("with the note's name on the path line", text(".crumbs").startsWith("lambda"), text(".crumbs"));
+    check("and the question as the last bullet", exists(".question.bulleted"), text(".question"));
+    await shot("review-04-parents");
+
     const first = text(".question");
     await key(" ");
     check("any key reveals the answer", exists(".answer"), text(".answer"));

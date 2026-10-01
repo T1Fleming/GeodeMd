@@ -11,11 +11,11 @@ app do*, and *where is that proven*. What it deliberately cannot tell you is wha
 app does **untested** — an area that looks thin here is thinly covered, and that is
 worth reading as a finding rather than a gap in the document.
 
-718 behaviours in 12 areas, which follow [the guides](../guides/) rather than the source tree.
+728 behaviours in 12 areas, which follow [the guides](../guides/) rather than the source tree.
 
-- [Reviewing](#reviewing) — 190
+- [Reviewing](#reviewing) — 195
 - [Recognising a card](#recognising-a-card) — 121
-- [Syncing notes](#syncing-notes) — 82
+- [Syncing notes](#syncing-notes) — 85
 - [Recovery and the log](#recovery-and-the-log) — 43
 - [Moving between machines](#moving-between-machines) — 16
 - [Keeping several vaults](#keeping-several-vaults) — 45
@@ -24,13 +24,13 @@ worth reading as a finding rather than a gap in the document.
 - [The database as a cache](#the-database-as-a-cache) — 7
 - [At scale](#at-scale) — 9
 - [Rules the project enforces on itself](#rules-the-project-enforces-on-itself) — 34
-- [The documentation tells the truth](#the-documentation-tells-the-truth) — 58
+- [The documentation tells the truth](#the-documentation-tells-the-truth) — 60
 
 ## Reviewing
 
 _A session: which card is next, what the keys mean, what a rating records, and what comes back before the sitting ends._
 
-**190 behaviours.**
+**195 behaviours.**
 
 ### the order cards are served in
 
@@ -155,13 +155,18 @@ _3 · `host/present.test.ts`_
 - reports in rating order, not insertion order
 - is empty for a session with no answers in it
 
-### the breadcrumb above a question
+### what is shown above a question
 
-_3 · `host/present.test.ts`_
+_8 · `host/present.test.ts`_
 
-- is the note's name, then each heading and parent bullet
+- puts the note and its headings on the path line, and the bullets in the outline
 - is just the note's name for a card with nothing above it
-- shortens each long segment on its own
+- shortens a long path segment on its own
+- does not shorten a parent bullet, which is cut by lines instead
+- shows the nearest 3 parents and folds the older ones
+- leaves out a parent whose text is in the answer until the answer shows
+- leaves a spoiler out before folding, so the nearest parents that can be shown are
+- never treats a heading as a spoiler, nor whitespace as text
 
 ### what the app says when the card syntax changed
 
@@ -638,7 +643,7 @@ _2 · `parser/parser.test.ts`_
 
 _Finding what changed, stamping it, pruning what is gone, and saying what happened._
 
-**82 behaviours.**
+**85 behaviours.**
 
 ### which counts a sync summary shows
 
@@ -692,6 +697,14 @@ _4 · `core/sync.test.ts`_
 - is not reported for a vault that has never synced
 - is still owed after a preview, which records nothing
 - drops cards written with `::`, keeping their history for when the line comes back
+
+### a change of how context is derived
+
+_3 · `core/sync.test.ts`_
+
+- makes the next sync read every note once, without reporting a syntax change
+- is still owed after a preview
+- draws a parent stored before `kind` existed as a bullet
 
 ### card lines that are not nested
 
@@ -1496,7 +1509,7 @@ _5 · `behaviours/areas.test.ts`_
 
 _Documents that make checkable claims, checked._
 
-**58 behaviours.**
+**60 behaviours.**
 
 ### the demo collection
 
@@ -1550,11 +1563,13 @@ _2 · `journeys/first-sync.test.ts`_
 - keeps a card's id, and so its history, through the guide's command
 - previews how many lines stop being cards before anything is written
 
-### the guide's breadcrumb is the one a card is shown under
+### a card is shown under its parents as the guide draws it
 
-_1 · `journeys/reviewing.test.ts`_
+_3 · `journeys/reviewing.test.ts`_
 
-- shows its example card under the path the guide says
+- lays out the guide's example as the guide shows it
+- folds all but the nearest three parents, as it says
+- leaves out a parent that is in the answer until the answer shows, as it says
 
 ### the guide's four ratings are the four the app honours
 

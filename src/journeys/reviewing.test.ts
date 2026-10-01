@@ -17,7 +17,8 @@ import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import {
   ACTION_KEYS,
-  breadcrumb,
+  ANCESTORS_SHOWN,
+  cardContext,
   CRUMB_SEPARATOR,
   RATING_KEYS,
   actionsAt,
@@ -46,18 +47,47 @@ async function reviewing(): Promise<string> {
   return guide("reviewing.md");
 }
 
-describe("the guide's breadcrumb is the one a card is shown under", () => {
-  it("shows its example card under the path the guide says", async () => {
+describe("a card is shown under its parents as the guide draws it", () => {
+  it("lays out the guide's example as the guide shows it", async () => {
     const text = await reviewing();
     const [outline] = fences(text, "markdown").filter((b) => b.includes("Nucleolus"));
-    const said = codeSpans(text).find((s) => s.startsWith("cells "));
-    expect(said, "the guide no longer shows a breadcrumb").toBeDefined();
+    const [drawn] = fences(text, "text").filter((b) => b.includes("Nucleolus"));
+    expect(drawn, "the guide no longer draws the example").toBeDefined();
 
     open = await newCollection();
     await open.write("cells.md", outline!);
     await open.core.sync(T0);
     const card = open.core.getDueCards(T0, 10).find((c) => c.question === "Nucleolus")!;
-    expect(breadcrumb(card).join(CRUMB_SEPARATOR)).toBe(said);
+
+    // The screen's layout, as text: the path line, then one bullet per parent,
+    // each three spaces deeper, then the question as the last bullet.
+    const shown = cardContext(card, { revealed: false, expanded: false });
+    const lines = [
+      shown.path.join(CRUMB_SEPARATOR),
+      ...shown.parents.map((p, i) => `${"   ".repeat(i)}• ${p.text}${p.answer ? ` → ${p.answer}` : ""}`),
+      `${"   ".repeat(shown.parents.length)}• ${card.question}`,
+    ];
+    expect(lines.join("\n")).toBe(drawn!.trimEnd());
+  });
+
+  it("folds all but the nearest three parents, as it says", async () => {
+    expect(await reviewing()).toContain("**Only the nearest three parents are shown in full.**");
+    expect(ANCESTORS_SHOWN).toBe(3);
+  });
+
+  it("leaves out a parent that is in the answer until the answer shows, as it says", async () => {
+    expect(await reviewing()).toContain(
+      "**A parent whose text appears in the answer is left out until you reveal it**",
+    );
+
+    open = await newCollection();
+    await open.write("m.md", "- Mitochondria\n  - What makes ATP >> the mitochondria\n");
+    await open.core.sync(T0);
+    const [card] = open.core.getDueCards(T0, 10);
+    expect(cardContext(card!, { revealed: false, expanded: false }).parents).toEqual([]);
+    expect(cardContext(card!, { revealed: true, expanded: false }).parents).toEqual([
+      { text: "Mitochondria" },
+    ]);
   });
 });
 

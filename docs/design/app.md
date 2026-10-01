@@ -156,7 +156,7 @@ A decision lives in `host`, not in the component that wanted it first. With two 
 | `PHASE_LABEL` | what `scan` / `prune` / `ingest` are called |
 | `rescheduledText` | what the app says when opening a vault re-derived its due dates |
 | `syntaxChangedText` | what the app says when the open vault's cards were found under older card syntax |
-| `breadcrumb` | the note name, headings and parent bullets shown above a question, shortened per segment |
+| `cardContext`, `ANCESTORS_SHOWN`, `ANCESTOR_LINES` | the path line and parent outline above a question: which parents, how many before folding, how many lines each, and which are spoilers |
 | `queue.ts` | which card is next, and when a rated card comes back |
 | `countText`, `COUNT_CAP` | how far a backlog is counted, and how a capped count reads |
 

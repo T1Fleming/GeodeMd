@@ -4,7 +4,14 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { actionsAt, breadcrumb, countText, CRUMB_SEPARATOR, RATING_KEYS } from "../../host/present.js";
+import {
+  actionsAt,
+  ANCESTOR_LINES,
+  cardContext,
+  countText,
+  CRUMB_SEPARATOR,
+  RATING_KEYS,
+} from "../../host/present.js";
 import { cardLineNote } from "../../host/note.js";
 import type { DueCard } from "../../core/index.js";
 import {
@@ -294,12 +301,9 @@ export function Review({
       ) : (
         <>
           <section className="card">
-            {/* The card's parents, at both stages: they are what makes a short
-                question answerable (ADR 0031). */}
-            <div className="front">
-              <p className="crumbs">{breadcrumb(card).join(CRUMB_SEPARATOR)}</p>
-              <p className="question">{card.question}</p>
-            </div>
+            {/* Keyed by card, so what was expanded for one card is not
+                expanded for the next. */}
+            <Front key={card.id} card={card} revealed={session.revealed} />
             {session.revealed ? (
               <p className="answer">{card.answer}</p>
             ) : (
@@ -527,5 +531,55 @@ function Finished({
         </p>
       )}
     </main>
+  );
+}
+
+/**
+ * The question, under the note's path and the outline of its parent bullets,
+ * as RemNote draws a card (ADR 0032). What is shown — which parents, how many,
+ * which are spoilers — is `host`'s `cardContext`; this lays it out and keeps
+ * the two things a click can change.
+ *
+ * Shown at both stages: the parents are what make a short question
+ * answerable. A spoiler parent appears once the answer does.
+ */
+function Front({ card, revealed }: { card: DueCard; revealed: boolean }): React.JSX.Element {
+  const [expanded, setExpanded] = useState(false);
+  const [unclamped, setUnclamped] = useState<ReadonlySet<string>>(new Set());
+  const shown = cardContext(card, { revealed, expanded });
+  const depth = shown.parents.length;
+  const indent = (level: number) => ({ marginLeft: `${level * 1.25}rem` });
+
+  return (
+    <div className="front">
+      <p className="crumbs">{shown.path.join(CRUMB_SEPARATOR)}</p>
+      {shown.folded > 0 && (
+        <button className="fold" onClick={() => setExpanded(true)}>
+          … {shown.folded} more
+        </button>
+      )}
+      {depth > 0 && (
+        <ul className="parents">
+          {shown.parents.map((p, level) => {
+            const id = `${p.text}\u0000${p.answer ?? ""}`;
+            const clamped = !unclamped.has(id);
+            return (
+              <li
+                key={level}
+                className={clamped ? "parent clamped" : "parent"}
+                style={{ ...indent(level), WebkitLineClamp: clamped ? ANCESTOR_LINES : "unset" }}
+                onClick={() => setUnclamped((s) => new Set(s).add(id))}
+              >
+                {p.text}
+                {p.answer !== undefined && <span className="parent-answer"> → {p.answer}</span>}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      <p className={depth > 0 ? "question bulleted" : "question"} style={depth > 0 ? indent(depth) : undefined}>
+        {card.question}
+      </p>
+    </div>
   );
 }

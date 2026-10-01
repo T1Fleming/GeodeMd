@@ -10,7 +10,7 @@
 import { readFile as readFileAsync, stat as statAsync } from "node:fs/promises";
 import * as path from "node:path";
 import * as files from "../files/index.js";
-import { parse, parseNote, splitLines, stampLine, SYNTAX_VERSION } from "../parser/index.js";
+import { CONTEXT_VERSION, parse, parseNote, splitLines, stampLine, SYNTAX_VERSION } from "../parser/index.js";
 import type { ContextEntry, ParsedCard } from "../parser/index.js";
 import { Store } from "../store/index.js";
 import type { CardState, DueRow } from "../store/index.js";
@@ -153,6 +153,9 @@ const UNNESTED_SHOWN = 10;
 /** The `meta` key naming the card syntax that derived `cards` (ADR 0031). */
 const SYNTAX_KEY = "syntax";
 
+/** The `meta` key naming the rules that derived `cards.context` (ADR 0032). */
+const CONTEXT_KEY = "context";
+
 /**
  * Schedules re-derived per transaction by `adoptScheduler`, with the event
  * loop let back in between. The same shape as the rest of `core`'s long
@@ -211,7 +214,10 @@ export class Core {
     // read again, and the mtime cache would never read an untouched note. So a
     // change of syntax makes this one sync read everything (ADR 0031).
     const syntaxStale = this.store.getMeta(SYNTAX_KEY) !== SYNTAX_VERSION;
-    const full = opts.full === true || syntaxStale;
+    // The same for context, which a re-read can change without changing any
+    // card — so it is caught up silently, with no notice (ADR 0032).
+    const contextStale = this.store.getMeta(CONTEXT_KEY) !== CONTEXT_VERSION;
+    const full = opts.full === true || syntaxStale || contextStale;
 
     // A notesPath that is missing or is not a directory is a CONFIGURATION
     // error: every count the run would report is meaningless, a silent
@@ -372,8 +378,9 @@ export class Core {
     // Recorded only once every note has been read under these rules. A note
     // that could not be read keeps its old cards and its old `files` row, so
     // the next sync must read everything again rather than call it unchanged.
-    if (!dryRun && syntaxStale && summary.filesSkippedOnError === 0) {
-      this.store.setMeta(SYNTAX_KEY, SYNTAX_VERSION);
+    if (!dryRun && summary.filesSkippedOnError === 0) {
+      if (syntaxStale) this.store.setMeta(SYNTAX_KEY, SYNTAX_VERSION);
+      if (contextStale) this.store.setMeta(CONTEXT_KEY, CONTEXT_VERSION);
     }
 
     if (!dryRun) this.store.checkpoint();
@@ -886,7 +893,11 @@ function toDueCard(row: DueRow): DueCard {
     filePath: row.file_path,
     lineNo: row.line_no,
     locator: `${row.file_path}:${row.line_no ?? 0}`,
-    context: JSON.parse(row.context) as ContextEntry[],
+    // A row from before `kind` was stored is drawn as bullets until the sync
+    // that re-reads it (ADR 0032).
+    context: (JSON.parse(row.context) as Array<Partial<ContextEntry> & { text: string }>).map(
+      (c) => ({ ...c, kind: c.kind ?? "item" }),
+    ),
   };
 }
 

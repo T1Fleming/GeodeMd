@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   unnestedReason,
-  breadcrumb,
+  ANCESTORS_SHOWN,
+  cardContext,
   CRUMB_MAX,
   syntaxChangedText,
   ACTION_KEYS,
@@ -262,26 +263,81 @@ describe("what the app says when due dates were worked out again", () => {
   });
 });
 
-describe("the breadcrumb above a question", () => {
-  it("is the note's name, then each heading and parent bullet", () => {
-    expect(
-      breadcrumb({
-        filePath: "bio/cells.md",
-        context: [{ text: "Biology" }, { text: "Cell" }, { text: "Nucleus", answer: "holds DNA" }],
-      }),
-    ).toEqual(["cells", "Biology", "Cell", "Nucleus → holds DNA"]);
+describe("what is shown above a question", () => {
+  const h = (text: string) => ({ kind: "heading" as const, text });
+  const i = (text: string, answer?: string) =>
+    answer === undefined ? { kind: "item" as const, text } : { kind: "item" as const, text, answer };
+  const question = { revealed: false, expanded: false };
+
+  it("puts the note and its headings on the path line, and the bullets in the outline", () => {
+    const card = {
+      filePath: "bio/cells.md",
+      answer: "makes ribosomes",
+      context: [h("Biology"), i("Cell"), i("Nucleus", "holds DNA")],
+    };
+    expect(cardContext(card, question)).toEqual({
+      path: ["cells", "Biology"],
+      folded: 0,
+      parents: [{ text: "Cell" }, { text: "Nucleus", answer: "holds DNA" }],
+    });
   });
 
   it("is just the note's name for a card with nothing above it", () => {
-    expect(breadcrumb({ filePath: "Lambda.markdown", context: [] })).toEqual(["Lambda"]);
+    expect(cardContext({ filePath: "Lambda.markdown", answer: "x", context: [] }, question)).toEqual({
+      path: ["Lambda"],
+      folded: 0,
+      parents: [],
+    });
   });
 
-  it("shortens each long segment on its own", () => {
+  it("shortens a long path segment on its own", () => {
     const long = "x".repeat(CRUMB_MAX + 10);
-    const [, crumb, near] = breadcrumb({ filePath: "a.md", context: [{ text: long }, { text: "near" }] });
-    expect([...crumb!]).toHaveLength(CRUMB_MAX);
-    expect(crumb!.endsWith("…")).toBe(true);
-    expect(near).toBe("near");
+    const { path } = cardContext({ filePath: "a.md", answer: "z", context: [h(long), h("near")] }, question);
+    expect([...path[1]!]).toHaveLength(CRUMB_MAX);
+    expect(path[1]!.endsWith("…")).toBe(true);
+    expect(path[2]).toBe("near");
+  });
+
+  it("does not shorten a parent bullet, which is cut by lines instead", () => {
+    const long = "y".repeat(CRUMB_MAX * 3);
+    expect(cardContext({ filePath: "a.md", answer: "z", context: [i(long)] }, question).parents).toEqual([
+      { text: long },
+    ]);
+  });
+
+  it(`shows the nearest ${ANCESTORS_SHOWN} parents and folds the older ones`, () => {
+    const context = ["1", "2", "3", "4", "5"].map((t) => i(t));
+    const shown = cardContext({ filePath: "a.md", answer: "z", context }, question);
+    expect(shown.folded).toBe(2);
+    expect(shown.parents.map((p) => p.text)).toEqual(["3", "4", "5"]);
+
+    const all = cardContext({ filePath: "a.md", answer: "z", context }, { revealed: false, expanded: true });
+    expect(all.folded).toBe(0);
+    expect(all.parents).toHaveLength(5);
+  });
+
+  it("leaves out a parent whose text is in the answer until the answer shows", () => {
+    const card = {
+      filePath: "a.md",
+      answer: "The   MITOCHONDRIA, in every cell",
+      context: [i("Organelles"), i("mitochondria")],
+    };
+    expect(cardContext(card, question).parents).toEqual([{ text: "Organelles" }]);
+    expect(cardContext(card, { revealed: true, expanded: false }).parents).toHaveLength(2);
+  });
+
+  it("leaves a spoiler out before folding, so the nearest parents that can be shown are", () => {
+    const card = { filePath: "a.md", answer: "spoiler", context: ["1", "2", "3", "4"].map((t) => i(t)).concat(i("spoiler")) };
+    const shown = cardContext(card, question);
+    expect(shown.parents.map((p) => p.text)).toEqual(["2", "3", "4"]);
+    expect(shown.folded).toBe(1);
+  });
+
+  it("never treats a heading as a spoiler, nor whitespace as text", () => {
+    const card = { filePath: "a.md", answer: "Biology", context: [h("Biology"), i("  ")] };
+    const shown = cardContext(card, question);
+    expect(shown.path).toEqual(["a", "Biology"]);
+    expect(shown.parents).toEqual([{ text: "  " }]);
   });
 });
 

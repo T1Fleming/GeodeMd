@@ -3,6 +3,7 @@
 - **Status:** Accepted
 - **Date:** 2026-10-01
 - **Amends:** [ADR 0002](0002-one-line-card-syntax.md)'s "exactly one form is recognised: ` :: `"
+- **Amended by:** [ADR 0032](0032-show-parents-as-remnote-does.md) — parents are shown as an outline under a path line, not as one breadcrumb
 
 ## Context
 
