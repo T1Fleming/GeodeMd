@@ -412,9 +412,9 @@ function register(): void {
    */
   ipcMain.handle(CH.vaultsOpen, () =>
     guard<VaultOpened>(async () => {
-      await active.ensure();
+      const { core } = await active.ensure();
       const r = active.takeRescheduled();
-      return { rescheduled: r ? { cards: r.cards } : null };
+      return { rescheduled: r ? { cards: r.cards } : null, syntaxChanged: core.syntaxChanged() };
     }),
   );
 

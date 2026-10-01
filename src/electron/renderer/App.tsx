@@ -18,7 +18,7 @@ import { Sync } from "./Sync.js";
 import type { OpenIn, Session } from "./model/session.js";
 import { choose, leftNote, switcherOptions } from "./model/vaults.js";
 import type { Scheduled } from "../../host/queue.js";
-import { backlogCapped, rescheduledText } from "../../host/present.js";
+import { backlogCapped, rescheduledText, syntaxChangedText } from "../../host/present.js";
 
 declare global {
   interface Window {
@@ -89,7 +89,18 @@ export function App(): React.JSX.Element {
     // (ADR 0028), and the user hears why before seeing a queue that moved.
     const opened = await window.geode.vaultsOpen();
     if (!opened.ok) setNote(opened.message);
-    else if (opened.value.rescheduled) setNote(rescheduledText(opened.value.rescheduled));
+    else {
+      const { rescheduled, syntaxChanged } = opened.value;
+      const said = [
+        syntaxChanged ? syntaxChangedText() : null,
+        rescheduled ? rescheduledText(rescheduled) : null,
+      ].filter((t) => t !== null);
+      if (said.length > 0) setNote(said.join(" "));
+      // The next sync reads every note and may stamp lines that were never
+      // cards, so the user is taken to the preview rather than the queue
+      // (ADR 0031).
+      if (syntaxChanged) setTab("sync");
+    }
     setBoot({ at: "ready", config: c.value });
   }, []);
 

@@ -32,7 +32,7 @@ describe("what the guide says two machines need in order to agree", () => {
     expect(await moving()).toContain("each machine writes its own review log file");
 
     open = await newCollection("desktop");
-    await open.write("a.md", "Q1 :: A1\nQ2 :: A2\n");
+    await open.write("a.md", "Q1 >> A1\nQ2 >> A2\n");
     await open.core.sync(T0);
     const queue = open.core.getDueCards(T0, 10);
     await open.core.reviewCard(queue[0]!.id, 3, T0);
@@ -57,7 +57,7 @@ describe("what the guide says two machines need in order to agree", () => {
     expect(await moving()).toContain("re-reading a log you already have is a no-op");
 
     open = await newCollection();
-    await open.write("a.md", "Q1 :: A1\n");
+    await open.write("a.md", "Q1 >> A1\n");
     await open.core.sync(T0);
     await open.core.reviewCard(open.core.getDueCards(T0, 1)[0]!.id, 3, T0);
 
@@ -74,7 +74,7 @@ describe("what the guide says two machines need in order to agree", () => {
     );
 
     open = await newCollection("desktop");
-    await open.write("a.md", "Q1 :: A1\nQ2 :: A2\n");
+    await open.write("a.md", "Q1 >> A1\nQ2 >> A2\n");
     await open.core.sync(T0);
     const queue = open.core.getDueCards(T0, 10);
     await open.core.reviewCard(queue[0]!.id, 3, T0);
@@ -121,7 +121,7 @@ describe("the conflict copies the guide promises to leave alone", () => {
 
   it("leaves one alone in a real sync, and says that it did", async () => {
     open = await newCollection();
-    await open.write("a.md", "Q1 :: A1\n");
+    await open.write("a.md", "Q1 >> A1\n");
     await open.core.sync(T0);
     const stamped = await open.read("a.md");
 

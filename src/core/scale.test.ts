@@ -44,7 +44,7 @@ async function makeTree(fileCount: number, cardsPer: number): Promise<Harness> {
     for (let f = 0; f < perDir && d * perDir + f < fileCount; f++) {
       const n = d * perDir + f;
       let body = "";
-      for (let c = 0; c < cardsPer; c++) body += `Q${n}_${c} :: A${n}_${c}\n`;
+      for (let c = 0; c < cardsPer; c++) body += `Q${n}_${c} >> A${n}_${c}\n`;
       const abs = path.join(dir, `n${f}.md`);
       await fs.writeFile(abs, body, "utf8");
       await fs.utimes(abs, MTIME, MTIME);
@@ -103,7 +103,7 @@ describe("the invariant that is not a time at all", () => {
 
     const target = path.join(notes, "d0", "n7.md");
     const text = await fs.readFile(target, "utf8");
-    await fs.writeFile(target, `${text}Extra :: card\n`, "utf8");
+    await fs.writeFile(target, `${text}Extra >> card\n`, "utf8");
     await fs.utimes(target, MTIME, new Date(MTIME.getTime() + 5000));
 
     const s = await core.sync(new Date(T0.getTime() + 60_000));
@@ -119,7 +119,7 @@ describe("the invariant that is not a time at all", () => {
 
     const target = path.join(notes, "d0", "n5.md");
     const text = await fs.readFile(target, "utf8");
-    await fs.writeFile(target, `${text}Extra :: card\n`, "utf8");
+    await fs.writeFile(target, `${text}Extra >> card\n`, "utf8");
     await fs.utimes(target, MTIME, new Date(MTIME.getTime() + 5000));
     expect((await core.sync(T0)).reconciled).toBe(false);
 

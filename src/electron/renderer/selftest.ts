@@ -532,7 +532,7 @@ async function runSanitiserChecks(): Promise<void> {
   const w = window as unknown as { __geodePwned?: string };
   delete w.__geodePwned;
   const hostile = [
-    "Before :: after",
+    "Before >> after",
     "<script>window.__geodePwned = 'script'</script>",
     `<img src="x" onerror="window.__geodePwned = 'onerror'">`,
     "[a markdown link](javascript:window.__geodePwned='markdown-link')",

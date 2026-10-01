@@ -38,7 +38,7 @@ beforeEach(async () => {
     store,
   );
   const abs = path.join(notes, "a.md");
-  await fs.writeFile(abs, "Q1 :: A1\nQ2 :: A2\n", "utf8");
+  await fs.writeFile(abs, "Q1 >> A1\nQ2 >> A2\n", "utf8");
   await fs.utimes(abs, MTIME, MTIME);
   await core.sync(T0);
 });

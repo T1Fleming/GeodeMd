@@ -93,7 +93,7 @@ function releaseWriteLock(): void {
 }
 
 async function oneCard(): Promise<string> {
-  await write("a.md", "Q :: A\n");
+  await write("a.md", "Q >> A\n");
   await core.sync(T0, {});
   const [card] = core.getDueCards(T0, 1);
   return card!.id;

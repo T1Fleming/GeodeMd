@@ -32,7 +32,7 @@ plugin.
 `geodemd/syntax.md` is a note *about* the tool, which makes it the natural
 place for the difficult cases. It contains a fenced code block, an indented
 one, an inline code span, a table, a blockquote, a heading and YAML
-frontmatter — **each containing ` :: `, and none of them a card**. That is not
+frontmatter — **each containing ` >> ` or ` == `, and none of them a card**. That is not
 contrived: a note explaining a syntax is exactly where you would write about
 the syntax, and it is the file most likely to break a parser that is too eager.
 

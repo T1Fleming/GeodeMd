@@ -99,8 +99,8 @@ describe("what switching costs, as the guide promises it", () => {
   it("reads no notes on coming back to a vault whose notes have not changed", async () => {
     expect(await vaults()).toContain("a vault whose notes have not changed reads no notes at all");
 
-    await note(path.join(root, "home"), "a.md", "H :: 1\n");
-    await note(path.join(root, "work"), "b.md", "W :: 1\n");
+    await note(path.join(root, "home"), "a.md", "H >> 1\n");
+    await note(path.join(root, "work"), "b.md", "W >> 1\n");
     const home = await initConfig(configFile, path.join(root, "home"), { env });
     await syncActive();
     await addVault(configFile, path.join(root, "work"), { env });
@@ -138,7 +138,7 @@ describe("what the guide says removing a vault keeps", () => {
     expect(await vaults()).toContain("adding that folder again later brings the vault back with its history");
 
     const homeDir = path.join(root, "home");
-    await note(homeDir, "a.md", "H :: 1\n");
+    await note(homeDir, "a.md", "H >> 1\n");
     const home = await initConfig(configFile, homeDir, { env });
     {
       const { core, store: cache } = openCore(home);

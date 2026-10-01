@@ -17,6 +17,12 @@ export interface CardRow {
   line_no: number | null;
   question: string;
   answer: string;
+  /**
+   * The headings and parent bullets above the card, as JSON (ADR 0031).
+   * Derived from the note alone, like question and answer, so a rebuild
+   * reproduces it. `core` owns the shape; to the store it is text.
+   */
+  context: string;
   type: string;
   reviewed: number;
 }
@@ -54,6 +60,7 @@ export interface DueRow {
   id: string;
   question: string;
   answer: string;
+  context: string;
   file_path: string;
   line_no: number | null;
 }
@@ -66,7 +73,8 @@ CREATE TABLE IF NOT EXISTS cards (
   question   TEXT NOT NULL,
   answer     TEXT NOT NULL,
   type       TEXT NOT NULL DEFAULT 'basic',
-  reviewed   INTEGER NOT NULL DEFAULT 0
+  reviewed   INTEGER NOT NULL DEFAULT 0,
+  context    TEXT NOT NULL DEFAULT '[]'
 );
 CREATE INDEX IF NOT EXISTS idx_cards_path ON cards(file_path, line_no);
 CREATE INDEX IF NOT EXISTS idx_cards_new  ON cards(file_path, line_no) WHERE reviewed = 0;
@@ -152,6 +160,12 @@ export class Store {
     const cols = this.db.pragma("table_info(card_state)") as Array<{ name: string }>;
     if (!cols.some((c) => c.name === "learning_steps")) {
       this.db.exec("ALTER TABLE card_state ADD COLUMN learning_steps INTEGER NOT NULL DEFAULT 0");
+    }
+    // Empty until the next sync re-reads every note, which a parser version
+    // older than the code's makes it do (ADR 0031).
+    const cardCols = this.db.pragma("table_info(cards)") as Array<{ name: string }>;
+    if (!cardCols.some((c) => c.name === "context")) {
+      this.db.exec("ALTER TABLE cards ADD COLUMN context TEXT NOT NULL DEFAULT '[]'");
     }
   }
 
@@ -261,14 +275,15 @@ export class Store {
    */
   upsertCard(row: Omit<CardRow, "reviewed" | "type">): void {
     this.stmt(
-      `INSERT INTO cards (id, file_path, line_no, question, answer, type, reviewed)
-       VALUES (@id, @file_path, @line_no, @question, @answer, 'basic',
+      `INSERT INTO cards (id, file_path, line_no, question, answer, context, type, reviewed)
+       VALUES (@id, @file_path, @line_no, @question, @answer, @context, 'basic',
                EXISTS(SELECT 1 FROM card_state WHERE card_id = @id))
        ON CONFLICT(id) DO UPDATE SET
          file_path = excluded.file_path,
          line_no   = excluded.line_no,
          question  = excluded.question,
-         answer    = excluded.answer`,
+         answer    = excluded.answer,
+         context   = excluded.context`,
     ).run(row as never);
   }
 
@@ -436,7 +451,7 @@ export class Store {
 
   dueCards(now: string, limit: number): DueRow[] {
     return this.many<DueRow>(
-      `SELECT c.id, c.question, c.answer, c.file_path, c.line_no
+      `SELECT c.id, c.question, c.answer, c.context, c.file_path, c.line_no
          FROM card_state s JOIN cards c ON c.id = s.card_id
         WHERE s.due <= ?
         ORDER BY s.due
@@ -448,7 +463,7 @@ export class Store {
 
   newCards(limit: number): DueRow[] {
     return this.many<DueRow>(
-      `SELECT id, question, answer, file_path, line_no
+      `SELECT id, question, answer, context, file_path, line_no
          FROM cards
         WHERE reviewed = 0
         ORDER BY file_path, line_no

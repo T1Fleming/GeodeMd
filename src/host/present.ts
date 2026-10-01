@@ -11,7 +11,7 @@
  * the module stays shareable.
  */
 
-import type { Rescheduled, SyncPhase, SyncSummary } from "../core/index.js";
+import type { DueCard, Rescheduled, SyncPhase, SyncSummary } from "../core/index.js";
 
 /**
  * The four FSRS ratings, and what they are called. Spec section 9: the numbers
@@ -359,4 +359,45 @@ export function rescheduledText(r: Pick<Rescheduled, "cards">): string {
     `The scheduler was updated, so due dates were worked out again for ${cards} ` +
     `from your review history. Some may have moved. Your notes and review log are unchanged.`
   );
+}
+
+/**
+ * What to tell the user when the open vault's cards were found under older
+ * card syntax ([ADR 0031](../../docs/decisions/0031-forward-cards-and-context.md)).
+ *
+ * Said before any sync, because the next one reads every note and may stamp
+ * lines that were never cards before. The app also takes the user to the Sync
+ * screen, where the preview is.
+ */
+export function syntaxChangedText(): string {
+  return (
+    "Card syntax changed: lines with >> or == are cards now, and lines with :: are not. " +
+    "The next sync reads every note, so preview it first. Your review history is unchanged."
+  );
+}
+
+/** Longest a breadcrumb segment is shown before it is shortened. */
+export const CRUMB_MAX = 40;
+
+/** Between breadcrumb segments. */
+export const CRUMB_SEPARATOR = " › ";
+
+/**
+ * The path from a card's note down to it, shown above the question: the
+ * note's name, then each heading and parent bullet (ADR 0031). A parent that
+ * is itself a forward card shows its answer too, as RemNote does.
+ *
+ * Shortened per segment rather than as a whole, so a long parent does not
+ * push the nearest one — usually the most useful — off the end.
+ */
+export function breadcrumb(card: Pick<DueCard, "filePath" | "context">): string[] {
+  const file = card.filePath.slice(card.filePath.lastIndexOf("/") + 1);
+  const note = file.replace(/\.(?:md|markdown)$/i, "");
+  const steps = card.context.map((c) => (c.answer === undefined ? c.text : `${c.text} → ${c.answer}`));
+  return [note, ...steps].map(shorten);
+}
+
+function shorten(text: string): string {
+  const chars = [...text];
+  return chars.length <= CRUMB_MAX ? text : `${chars.slice(0, CRUMB_MAX - 1).join("").trimEnd()}…`;
 }

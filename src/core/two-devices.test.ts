@@ -64,7 +64,7 @@ async function write(rel: string, content: string): Promise<void> {
 
 /** Both machines read the shared notes. The laptop stamps; the desktop finds them stamped. */
 async function bothSync(): Promise<string[]> {
-  await write("a.md", "Q1 :: A1\nQ2 :: A2\n");
+  await write("a.md", "Q1 >> A1\nQ2 >> A2\n");
   await laptop.core.sync(T0);
   await desktop.core.sync(T0);
   return laptop.core.getDueCards(T0, 10).map((c) => c.id);
@@ -204,7 +204,7 @@ describe("both machines stamping before they ever exchange", () => {
     try {
       const write2 = async (root: string): Promise<void> => {
         const abs = path.join(root, "a.md");
-        await fs.writeFile(abs, "Q1 :: A1\nQ2 :: A2\n", "utf8");
+        await fs.writeFile(abs, "Q1 >> A1\nQ2 >> A2\n", "utf8");
         await fs.utimes(abs, MTIME, MTIME);
       };
       await write2(notes);

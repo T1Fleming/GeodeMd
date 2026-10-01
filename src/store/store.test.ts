@@ -62,7 +62,7 @@ describe("counting what is due", () => {
     store.transaction(() => {
       for (let i = 0; i < n; i++) {
         const id = `sr-${String(i).padStart(12, "0")}`;
-        store.upsertCard({ id, file_path: "a.md", line_no: i, question: "Q", answer: "A" });
+        store.upsertCard({ id, file_path: "a.md", line_no: i, question: "Q", answer: "A", context: "[]" });
         store.putState(id, state("2026-09-01T00:00:00.000Z"));
       }
     });
@@ -106,6 +106,7 @@ describe("checkpointing", () => {
           line_no: i,
           question: "Q".repeat(200),
           answer: "A".repeat(200),
+          context: "[]",
         });
       }
     });

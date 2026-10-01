@@ -509,13 +509,13 @@ describe("keeping a list of vaults", () => {
   it("removes a vault without touching its notes or its log", async () => {
     const { first } = await twoVaults();
     await fs.mkdir(path.join(dir, "home", ".sr", "log"), { recursive: true });
-    await fs.writeFile(path.join(dir, "home", "a.md"), "Q :: A\n");
+    await fs.writeFile(path.join(dir, "home", "a.md"), "Q >> A\n");
     await fs.writeFile(path.join(dir, "home", ".sr", "log", "mac-2026-09.jsonl"), "{}\n");
 
     const { removed, settings } = await removeVault(file(), first, env());
     expect(removed.id).toBe(first);
     expect(settings.vaults.map((v) => v.id)).not.toContain(first);
-    expect(await fs.readFile(path.join(dir, "home", "a.md"), "utf8")).toBe("Q :: A\n");
+    expect(await fs.readFile(path.join(dir, "home", "a.md"), "utf8")).toBe("Q >> A\n");
     await fs.access(path.join(dir, "home", ".sr", "log", "mac-2026-09.jsonl"));
   });
 

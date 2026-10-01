@@ -33,11 +33,11 @@ beforeEach(async () => {
   root = await fs.mkdtemp(path.join(os.tmpdir(), "geode-note-"));
   notes = path.join(root, "notes");
   configFile = path.join(root, "config", "config.json");
-  await write("algo/sort.md", "# Sorting\n\nQuicksort :: O(n log n)\nMergesort :: stable\n");
+  await write("algo/sort.md", "# Sorting\n\nQuicksort >> O(n log n)\nMergesort >> stable\n");
   // Outside the notes folder, and beside it with a name the folder's is a prefix of.
   await write("secret.md", "not yours\n", root);
   await write("x.md", "not yours either\n", path.join(root, "notes-evil"));
-  await write("w.md", "W :: one\n", path.join(root, "other"));
+  await write("w.md", "W >> one\n", path.join(root, "other"));
 
   const env = { XDG_DATA_HOME: path.join(root, "data") } as NodeJS.ProcessEnv;
   homeId = (await initConfig(configFile, notes, { dbPath: path.join(root, "data", "home.sqlite"), env })).id;

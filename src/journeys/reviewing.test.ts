@@ -17,6 +17,8 @@ import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import {
   ACTION_KEYS,
+  breadcrumb,
+  CRUMB_SEPARATOR,
   RATING_KEYS,
   actionsAt,
   interpretAnnotatingKey,
@@ -28,7 +30,7 @@ import { cardLineNote, noteMarkdown } from "../host/note.js";
 import { initConfig, readConfig, setEditor, setViewNotesInside } from "../host/config.js";
 import type { Machine } from "../host/editor.js";
 import { FsrsScheduler } from "../scheduler/index.js";
-import { codeSpans, guide, plain, tableAfter } from "./guide.js";
+import { codeSpans, fences, guide, plain, tableAfter } from "./guide.js";
 import { newCollection } from "./collection.js";
 import type { Collection } from "./collection.js";
 
@@ -43,6 +45,21 @@ afterEach(async () => {
 async function reviewing(): Promise<string> {
   return guide("reviewing.md");
 }
+
+describe("the guide's breadcrumb is the one a card is shown under", () => {
+  it("shows its example card under the path the guide says", async () => {
+    const text = await reviewing();
+    const [outline] = fences(text, "markdown").filter((b) => b.includes("Nucleolus"));
+    const said = codeSpans(text).find((s) => s.startsWith("cells "));
+    expect(said, "the guide no longer shows a breadcrumb").toBeDefined();
+
+    open = await newCollection();
+    await open.write("cells.md", outline!);
+    await open.core.sync(T0);
+    const card = open.core.getDueCards(T0, 10).find((c) => c.question === "Nucleolus")!;
+    expect(breadcrumb(card).join(CRUMB_SEPARATOR)).toBe(said);
+  });
+});
 
 describe("the guide's four ratings are the four the app honours", () => {
   it("names the same keys, in the same order, with the same words", async () => {
@@ -170,7 +187,7 @@ describe("reading the note inside the app does what the guide says", () => {
     expect(text).toContain("if it is not in the note any more, nothing is highlighted and that line says why");
 
     open = await newCollection();
-    await open.write("a.md", "Intro.\nQ1 :: A1\n");
+    await open.write("a.md", "Intro.\nQ1 >> A1\n");
     await open.core.sync(T0);
     const [card] = open.core.getDueCards(T0, 10);
     expect(card!.lineNo).toBe(2);
@@ -180,7 +197,7 @@ describe("reading the note inside the app does what the guide says", () => {
     const moved = await open.core.readNote(card!.filePath, card!.id);
     expect(moved.line).toBe(4);
     expect(cardLineNote(card!.lineNo, moved.line)).toContain("now on line 4");
-    expect(noteMarkdown(moved.text, moved.line, "m").split("\n")[3]).toBe('<mark id="m">Q1 :: A1</mark>');
+    expect(noteMarkdown(moved.text, moved.line, "m").split("\n")[3]).toBe('<mark id="m">Q1 >> A1</mark>');
 
     // Gone: nothing is marked, and the viewer says why.
     await open.write("a.md", "Intro.\nRewritten.\n");
@@ -231,7 +248,7 @@ describe("a rating is safe the moment it is given", () => {
     expect(await reviewing()).toContain("written to the review log and flushed to disk");
 
     open = await newCollection("laptop");
-    await open.write("a.md", "Q1 :: A1\nQ2 :: A2\nQ3 :: A3\n");
+    await open.write("a.md", "Q1 >> A1\nQ2 >> A2\nQ3 >> A3\n");
     await open.core.sync(T0);
 
     const queue = open.core.getDueCards(T0, 10);
@@ -255,7 +272,7 @@ describe("a rating is safe the moment it is given", () => {
     expect(await reviewing()).toContain("costs you nothing but the cards you had not answered yet");
 
     open = await newCollection();
-    await open.write("a.md", "Q1 :: A1\nQ2 :: A2\nQ3 :: A3\n");
+    await open.write("a.md", "Q1 >> A1\nQ2 >> A2\nQ3 >> A3\n");
     await open.core.sync(T0);
     expect(open.core.stats(T0, 100).newCards).toBe(3);
 
@@ -279,8 +296,8 @@ describe("the session's own claims about what you get", () => {
     expect(text).toContain("Nothing is randomised");
 
     open = await newCollection();
-    await open.write("a.md", "Q1 :: A1\nQ2 :: A2\n");
-    await open.write("b.md", "Q3 :: A3\n");
+    await open.write("a.md", "Q1 >> A1\nQ2 >> A2\n");
+    await open.write("b.md", "Q3 >> A3\n");
     await open.core.sync(T0);
 
     const all = open.core.getDueCards(T0, 10);
@@ -299,8 +316,8 @@ describe("the session's own claims about what you get", () => {
     expect(await reviewing()).toContain("leaves its cards in the queue until you sync");
 
     open = await newCollection();
-    await open.write("a.md", "Q1 :: A1\n");
-    await open.write("b.md", "Q2 :: A2\n");
+    await open.write("a.md", "Q1 >> A1\n");
+    await open.write("b.md", "Q2 >> A2\n");
     await open.core.sync(T0);
     expect(open.core.getDueCards(T0, 10)).toHaveLength(2);
 
@@ -338,13 +355,13 @@ describe("annotations are where the guide says, and behave as it says", () => {
     expect(text).toContain("Emptying the box and closing it removes the annotation.");
 
     open = await newCollection();
-    await open.write("a.md", "Q1 :: A1\n");
+    await open.write("a.md", "Q1 >> A1\n");
     await open.core.sync(T0);
     const [card] = open.core.getDueCards(T0, 10);
-    await open.core.setAnnotation(card!.id, "mnemonic :: not a card\n");
+    await open.core.setAnnotation(card!.id, "mnemonic >> not a card\n");
 
     const file = path.join(open.notes, ".sr", "annotations", `${card!.id}.md`);
-    expect(await fs.readFile(file, "utf8")).toBe("mnemonic :: not a card\n");
+    expect(await fs.readFile(file, "utf8")).toBe("mnemonic >> not a card\n");
     // It is in the notes folder but never read as a note.
     const again = await open.core.sync(T0, { full: true });
     expect(again.filesEnumerated).toBe(1);
@@ -360,7 +377,7 @@ describe("annotations are where the guide says, and behave as it says", () => {
     );
 
     open = await newCollection();
-    await open.write("a.md", "Q1 :: A1\n");
+    await open.write("a.md", "Q1 >> A1\n");
     await open.core.sync(T0);
     const stamped = await open.read("a.md");
     const [card] = open.core.getDueCards(T0, 10);

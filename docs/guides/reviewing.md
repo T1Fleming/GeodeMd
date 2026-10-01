@@ -4,6 +4,17 @@ A session is one question at a time. Recall the answer, reveal it, and say how i
 
 It is the **Review** tab. Every key below is also a button, and they cannot disagree: one table in the code says what each key means, and the window draws from it rather than restating it. Anything here that says "press `3`" is true of the button marked `3 good` as well.
 
+Above the question, smaller and grey, is where the card sits: the note's name, the headings above it, and the bullets it is nested under. A parent that is itself a card shows its answer too. So in `cells.md`,
+
+```markdown
+# Biology
+- Cell
+  - Nucleus >> holds DNA
+    - Nucleolus >> makes ribosomes
+```
+
+`Nucleolus` is shown under `cells › Biology › Cell › Nucleus → holds DNA`. That is what lets a card deep in an outline have a short question. It shows the text from your last sync, like the card itself.
+
 ## The four ratings
 
 Any key flips the card over. Then:

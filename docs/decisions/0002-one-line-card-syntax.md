@@ -1,6 +1,7 @@
 # 0002 — One-line `::` card syntax with a strict skip list
 
 - **Status:** Accepted
+- **Amended by:** [ADR 0031](0031-forward-cards-and-context.md) — the separator is now ` >> ` or ` == `, and ` :: ` is not a card
 - **Date:** 2026-09-19 (backfilled)
 - **Source:** [phase-1 brief](../design/phase-1-brief.md) §3
 

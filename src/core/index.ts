@@ -10,8 +10,8 @@
 import { readFile as readFileAsync, stat as statAsync } from "node:fs/promises";
 import * as path from "node:path";
 import * as files from "../files/index.js";
-import { parse, splitLines, stampLine } from "../parser/index.js";
-import type { ParsedCard } from "../parser/index.js";
+import { parse, splitLines, stampLine, SYNTAX_VERSION } from "../parser/index.js";
+import type { ContextEntry, ParsedCard } from "../parser/index.js";
 import { Store } from "../store/index.js";
 import type { CardState, DueRow } from "../store/index.js";
 import { fold, FsrsScheduler } from "../scheduler/index.js";
@@ -112,6 +112,8 @@ export interface DueCard {
   lineNo: number | null;
   /** "algorithms/Sorting.md:142" — relative to notesPath. Display only. */
   locator: string;
+  /** The headings and parent bullets above the card, outermost first (ADR 0031). */
+  context: ContextEntry[];
 }
 
 /**
@@ -131,6 +133,9 @@ export class ConfigError extends Error {}
 
 /** The `meta` key naming the scheduler that derived `card_state`. */
 const SCHEDULER_KEY = "scheduler";
+
+/** The `meta` key naming the card syntax that derived `cards` (ADR 0031). */
+const SYNTAX_KEY = "syntax";
 
 /**
  * Schedules re-derived per transaction by `adoptScheduler`, with the event
@@ -184,6 +189,11 @@ export class Core {
     const summary = emptySummary();
     const { notesPath } = this.config;
     const dryRun = opts.dryRun === true;
+    // Cards found under older rules stay in the database until their note is
+    // read again, and the mtime cache would never read an untouched note. So a
+    // change of syntax makes this one sync read everything (ADR 0031).
+    const syntaxStale = this.store.getMeta(SYNTAX_KEY) !== SYNTAX_VERSION;
+    const full = opts.full === true || syntaxStale;
 
     // A notesPath that is missing or is not a directory is a CONFIGURATION
     // error: every count the run would report is meaningless, a silent
@@ -236,7 +246,7 @@ export class Core {
         continue;
       }
 
-      if (row && !opts.full && row.mtime_ms === cand.mtimeMs && row.size === cand.size) {
+      if (row && !full && row.mtime_ms === cand.mtimeMs && row.size === cand.size) {
         summary.filesUnchanged++;
         continue;
       }
@@ -283,8 +293,15 @@ export class Core {
           outcome.pending,
         );
       } else {
+        const keep = new Set<string>();
         for (const c of outcome.confirmed) {
+          keep.add(c.id!);
           if (!this.store.getCard(c.id!)) summary.cardsNew++;
+        }
+        // What reconcile would prune from this file. After a syntax change it
+        // is the preview's other half: lines that were cards and are not now.
+        for (const id of this.store.cardIdsInFile(cand.relPath)) {
+          if (!keep.has(id)) summary.cardsPruned++;
         }
       }
     }
@@ -330,6 +347,13 @@ export class Core {
      * it, where a progress bar is already on screen, and it is best-effort:
      * `checkpoint` never blocks on a reader.
      */
+    // Recorded only once every note has been read under these rules. A note
+    // that could not be read keeps its old cards and its old `files` row, so
+    // the next sync must read everything again rather than call it unchanged.
+    if (!dryRun && syntaxStale && summary.filesSkippedOnError === 0) {
+      this.store.setMeta(SYNTAX_KEY, SYNTAX_VERSION);
+    }
+
     if (!dryRun) this.store.checkpoint();
 
     summary.elapsedMs = Date.now() - started;
@@ -488,9 +512,16 @@ export class Core {
         const existing = this.store.getCard(id);
 
         keep.push(id);
+        // Editing a parent changes this card's context without touching its
+        // line, so context counts as a change like the text does (ADR 0031).
+        const context = JSON.stringify(card.context);
         if (!existing) {
           summary.cardsNew++;
-        } else if (existing.question !== card.question || existing.answer !== card.answer) {
+        } else if (
+          existing.question !== card.question ||
+          existing.answer !== card.answer ||
+          existing.context !== context
+        ) {
           // A typo fix must not reset scheduling — card_state is untouched.
           summary.cardsUpdated++;
         }
@@ -500,6 +531,7 @@ export class Core {
           line_no: card.lineIndex + 1,
           question: card.question,
           answer: card.answer,
+          context,
         });
       }
 
@@ -757,6 +789,16 @@ export class Core {
    * separate code path — that is the only reason it can be trusted to keep
    * working.
    */
+  /**
+   * Whether this database's cards were found under older card syntax, so the
+   * next sync will re-read every note and may find different cards
+   * (ADR 0031). False for a database that has never synced: its first sync
+   * reads everything anyway, behind a preview of its own.
+   */
+  syntaxChanged(): boolean {
+    return this.store.countFiles() > 0 && this.store.getMeta(SYNTAX_KEY) !== SYNTAX_VERSION;
+  }
+
   async rebuild(now: Date, opts: SyncOptions = {}): Promise<SyncSummary> {
     this.store.dropAll();
     // Everything the sync below derives, it derives with this scheduler.
@@ -822,6 +864,7 @@ function toDueCard(row: DueRow): DueCard {
     filePath: row.file_path,
     lineNo: row.line_no,
     locator: `${row.file_path}:${row.line_no ?? 0}`,
+    context: JSON.parse(row.context) as ContextEntry[],
   };
 }
 

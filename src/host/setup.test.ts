@@ -14,7 +14,7 @@ afterEach(async () => {
   await fs.rm(dir, { recursive: true, force: true });
 });
 
-const write = async (rel: string, text = "q :: a\n"): Promise<void> => {
+const write = async (rel: string, text = "q >> a\n"): Promise<void> => {
   await fs.mkdir(path.dirname(path.join(dir, rel)), { recursive: true });
   await fs.writeFile(path.join(dir, rel), text);
 };

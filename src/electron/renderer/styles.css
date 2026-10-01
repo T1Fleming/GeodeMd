@@ -118,6 +118,20 @@ body {
   padding: 3rem 0;
 }
 
+.front {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.crumbs {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+
 .question {
   margin: 0;
   font-size: 1.5rem;

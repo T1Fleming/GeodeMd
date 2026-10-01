@@ -13,7 +13,7 @@ To rehearse it on something harmless, copy [`demo/`](../../demo/) and point Geod
 GeodeMD identifies a card by an ID it writes into the line, as an HTML comment:
 
 ```markdown
-Default Lambda timeout :: 3 seconds <!-- sr-a7Kd9mQ2xR4v -->
+Default Lambda timeout >> 3 seconds <!-- sr-a7Kd9mQ2xR4v -->
 ```
 
 Invisible in every Markdown renderer — GitHub, Obsidian, VS Code preview, pandoc — but **it is a change to the file**. Every line in your notes that parses as a card gets one, the first time you sync.
@@ -36,23 +36,27 @@ Two numbers matter, and they are different questions:
 - **`1893 cards found`** — lines GeodeMD read as cards.
 - **`96 files stamped`** — notes it would edit. This is the diff size.
 
-**Read both against what you expect.** If you thought you had a few dozen cards and it found nineteen hundred, something in your notes uses ` :: ` for a purpose you had forgotten about — and the dry run is where you find that out, rather than in a diff afterwards.
+**Read both against what you expect.** If you thought you had a few dozen cards and it found nineteen hundred, something in your notes uses ` >> ` or ` == ` for a purpose you had forgotten about — and the dry run is where you find that out, rather than in a diff afterwards.
 
 ## What counts as a card
 
-One line containing ` :: `, with whitespace on both sides:
+One line containing ` >> ` or ` == `, with whitespace on both sides. Both make RemNote's forward card: the question is shown, and you recall the answer.
 
 ```markdown
-Default Lambda timeout :: 3 seconds
-- Max memory :: 10240 MB
-- [ ] Cold start cause :: a new execution environment
+Default Lambda timeout >> 3 seconds
+- Max memory == 10240 MB
+- [ ] Cold start cause >> a new execution environment
 ```
 
 A bullet nested under another bullet is a card at any depth. Other indented lines are read as code and skipped.
 
-`foo::bar` is **not** a card — the spaces are required, which is what keeps `key::value` fields and most code out of it.
+`a>>b` is **not** a card — the spaces are required, which is what keeps most code out of it.
 
-Deliberately skipped: fenced and indented code blocks, inline code spans (`` `foo :: bar` `` is prose *about* a syntax), table rows, YAML frontmatter, blockquotes, and headings.
+**A backslash keeps a separator literal**: `if x \== y` and `a \>> b` are prose, not cards. Markdown shows the backslash as nothing, so the note still reads `x == y`.
+
+**` :: ` is not a card.** RemNote reads it as a Concept card, tested in both directions, and GeodeMD will too; until then it is ordinary text. If your notes use it, see [Moving cards off the old separator](#moving-cards-off-the-old-separator).
+
+Deliberately skipped: fenced and indented code blocks, inline code spans (`` `foo >> bar` `` is prose *about* a syntax), table rows, YAML frontmatter, blockquotes, and headings.
 
 That list is longer than it looks like it needs to be, for exactly the reason this guide exists: a line wrongly read as a card does not just create a junk card, **it edits your note**.
 
@@ -62,7 +66,21 @@ Nothing has been written yet, so you have options:
 
 - **Move the notes you do not want synced** out of the directory, or into a dotted folder — anything under a `.` directory is skipped entirely.
 - **Point GeodeMD at a subdirectory** instead — `~/notes/flashcards` rather than `~/notes`.
-- **Change the lines**, if a handful of notes use ` :: ` for something else.
+- **Change the lines**, if a handful of notes use ` >> ` or ` == ` for something else — or escape them as ` \>> ` and ` \== `.
+
+## Moving cards off the old separator
+
+Earlier versions of GeodeMD read ` :: ` as a card. That is now RemNote's Concept card, which GeodeMD does not read yet, so those lines stop being cards on the next sync.
+
+**Nothing you have reviewed is lost.** A card's history is kept by its stamp, not by its line. Change the ` :: ` to ` >> ` and **leave the `<!-- sr-… -->` at the end of the line**, and the card comes back on its old schedule:
+
+```sh
+grep -rl ' :: ' --include='*.md' . | xargs perl -pi -e 's/(?<=\s)::(?=\s)/>>/'
+```
+
+Run it from your notes folder, after committing. It changes the first ` :: ` on each line, which is the one that was the separator. It does not know about code blocks, so read the diff before you sync.
+
+When you open a vault after updating, the app says the card syntax changed and takes you to the Sync screen. **That sync reads every note**, not just the ones you edited — preview it first. `pruned` in the preview is how many lines stop being cards.
 
 ## Commit first
 

@@ -395,7 +395,7 @@ export async function readShardFrom(
  *
  * Inside `.sr/`, so `enumerate` never walks it — a dotted directory is skipped
  * without being named — and a line in an annotation that happens to contain
- * ` :: ` can never be read as a card or stamped. That skip is what lets this
+ * a card separator can never be read as a card or stamped. That skip is what lets this
  * live in the notes folder at all, where it syncs with the notes.
  */
 export const ANNOTATION_DIR = path.join(".sr", "annotations");

@@ -64,14 +64,25 @@ describe("the examples the guide shows a reader", () => {
 
   it("is right that a nested bullet is a card at any depth", async () => {
     expect(await firstSync()).toContain("A bullet nested under another bullet is a card at any depth");
-    const outline = "- Cell\n  - Nucleus\n    - Nucleolus\n      - Fibrillar centre :: holds rDNA\n";
+    const outline = "- Cell\n  - Nucleus\n    - Nucleolus\n      - Fibrillar centre >> holds rDNA\n";
     expect(parse(outline).map((c) => c.question)).toEqual(["Fibrillar centre"]);
-    expect(parse("Intro\n\n    plain indented :: code\n")).toEqual([]);
+    expect(parse("Intro\n\n    plain indented >> code\n")).toEqual([]);
   });
 
-  it("is right that `foo::bar` is not one", async () => {
-    expect(await firstSync()).toContain("`foo::bar` is **not** a card");
-    expect(parse("foo::bar")).toEqual([]);
+  it("is right that `a>>b` is not one", async () => {
+    expect(await firstSync()).toContain("`a>>b` is **not** a card");
+    expect(parse("a>>b")).toEqual([]);
+  });
+
+  it("is right that a backslash keeps a separator literal", async () => {
+    expect(await firstSync()).toContain("A backslash keeps a separator literal");
+    expect(parse("if x \\== y")).toEqual([]);
+    expect(parse("a \\>> b")).toEqual([]);
+  });
+
+  it("is right that ` :: ` is not a card", async () => {
+    expect(await firstSync()).toContain("` :: ` is not a card.");
+    expect(parse("Mitochondria :: produce ATP")).toEqual([]);
   });
 
   it("is right about every context it says is skipped", async () => {
@@ -92,18 +103,18 @@ describe("the examples the guide shows a reader", () => {
 
     const note = [
       "---",
-      "frontmatter :: not a card",
+      "frontmatter >> not a card",
       "---",
-      "# heading :: not a card",
-      "> quoted :: not a card",
-      "| table :: not a card | x |",
-      "`inline :: not a card`",
+      "# heading >> not a card",
+      "> quoted >> not a card",
+      "| table >> not a card | x |",
+      "`inline >> not a card`",
       "```",
-      "fenced :: not a card",
+      "fenced >> not a card",
       "```",
-      "    indented :: not a card",
+      "    indented >> not a card",
       "",
-      "real :: card",
+      "real >> card",
     ].join("\n");
     expect(parse(note).map((c) => c.question)).toEqual(["real"]);
   });
@@ -115,7 +126,7 @@ describe("looking before it writes", () => {
     expect(await firstSync()).toContain("A preview writes nothing — not a stamp, not a database row");
 
     open = await newCollection();
-    await open.write("a.md", "Q1 :: A1\nQ2 :: A2\n");
+    await open.write("a.md", "Q1 >> A1\nQ2 >> A2\n");
     await open.write("b.md", "# no cards here\n");
     const before = await open.read("a.md");
 
@@ -135,8 +146,8 @@ describe("looking before it writes", () => {
     expect(text).toContain("files stamped");
 
     open = await newCollection();
-    await open.write("many.md", "Q1 :: A1\nQ2 :: A2\nQ3 :: A3\n");
-    await open.write("one.md", "Q4 :: A4\n");
+    await open.write("many.md", "Q1 >> A1\nQ2 >> A2\nQ3 >> A3\n");
+    await open.write("one.md", "Q4 >> A4\n");
     await open.write("none.md", "prose only\n");
 
     const dry = await open.core.sync(T0, { dryRun: true });
@@ -158,7 +169,7 @@ describe("the real sync", () => {
     expect(await firstSync()).toContain("edits every file that contains a card");
 
     open = await newCollection();
-    await open.write("cards.md", "Q1 :: A1\nQ2 :: A2\n");
+    await open.write("cards.md", "Q1 >> A1\nQ2 >> A2\n");
     await open.write("prose.md", "nothing here parses\n");
     const proseBefore = await open.read("prose.md");
 
@@ -173,7 +184,7 @@ describe("the real sync", () => {
 
   it("leaves a second run with nothing to do, so the edit happens once", async () => {
     open = await newCollection();
-    await open.write("cards.md", "Q1 :: A1\n");
+    await open.write("cards.md", "Q1 >> A1\n");
     await open.core.sync(T0);
     const stamped = await open.read("cards.md");
 
@@ -182,5 +193,43 @@ describe("the real sync", () => {
     expect(again.filesStamped).toBe(0);
     expect(again.cardsNew).toBe(0);
     expect(await open.read("cards.md")).toBe(stamped);
+  });
+});
+
+describe("moving cards off ` :: `", () => {
+  it("keeps a card's id, and so its history, through the guide's command", async () => {
+    // The guide's perl substitution, applied as perl would: the first ` :: ` on
+    // each line becomes ` >> `, and the stamp at the end is left alone.
+    const [command] = fences(await firstSync(), "sh").filter((b) => b.includes("perl"));
+    expect(command).toContain("s/(?<=\\s)::(?=\\s)/>>/");
+    const convert = (line: string) => line.replace(/(?<=\s)::(?=\s)/, ">>");
+
+    const old = "- Default Lambda timeout :: 3 seconds :: or so <!-- sr-a7Kd9mQ2xR4v -->";
+    expect(parse(old)).toEqual([]);
+    expect(parse(convert(old))).toMatchObject([
+      { id: "sr-a7Kd9mQ2xR4v", question: "Default Lambda timeout", answer: "3 seconds :: or so" },
+    ]);
+  });
+
+  it("previews how many lines stop being cards before anything is written", async () => {
+    expect(await firstSync()).toContain("**That sync reads every note**");
+    expect(await firstSync()).toContain("`pruned` in the preview is how many lines stop being cards");
+
+    open = await newCollection();
+    await open.write("a.md", "Q1 >> A1\nQ2 >> A2\n");
+    await open.core.sync(T0);
+    // One byte longer than before, so it reads as edited.
+    const edited = `${(await open.read("a.md")).replace(" >> A2", " :: A2")}\n`;
+    await open.write("a.md", edited);
+
+    const later = new Date(T0.getTime() + 60_000);
+    const dry = await open.core.sync(later, { dryRun: true });
+    expect(dry.cardsPruned).toBe(1);
+    expect(summaryFields(dry).map((f) => f.label)).toContain("pruned");
+    expect(open.core.getDueCards(later, 10)).toHaveLength(2);
+    expect(await open.read("a.md")).toBe(edited);
+
+    expect((await open.core.sync(later)).cardsPruned).toBe(1);
+    expect(open.core.getDueCards(later, 10)).toHaveLength(1);
   });
 });
