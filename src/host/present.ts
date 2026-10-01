@@ -294,6 +294,7 @@ export function summaryFields(s: SyncSummary): SummaryField[] {
     ["reviewsIngested", "reviews ingested"],
     ["filesSkippedOnError", "files skipped on error"],
     ["logLinesSkipped", "bad log lines skipped"],
+    ["cardLinesUnnested", "card lines not nested"],
   ];
 
   for (const [key, label] of incidental) {
@@ -324,6 +325,28 @@ export function deferralReason(s: SyncSummary): string | null {
     `${s.filesDeferred} ${files} modified in the last couple of seconds ` +
     `and left alone, in case you have them open.`
   );
+}
+
+/**
+ * Why some card-shaped lines are not cards, and where, or null when there are
+ * none.
+ *
+ * RemNote nests by indentation alone; Markdown nests only list items, and an
+ * indented line under a line of text is more of that text. GeodeMD follows
+ * Markdown, so these lines are skipped — said here, with the fix, because a
+ * card that silently never appears looks like a bug in the reader's notes.
+ */
+export function unnestedReason(s: Pick<SyncSummary, "cardLinesUnnested" | "unnestedAt">): string | null {
+  if (s.cardLinesUnnested === 0) return null;
+  const one = s.cardLinesUnnested === 1;
+  const more = s.cardLinesUnnested - s.unnestedAt.length;
+  const where = s.unnestedAt.join(", ") + (more > 0 ? `, and ${more} more` : "");
+  return one
+    ? `1 line looks like a card but is indented without a list marker, so Markdown ` +
+        `reads it as text, not as an outline: ${where}. Start it and its parent with "- " to nest it.`
+    : `${s.cardLinesUnnested} lines look like cards but are indented without a list marker, ` +
+        `so Markdown reads them as text, not as an outline: ${where}. ` +
+        `Start them and their parents with "- " to nest them.`;
 }
 
 /**

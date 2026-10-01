@@ -10,7 +10,7 @@
 import { readFile as readFileAsync, stat as statAsync } from "node:fs/promises";
 import * as path from "node:path";
 import * as files from "../files/index.js";
-import { parse, splitLines, stampLine, SYNTAX_VERSION } from "../parser/index.js";
+import { parse, parseNote, splitLines, stampLine, SYNTAX_VERSION } from "../parser/index.js";
 import type { ContextEntry, ParsedCard } from "../parser/index.js";
 import { Store } from "../store/index.js";
 import type { CardState, DueRow } from "../store/index.js";
@@ -83,6 +83,15 @@ export interface SyncSummary {
   reviewsIngested: number;
   filesSkippedOnError: number;
   logLinesSkipped: number;
+  /**
+   * Lines in the notes read this run that look like cards but are indented
+   * without a list marker under a line of text, so Markdown reads them as more
+   * of that text and they are not cards. Almost always an outline written the
+   * RemNote way; counted so it is not lost silently (`parseNote`).
+   */
+  cardLinesUnnested: number;
+  /** Where the first `UNNESTED_SHOWN` of them are, as `path:line`. */
+  unnestedAt: string[];
   elapsedMs: number;
 }
 
@@ -134,6 +143,13 @@ export class ConfigError extends Error {}
 /** The `meta` key naming the scheduler that derived `card_state`. */
 const SCHEDULER_KEY = "scheduler";
 
+/**
+ * How many unnested lines a summary names. Enough to find the pattern, few
+ * enough that a summary over a large vault stays a summary; the count is
+ * always the whole number.
+ */
+const UNNESTED_SHOWN = 10;
+
 /** The `meta` key naming the card syntax that derived `cards` (ADR 0031). */
 const SYNTAX_KEY = "syntax";
 
@@ -164,6 +180,8 @@ function emptySummary(): SyncSummary {
     reviewsIngested: 0,
     filesSkippedOnError: 0,
     logLinesSkipped: 0,
+    cardLinesUnnested: 0,
+    unnestedAt: [],
     elapsedMs: 0,
   };
 }
@@ -261,8 +279,12 @@ export class Core {
       }
       summary.filesRead++;
 
-      const parsed = parse(text);
+      const { cards: parsed, unnested } = parseNote(text);
       summary.cardsFound += parsed.length;
+      summary.cardLinesUnnested += unnested.length;
+      for (const i of unnested) {
+        if (summary.unnestedAt.length < UNNESTED_SHOWN) summary.unnestedAt.push(`${cand.relPath}:${i + 1}`);
+      }
 
       // Step 4: defer, mint, write.
       // "within 2 seconds of" is symmetric. A signed comparison would defer a

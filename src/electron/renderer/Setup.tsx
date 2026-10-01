@@ -16,6 +16,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { ConfigProposal, FolderReport, SyncSummary } from "../ipc.js";
+import { unnestedReason } from "../../host/present.js";
 import {
   abandonAdd,
   abandoned,
@@ -562,6 +563,11 @@ function PreviewSync({
             </strong>
             .
           </p>
+          {/* The first sync is where a RemNote-style outline meets Markdown's
+              rules, so the lines that did not become cards are named here. */}
+          {state.preview && unnestedReason(state.preview) && (
+            <p className="deferred">{unnestedReason(state.preview)}</p>
+          )}
           {report.notesEdited === 0 && (
             <p className="muted">
               Nothing to stamp — either there are no cards yet, or they all have ids

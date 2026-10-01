@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parse, parseLine, readStamp, splitLines, stampLine } from "./index.js";
+import { parse, parseLine, parseNote, readStamp, splitLines, stampLine } from "./index.js";
 
 /**
  * Spec section 10, "Parser". Fixture strings in, expected cards out.
@@ -367,6 +367,69 @@ describe("a card's context is the headings and bullets above it", () => {
 
   it("does not take a heading inside a list item", () => {
     expect(contextOf("- a\n  # inner\n  - Q >> x\n", "Q")).toEqual([{ text: "a" }]);
+  });
+});
+
+describe("tabs nest like spaces, and only list items nest", () => {
+  const contextOf = (text: string, question: string) =>
+    parse(text).find((c) => c.question === question)?.context;
+
+  it("gives a tab-nested card its parent bullets", () => {
+    const note = "- Cell\n\t- Nucleus >> holds DNA\n\t\t- Nucleolus >> makes ribosomes\n";
+    expect(contextOf(note, "Nucleolus")).toEqual([
+      { text: "Cell" },
+      { text: "Nucleus", answer: "holds DNA" },
+    ]);
+  });
+
+  it("gives a continuation line its bullet as a parent", () => {
+    expect(contextOf("- Cell\n  Nucleus >> holds DNA\n", "Nucleus")).toEqual([{ text: "Cell" }]);
+  });
+
+  it("skips a tab-indented line under a bullet when it is not a bullet itself", () => {
+    expect(parse("- Cell\n\tNucleus >> holds DNA\n")).toEqual([]);
+  });
+
+  it("skips a tab-indented bullet under a line that is not a bullet", () => {
+    expect(parse("Cell\n\t- Nucleus >> holds DNA\n")).toEqual([]);
+  });
+});
+
+describe("card-shaped lines indented without a list marker are reported", () => {
+  it("names a line indented under text, which Markdown reads as more of that text", () => {
+    const note = "Now we are >> Going to see\n    If we can look at\n    Nested things\n    Like >> This\n";
+    const { cards, unnested } = parseNote(note);
+    expect(cards.map((c) => c.question)).toEqual(["Now we are"]);
+    expect(unnested).toEqual([3]);
+  });
+
+  it("names one under a bullet, and one indented too deep under a bullet", () => {
+    expect(parseNote("- Cell\n\tNucleus >> holds DNA\n").unnested).toEqual([1]);
+    expect(parseNote("- a\n      - f >> Int\n").unnested).toEqual([1]);
+  });
+
+  it("does not name an indented code block, which follows a blank line", () => {
+    expect(parseNote("Append to the log:\n\n    echo done >> run.log\n").unnested).toEqual([]);
+    expect(parseNote("- Haskell example\n\n      - f >> Int\n").unnested).toEqual([]);
+  });
+
+  it.each([
+    ["a fence", "```\nx\n```\n    a >> b\n"],
+    ["a heading", "# H\n    a >> b\n"],
+    ["a table", "| a | b |\n    a >> b\n"],
+    ["a blockquote", "> q\n    a >> b\n"],
+    ["frontmatter", "---\nt: x\n---\n    a >> b\n"],
+  ])("does not name a line indented under %s", (_name, note) => {
+    expect(parseNote(note).unnested).toEqual([]);
+  });
+
+  it("names nothing that is not card-shaped", () => {
+    expect(parseNote("Intro\n    just indented prose\n").unnested).toEqual([]);
+  });
+
+  it("finds the same cards as parse", () => {
+    const note = "# T\n- a >> b\n  - c >> d\nprose\n    e >> f\n";
+    expect(parseNote(note).cards).toEqual(parse(note));
   });
 });
 

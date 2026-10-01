@@ -186,6 +186,26 @@ describe("a change of card syntax", () => {
   });
 });
 
+describe("card lines that are not nested", () => {
+  it("are counted and located by a sync, and by a preview, without becoming cards", async () => {
+    await write("a.md", "Q >> A\n    R >> B\n");
+    const dry = await core.sync(T0, { dryRun: true });
+    expect(dry.cardLinesUnnested).toBe(1);
+    expect(dry.unnestedAt).toEqual(["a.md:2"]);
+
+    const s = await core.sync(T0);
+    expect(s.cardLinesUnnested).toBe(1);
+    expect(s.cardsFound).toBe(1);
+  });
+
+  it("name only the first ten, and count them all", async () => {
+    await write("a.md", `Q >> A\n${"    R >> B\n".repeat(12)}`);
+    const s = await core.sync(T0);
+    expect(s.cardLinesUnnested).toBe(12);
+    expect(s.unnestedAt).toHaveLength(10);
+  });
+});
+
 describe("the write guard", () => {
   it("mints nothing in a file whose mtime is inside the deferral window", async () => {
     const abs = path.join(notes, "a.md");

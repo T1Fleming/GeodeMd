@@ -2,6 +2,27 @@
 
 `src/parser/index.ts`. Pure: a string in, `ParsedCard[]` out. No filesystem, no database, no clock.
 
+## RemNote's syntax, Markdown's structure
+
+GeodeMD reads RemNote's card types, but the notes are Markdown and stay Markdown. So the two get one job each:
+
+- **RemNote decides what the tokens mean.** `>>`, `==`, and later `::`, `;;` and the rest, mean what they mean in RemNote ([ADR 0031](../decisions/0031-forward-cards-and-context.md)).
+- **Markdown decides the structure**: which lines are cards at all, and what is nested under what. A line is nested only when Markdown renders it as a nested list item ([ADR 0030](../decisions/0030-nested-bullets-are-not-code.md)).
+- **When the two could disagree, the line is not a card.** The parser is stricter than CommonMark, never looser: a false positive writes a stamp into the note.
+
+The case where this costs something is RemNote's habit of nesting by indentation alone:
+
+```markdown
+Now we are >> Going to see
+    If we can look at
+    Nested things
+    Like >> This
+```
+
+RemNote reads the last three lines as children of the first, and makes two cards. Markdown reads them as more of the first line's paragraph — an indented code block cannot interrupt a paragraph — and renders all four as one line. GeodeMD makes **one** card, from the first line. The same outline with list markers is two cards, nested, in GeodeMD and in every Markdown viewer.
+
+Because a skipped card is otherwise invisible, `parseNote` reports these lines (`unnested`): a card-shaped line skipped as indented, directly under a line of text. Sync counts them and names the first ten (`cardLinesUnnested`, `unnestedAt`), and `host`'s `unnestedReason` says what to do. An indented line after a blank line is an indented code block, as Markdown has it, and is not reported — so `echo done >> run.log` in a script does not show up as a card someone forgot to nest.
+
 ## Recognising a card
 
 A card is a single line containing ` >> ` or ` == ` — RemNote's forward card ([ADR 0031](../decisions/0031-forward-cards-and-context.md)). Everything before the **first** separator of either kind is the question, everything after it is the answer, both trimmed.

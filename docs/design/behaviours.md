@@ -11,11 +11,11 @@ app do*, and *where is that proven*. What it deliberately cannot tell you is wha
 app does **untested** — an area that looks thin here is thinly covered, and that is
 worth reading as a finding rather than a gap in the document.
 
-698 behaviours in 12 areas, which follow [the guides](../guides/) rather than the source tree.
+718 behaviours in 12 areas, which follow [the guides](../guides/) rather than the source tree.
 
-- [Reviewing](#reviewing) — 187
-- [Recognising a card](#recognising-a-card) — 107
-- [Syncing notes](#syncing-notes) — 80
+- [Reviewing](#reviewing) — 190
+- [Recognising a card](#recognising-a-card) — 121
+- [Syncing notes](#syncing-notes) — 82
 - [Recovery and the log](#recovery-and-the-log) — 43
 - [Moving between machines](#moving-between-machines) — 16
 - [Keeping several vaults](#keeping-several-vaults) — 45
@@ -24,13 +24,13 @@ worth reading as a finding rather than a gap in the document.
 - [The database as a cache](#the-database-as-a-cache) — 7
 - [At scale](#at-scale) — 9
 - [Rules the project enforces on itself](#rules-the-project-enforces-on-itself) — 34
-- [The documentation tells the truth](#the-documentation-tells-the-truth) — 57
+- [The documentation tells the truth](#the-documentation-tells-the-truth) — 58
 
 ## Reviewing
 
 _A session: which card is next, what the keys mean, what a rating records, and what comes back before the sitting ends._
 
-**187 behaviours.**
+**190 behaviours.**
 
 ### the order cards are served in
 
@@ -168,6 +168,14 @@ _3 · `host/present.test.ts`_
 _1 · `host/present.test.ts`_
 
 - names both separators, the one that stopped, and the preview
+
+### what the app says about card lines that are not nested
+
+_3 · `host/present.test.ts`_
+
+- says nothing when there are none
+- names where they are, why, and the fix
+- says how many more there are than it names
 
 ### which program opens a note
 
@@ -408,7 +416,7 @@ _7 · `files/files.test.ts`_
 
 _Text in, cards out. Also — and mostly — the shapes that are deliberately NOT cards, because a false positive writes a stamp into someone's note._
 
-**107 behaviours.**
+**121 behaviours.**
 
 ### the basic form
 
@@ -574,6 +582,30 @@ _16 · `parser/parser.test.ts`_
 - does not take a tag, which is not a heading
 - does not take a heading inside a list item
 
+### tabs nest like spaces, and only list items nest
+
+_4 · `parser/parser.test.ts`_
+
+- gives a tab-nested card its parent bullets
+- gives a continuation line its bullet as a parent
+- skips a tab-indented line under a bullet when it is not a bullet itself
+- skips a tab-indented bullet under a line that is not a bullet
+
+### card-shaped lines indented without a list marker are reported
+
+_10 · `parser/parser.test.ts`_
+
+- names a line indented under text, which Markdown reads as more of that text
+- names one under a bullet, and one indented too deep under a bullet
+- does not name an indented code block, which follows a blank line
+- does not name a line indented under a fence
+- does not name a line indented under a heading
+- does not name a line indented under a table
+- does not name a line indented under a blockquote
+- does not name a line indented under frontmatter
+- names nothing that is not card-shaped
+- finds the same cards as parse
+
 ### splitLines keeps each terminator
 
 _5 · `parser/parser.test.ts`_
@@ -606,7 +638,7 @@ _2 · `parser/parser.test.ts`_
 
 _Finding what changed, stamping it, pruning what is gone, and saying what happened._
 
-**80 behaviours.**
+**82 behaviours.**
 
 ### which counts a sync summary shows
 
@@ -660,6 +692,13 @@ _4 · `core/sync.test.ts`_
 - is not reported for a vault that has never synced
 - is still owed after a preview, which records nothing
 - drops cards written with `::`, keeping their history for when the line comes back
+
+### card lines that are not nested
+
+_2 · `core/sync.test.ts`_
+
+- are counted and located by a sync, and by a preview, without becoming cards
+- name only the first ten, and count them all
 
 ### the write guard
 
@@ -1457,7 +1496,7 @@ _5 · `behaviours/areas.test.ts`_
 
 _Documents that make checkable claims, checked._
 
-**57 behaviours.**
+**58 behaviours.**
 
 ### the demo collection
 
@@ -1479,11 +1518,12 @@ _6 · `demo.test.ts`_
 
 ### the examples the guide shows a reader
 
-_7 · `journeys/first-sync.test.ts`_
+_8 · `journeys/first-sync.test.ts`_
 
 - shows a stamped line that really is one
 - shows three shapes that are cards, and they all are
 - is right that a nested bullet is a card at any depth
+- is right that only list items nest, and that the RemNote-style outline is one card
 - is right that `a>>b` is not one
 - is right that a backslash keeps a separator literal
 - is right that ` :: ` is not a card
