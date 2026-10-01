@@ -301,11 +301,11 @@ describe("a card's context is the headings and bullets above it", () => {
   it("is the parent bullets, outermost first, under the headings", () => {
     const note = "# Biology\n- Cell\n  - Nucleus >> holds DNA\n    - Nucleolus >> makes ribosomes\n";
     expect(contextOf(note, "Nucleolus")).toEqual([
-      { text: "Biology" },
-      { text: "Cell" },
-      { text: "Nucleus", answer: "holds DNA" },
+      { kind: "heading", text: "Biology" },
+      { kind: "item", text: "Cell" },
+      { kind: "item", text: "Nucleus", answer: "holds DNA" },
     ]);
-    expect(contextOf(note, "Nucleus")).toEqual([{ text: "Biology" }, { text: "Cell" }]);
+    expect(contextOf(note, "Nucleus")).toEqual([{ kind: "heading", text: "Biology" }, { kind: "item", text: "Cell" }]);
   });
 
   it("is empty for a card with no heading or bullet above it", () => {
@@ -313,43 +313,43 @@ describe("a card's context is the headings and bullets above it", () => {
   });
 
   it("gives a card outside a list the headings above it", () => {
-    expect(contextOf("# A\n## B\nQ >> x\n", "Q")).toEqual([{ text: "A" }, { text: "B" }]);
+    expect(contextOf("# A\n## B\nQ >> x\n", "Q")).toEqual([{ kind: "heading", text: "A" }, { kind: "heading", text: "B" }]);
   });
 
   it("replaces a heading with the next one at its level, and clears deeper ones", () => {
     const note = "# A\n## B\n### C\n## D\nQ >> x\n";
-    expect(contextOf(note, "Q")).toEqual([{ text: "A" }, { text: "D" }]);
+    expect(contextOf(note, "Q")).toEqual([{ kind: "heading", text: "A" }, { kind: "heading", text: "D" }]);
   });
 
   it("skips a level that was never opened", () => {
-    expect(contextOf("# A\n### C\nQ >> x\n", "Q")).toEqual([{ text: "A" }, { text: "C" }]);
+    expect(contextOf("# A\n### C\nQ >> x\n", "Q")).toEqual([{ kind: "heading", text: "A" }, { kind: "heading", text: "C" }]);
   });
 
   it("strips a closing sequence, comments and stamps from what it shows", () => {
     const note = `# Cells ## <!-- x -->\n- [ ] Nucleus >> holds DNA <!-- ${ID} -->\n  - Q >> A\n`;
     expect(contextOf(note, "Q")).toEqual([
-      { text: "Cells" },
-      { text: "Nucleus", answer: "holds DNA" },
+      { kind: "heading", text: "Cells" },
+      { kind: "item", text: "Nucleus", answer: "holds DNA" },
     ]);
   });
 
   it("shows only the term of a `::` ancestor, as a Concept card would", () => {
     const note = "- Mitochondria :: produce ATP\n  - where >> the cytoplasm\n";
-    expect(contextOf(note, "where")).toEqual([{ text: "Mitochondria" }]);
+    expect(contextOf(note, "where")).toEqual([{ kind: "item", text: "Mitochondria" }]);
   });
 
   it("drops a bullet that leaves the list, and a sibling is not a parent", () => {
     const note = "- a\n  - b\n- c\n  - Q >> x\n";
-    expect(contextOf(note, "Q")).toEqual([{ text: "c" }]);
+    expect(contextOf(note, "Q")).toEqual([{ kind: "item", text: "c" }]);
   });
 
   it("drops the list at a heading", () => {
     const note = "- a\n# H\n- Q >> x\n";
-    expect(contextOf(note, "Q")).toEqual([{ text: "H" }]);
+    expect(contextOf(note, "Q")).toEqual([{ kind: "heading", text: "H" }]);
   });
 
   it("keeps a parent across blank lines between items", () => {
-    expect(contextOf("- a\n\n  - Q >> x\n", "Q")).toEqual([{ text: "a" }]);
+    expect(contextOf("- a\n\n  - Q >> x\n", "Q")).toEqual([{ kind: "item", text: "a" }]);
   });
 
   it("leaves out an empty bullet", () => {
@@ -366,7 +366,7 @@ describe("a card's context is the headings and bullets above it", () => {
   });
 
   it("does not take a heading inside a list item", () => {
-    expect(contextOf("- a\n  # inner\n  - Q >> x\n", "Q")).toEqual([{ text: "a" }]);
+    expect(contextOf("- a\n  # inner\n  - Q >> x\n", "Q")).toEqual([{ kind: "item", text: "a" }]);
   });
 });
 
@@ -377,13 +377,13 @@ describe("tabs nest like spaces, and only list items nest", () => {
   it("gives a tab-nested card its parent bullets", () => {
     const note = "- Cell\n\t- Nucleus >> holds DNA\n\t\t- Nucleolus >> makes ribosomes\n";
     expect(contextOf(note, "Nucleolus")).toEqual([
-      { text: "Cell" },
-      { text: "Nucleus", answer: "holds DNA" },
+      { kind: "item", text: "Cell" },
+      { kind: "item", text: "Nucleus", answer: "holds DNA" },
     ]);
   });
 
   it("gives a continuation line its bullet as a parent", () => {
-    expect(contextOf("- Cell\n  Nucleus >> holds DNA\n", "Nucleus")).toEqual([{ text: "Cell" }]);
+    expect(contextOf("- Cell\n  Nucleus >> holds DNA\n", "Nucleus")).toEqual([{ kind: "item", text: "Cell" }]);
   });
 
   it("skips a tab-indented line under a bullet when it is not a bullet itself", () => {

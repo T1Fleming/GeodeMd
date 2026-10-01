@@ -79,7 +79,7 @@ describe("the examples the guide shows a reader", () => {
     expect(parse(bare!).map((c) => c.question)).toEqual(["Now we are"]);
     const cards = parse(bulleted!);
     expect(cards.map((c) => c.question)).toEqual(["Now we are", "Like"]);
-    expect(cards[1]!.context).toEqual([{ text: "Now we are", answer: "Going to see" }]);
+    expect(cards[1]!.context).toEqual([{ kind: "item", text: "Now we are", answer: "Going to see" }]);
 
     // "Sync says so, naming the line."
     open = await newCollection();

@@ -122,10 +122,10 @@ describe("a card's context follows its note", () => {
     await write("a.md", "# Biology\n- Cell\n  - Nucleus >> holds DNA\n");
     await core.sync(T0);
     expect(JSON.parse(store.getCard("sr-000000000001")!.context)).toEqual([
-      { text: "Biology" },
-      { text: "Cell" },
+      { kind: "heading", text: "Biology" },
+      { kind: "item", text: "Cell" },
     ]);
-    expect(core.getDueCards(T0, 10)[0]!.context).toEqual([{ text: "Biology" }, { text: "Cell" }]);
+    expect(core.getDueCards(T0, 10)[0]!.context).toEqual([{ kind: "heading", text: "Biology" }, { kind: "item", text: "Cell" }]);
   });
 
   it("changes when a parent is edited, without the card's own line changing", async () => {
@@ -137,7 +137,7 @@ describe("a card's context follows its note", () => {
     const s = await core.sync(new Date(T0.getTime() + 60_000));
     expect(s.cardsUpdated).toBe(1);
     expect(JSON.parse(store.getCard("sr-000000000001")!.context)).toEqual([
-      { text: "Eukaryotic cell" },
+      { kind: "item", text: "Eukaryotic cell" },
     ]);
   });
 });
@@ -183,6 +183,36 @@ describe("a change of card syntax", () => {
     await write("a.md", `${stamped}\n`);
     await core.sync(new Date(T0.getTime() + 120_000));
     expect(store.getCard("sr-000000000001")!.reviewed).toBe(1);
+  });
+});
+
+describe("a change of how context is derived", () => {
+  it("makes the next sync read every note once, without reporting a syntax change", async () => {
+    await write("a.md", "# T\n- Q >> A\n");
+    await write("b.md", "R >> B\n");
+    await core.sync(T0);
+    const later = new Date(T0.getTime() + 60_000);
+
+    store.setMeta("context", "1");
+    expect(core.syntaxChanged()).toBe(false);
+    expect((await core.sync(later)).filesRead).toBe(2);
+    expect(store.getMeta("context")).not.toBe("1");
+    expect((await core.sync(later)).filesRead).toBe(0);
+  });
+
+  it("is still owed after a preview", async () => {
+    await write("a.md", "Q >> A\n");
+    await core.sync(T0);
+    store.setMeta("context", "1");
+    await core.sync(T0, { dryRun: true });
+    expect(store.getMeta("context")).toBe("1");
+  });
+
+  it("draws a parent stored before `kind` existed as a bullet", async () => {
+    await write("a.md", "- P\n  - Q >> A\n");
+    await core.sync(T0);
+    store.db.prepare("UPDATE cards SET context = ?").run(JSON.stringify([{ text: "P" }]));
+    expect(core.getDueCards(T0, 10)[0]!.context).toEqual([{ kind: "item", text: "P" }]);
   });
 });
 

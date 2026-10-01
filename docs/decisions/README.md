@@ -39,6 +39,7 @@ New decisions from here get an ADR when they are made, not in a later sweep — 
 | [0029](0029-annotations.md) | Annotations: one plain-text file per card, beside the log | Accepted |
 | [0030](0030-nested-bullets-are-not-code.md) | A bullet nested under another bullet is not code | Accepted |
 | [0031](0031-forward-cards-and-context.md) | RemNote's forward card: `>>` and `==`, with its parents above it | Accepted |
+| [0032](0032-show-parents-as-remnote-does.md) | Show a card's parents as RemNote does | Accepted |
 
 ## Writing one
 

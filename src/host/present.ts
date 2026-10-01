@@ -399,25 +399,73 @@ export function syntaxChangedText(): string {
   );
 }
 
-/** Longest a breadcrumb segment is shown before it is shortened. */
+/** Longest a path segment — the note's name or a heading — is shown before it is shortened. */
 export const CRUMB_MAX = 40;
 
-/** Between breadcrumb segments. */
+/** Between path segments. */
 export const CRUMB_SEPARATOR = " › ";
 
 /**
- * The path from a card's note down to it, shown above the question: the
- * note's name, then each heading and parent bullet (ADR 0031). A parent that
- * is itself a forward card shows its answer too, as RemNote does.
- *
- * Shortened per segment rather than as a whole, so a long parent does not
- * push the nearest one — usually the most useful — off the end.
+ * How many parent bullets are shown in full above a question. Older ones are
+ * folded behind "… N more" until asked for: the nearest parent is the one that
+ * gives a short question its meaning, and a deep outline would otherwise push
+ * the question down the screen (ADR 0032).
  */
-export function breadcrumb(card: Pick<DueCard, "filePath" | "context">): string[] {
+export const ANCESTORS_SHOWN = 3;
+
+/** How many lines a parent bullet takes before it is cut, until it is clicked. */
+export const ANCESTOR_LINES = 2;
+
+/** A parent bullet as the outline above a question shows it. */
+export interface Parent {
+  text: string;
+  answer?: string;
+}
+
+/** What to draw above a question. The renderer lays it out and decides nothing. */
+export interface CardContext {
+  /** The note's name, then its headings, each shortened to `CRUMB_MAX`. */
+  path: string[];
+  /** Parent bullets behind "… N more"; 0 when there are none, or once expanded. */
+  folded: number;
+  /** The parent bullets shown, outermost first, so the nearest is last. */
+  parents: Parent[];
+}
+
+/**
+ * The note and its headings as a path line, then the parent bullets as an
+ * outline with the question as its last bullet — as RemNote shows a document
+ * and the rems above a card (ADR 0032).
+ *
+ * **A parent whose text appears in the card's answer is left out at the
+ * question**, and comes back with the answer: showing it first would give the
+ * answer away. RemNote does the same. It is left out before folding, so the
+ * parents shown are always the nearest ones that can be shown.
+ */
+export function cardContext(
+  card: Pick<DueCard, "filePath" | "context" | "answer">,
+  view: { revealed: boolean; expanded: boolean },
+): CardContext {
   const file = card.filePath.slice(card.filePath.lastIndexOf("/") + 1);
   const note = file.replace(/\.(?:md|markdown)$/i, "");
-  const steps = card.context.map((c) => (c.answer === undefined ? c.text : `${c.text} → ${c.answer}`));
-  return [note, ...steps].map(shorten);
+  const headings = card.context.filter((c) => c.kind === "heading").map((c) => c.text);
+
+  const answer = normalise(card.answer);
+  const parents = card.context
+    .filter((c) => c.kind === "item")
+    .filter((c) => view.revealed || !spoils(normalise(c.text), answer))
+    .map((c): Parent => (c.answer === undefined ? { text: c.text } : { text: c.text, answer: c.answer }));
+
+  const folded = view.expanded ? 0 : Math.max(0, parents.length - ANCESTORS_SHOWN);
+  return { path: [note, ...headings].map(shorten), folded, parents: parents.slice(folded) };
+}
+
+function normalise(text: string): string {
+  return text.toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+function spoils(parent: string, answer: string): boolean {
+  return parent !== "" && answer.includes(parent);
 }
 
 function shorten(text: string): string {

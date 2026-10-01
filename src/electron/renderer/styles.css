@@ -132,6 +132,60 @@ body {
   user-select: text;
 }
 
+/* The parent bullets above a question (ADR 0032). Clamped to a few lines
+   until clicked; the line count comes from host, as an inline style. */
+.parents {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.parent,
+.question.bulleted {
+  position: relative;
+  padding-left: 1rem;
+}
+
+.parent::before,
+.question.bulleted::before {
+  content: "•";
+  position: absolute;
+  left: 0;
+  color: var(--muted);
+}
+
+.parent {
+  font-size: 1.05rem;
+  line-height: 1.45;
+  color: var(--ink);
+  opacity: 0.8;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+
+.parent.clamped {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  cursor: pointer;
+}
+
+.parent-answer {
+  color: var(--muted);
+}
+
+.fold {
+  align-self: flex-start;
+  padding: 0.1rem 0.5rem;
+  font-size: 0.85rem;
+  color: var(--muted);
+  background: none;
+  border: 1px dashed var(--line);
+}
+
 .question {
   margin: 0;
   font-size: 1.5rem;

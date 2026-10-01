@@ -30,17 +30,31 @@ export interface ParsedCard {
  * before the `::`, which will be a Concept card's rule (ADR 0031).
  */
 export interface ContextEntry {
+  /**
+   * A heading goes on the path line above the card and a list item in the
+   * outline beneath it, as RemNote shows a document and its rems (ADR 0032).
+   */
+  kind: "heading" | "item";
   text: string;
   answer?: string;
 }
 
 /**
- * Which rules this parser reads cards and context by. Bump it whenever the
- * same note would parse differently, so every vault re-reads every note once
- * rather than keeping what the old rules found in the notes nobody has touched
- * since (ADR 0031). `1` was `::`; `2` is `>>`/`==` with context.
+ * Which rules this parser reads cards by. Bump it whenever the same note would
+ * yield different cards, so every vault re-reads every note once rather than
+ * keeping what the old rules found in the notes nobody has touched since
+ * (ADR 0031). `1` was `::`; `2` is `>>`/`==`. The app warns before the sync
+ * that follows a bump, because that sync may stamp lines.
  */
 export const SYNTAX_VERSION = "2";
+
+/**
+ * Which rules this parser derives `context` by. Bump it when the same note
+ * would give a card a different context but the same cards: every vault
+ * re-reads every note once, with no warning, because nothing new can be
+ * stamped (ADR 0032). `1` had no `kind`; `2` has.
+ */
+export const CONTEXT_VERSION = "2";
 
 /** `sr-` plus exactly 12 chars from [A-Za-z0-9]. Section 4. */
 export const ID_PATTERN = /^sr-[A-Za-z0-9]{12}$/;
@@ -195,12 +209,12 @@ function withoutTrailingComments(text: string): string {
  */
 function contextOf(raw: string, lineIndex: number): ContextEntry | null {
   const card = parseLine(raw, lineIndex);
-  if (card) return { text: card.question, answer: card.answer };
+  if (card) return { kind: "item", text: card.question, answer: card.answer };
   let text = withoutTrailingComments(body(raw)).replace(/^[ \t]*/, "").replace(LIST_MARKER, "");
   const concept = CONCEPT_SEPARATOR.exec(text);
   if (concept && !insideCodeSpan(text, concept.index)) text = text.slice(0, concept.index);
   text = text.trim();
-  return text === "" ? null : { text };
+  return text === "" ? null : { kind: "item", text };
 }
 
 /** A heading's text: the `#`s, a closing sequence and trailing comments off. */
@@ -365,7 +379,7 @@ export function parseNote(text: string): ParsedNote {
       const level = heading[1]!.length;
       headings.length = level;
       const text = headingText(rest, level);
-      headings[level - 1] = text === "" ? null : { text };
+      headings[level - 1] = text === "" ? null : { kind: "heading", text };
     }
     // Blockquote or heading.
     if (/^[ \t]*[>#]/.test(line)) {

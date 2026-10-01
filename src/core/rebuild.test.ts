@@ -71,7 +71,7 @@ describe("rebuilding from notes and logs", () => {
     await write("sub/c.md", "# Topic\n- Parent >> p\n  - C >> 3\n");
     await core.sync(T0);
     expect(store.getCard("sr-000000000004")!.context).toBe(
-      JSON.stringify([{ text: "Topic" }, { text: "Parent", answer: "p" }]),
+      JSON.stringify([{ kind: "heading", text: "Topic" }, { kind: "item", text: "Parent", answer: "p" }]),
     );
 
     await core.reviewCard("sr-000000000001", 3, new Date("2026-09-02T13:00:00.000Z"));
