@@ -96,6 +96,8 @@ A vault is a notes folder together with its own database, and one is open at a t
 
 **Opening a vault brings its schedules up to the running scheduler first.** `Active.ensure` calls `core.adoptScheduler` before it hands the vault over. That call re-derives every schedule from the review history when the database was scheduled by a different `ts-fsrs` or different parameters ([ADR 0028](../decisions/0028-move-to-fsrs-6.md)). Because opening now awaits, `ensure` is single-flight, and an open overtaken by a switch closes its Store instead of keeping it. `App.tsx` asks `vaults/open` each time it arrives at a vault, before any screen reads, and shows `rescheduledText` when something was re-derived. The answer is handed over once, so due dates that moved are explained once and not on every visit.
 
+**`vaults/open` also says whether the vault's card syntax is out of date** (`core.syntaxChanged()`, [ADR 0031](../decisions/0031-forward-cards-and-context.md)). Unlike the rescheduling note this is not handed over once: it is a fact about the database until a sync re-reads every note. When it is true, `App.tsx` shows `syntaxChangedText` and opens the Sync tab, because that sync may stamp lines that were never cards and the Preview button is there. The self-test does not cover this path; it starts every run on the Review tab.
+
 **A write composed in one vault names it.** `annotation/set` carries the id of the vault the review was drawn from, and `Active.ensureVault` refuses it if another is open by then. That is a backstop: the switcher first asks the review screen to save an open annotation and waits for it, and a failed save stops the switch, so the text is neither lost nor filed under the wrong vault ([ADR 0029](../decisions/0029-annotations.md)).
 
 The switcher is a `<select>` at the end of the tab bar, and is blurred after every choice so the review screen's document-level keys are not typed into it. Its decisions — what the options are, what choosing one means, when **Remove…** is offered — are in `renderer/model/vaults.ts`. The repair screen shows it too, when there is another vault to go to: a vault on an unplugged drive must not trap the user in it.
@@ -152,6 +154,8 @@ A decision lives in `host`, not in the component that wanted it first. With two 
 | `deferralReason` | why a freshly-edited file was left alone |
 | `PHASE_LABEL` | what `scan` / `prune` / `ingest` are called |
 | `rescheduledText` | what the app says when opening a vault re-derived its due dates |
+| `syntaxChangedText` | what the app says when the open vault's cards were found under older card syntax |
+| `breadcrumb` | the note name, headings and parent bullets shown above a question, shortened per segment |
 | `queue.ts` | which card is next, and when a rated card comes back |
 | `countText`, `COUNT_CAP` | how far a backlog is counted, and how a capped count reads |
 

@@ -122,7 +122,7 @@ async function makeTree(total: number, perDir: number): Promise<string> {
     const n = Math.min(perDir, total - d * perDir);
     await Promise.all(
       Array.from({ length: n }, (_, i) =>
-        fs.writeFile(path.join(dir, `n${i}.md`), `Q${d}_${i} :: A${d}_${i}\n`, "utf8"),
+        fs.writeFile(path.join(dir, `n${i}.md`), `Q${d}_${i} >> A${d}_${i}\n`, "utf8"),
       ),
     );
   }

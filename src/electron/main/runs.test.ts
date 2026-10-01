@@ -91,7 +91,7 @@ describe("single-flight", () => {
   it("a second sync JOINS the first rather than failing", async () => {
     // Two windows asking to sync meant one sync. An error there answers a
     // question nobody asked.
-    await write("a.md", "Q :: A\n");
+    await write("a.md", "Q >> A\n");
     const h = makeRunner();
 
     const first = h.runner.start("sync", { full: false, dryRun: false });
@@ -108,7 +108,7 @@ describe("single-flight", () => {
   it("a rebuild cannot join a sync", async () => {
     // dropAll is destructive, so a joiner would get a summary for a database
     // it did not expect.
-    await write("a.md", "Q :: A\n");
+    await write("a.md", "Q >> A\n");
     const h = makeRunner();
 
     h.runner.start("sync", { full: false, dryRun: false });
@@ -120,7 +120,7 @@ describe("single-flight", () => {
   });
 
   it("frees the slot when the run ends", async () => {
-    await write("a.md", "Q :: A\n");
+    await write("a.md", "Q >> A\n");
     const h = makeRunner();
     h.runner.start("sync", { full: false, dryRun: false });
     await h.done();
@@ -137,7 +137,7 @@ describe("progress", () => {
     // onProgress fires once per enumerated file including cache hits — a
     // million calls at the top of the scale range. One send per call would
     // flood the renderer, so the hot path only records.
-    for (let i = 0; i < 40; i++) await write(`n${i}.md`, "Q :: A\n");
+    for (let i = 0; i < 40; i++) await write(`n${i}.md`, "Q >> A\n");
     const h = makeRunner();
 
     h.runner.start("sync", { full: false, dryRun: false });
@@ -149,7 +149,7 @@ describe("progress", () => {
 
   it("always ends at 100%, even if the throttle dropped the last update", async () => {
     // A bar that stops at 999,847 of a million looks broken rather than done.
-    for (let i = 0; i < 10; i++) await write(`n${i}.md`, "Q :: A\n");
+    for (let i = 0; i < 10; i++) await write(`n${i}.md`, "Q >> A\n");
     const h = makeRunner();
 
     h.runner.start("sync", { full: false, dryRun: false });
@@ -164,7 +164,7 @@ describe("progress", () => {
     // Phase ORDERING is core's contract and is tested there. What the runner
     // owes is that an emit can be attributed: a stale run must not be able to
     // paint over a current one.
-    await write("a.md", "Q :: A\n");
+    await write("a.md", "Q >> A\n");
     const h = makeRunner();
 
     const started = h.runner.start("sync", { full: false, dryRun: false });
@@ -182,7 +182,7 @@ describe("progress", () => {
 
 describe("results", () => {
   it("returns a summary rather than throwing", async () => {
-    await write("a.md", "Q :: A\n");
+    await write("a.md", "Q >> A\n");
     const h = makeRunner();
     h.runner.start("sync", { full: false, dryRun: false });
     await h.done();
@@ -209,7 +209,7 @@ describe("the wire types survive structuredClone", () => {
   it("clones every payload a real run produces", async () => {
     // structuredClone THROWS on a function, so this catches a callback
     // sneaking into a payload — which no type survives one `as any`.
-    await write("a.md", "Q :: A\n");
+    await write("a.md", "Q >> A\n");
     const h = makeRunner();
     h.runner.start("sync", { full: false, dryRun: false });
     await h.done();
@@ -232,7 +232,7 @@ describe("status survives a missed event", () => {
   it("distinguishes never-run from finished", async () => {
     // Two different things to a UI deciding what to render, and a nullable
     // progress object cannot tell them apart.
-    await write("a.md", "Q :: A\n");
+    await write("a.md", "Q >> A\n");
     const h = makeRunner();
     expect(h.runner.status()).toEqual({ state: "never" });
 
@@ -244,7 +244,7 @@ describe("status survives a missed event", () => {
   it("keeps the last result, so a late subscriber can still learn it", async () => {
     // The gap this closes: a five-file sync finishes in milliseconds, so a
     // component that mounts and then starts a run can miss its own completion.
-    await write("a.md", "Q :: A\n");
+    await write("a.md", "Q >> A\n");
     const h = makeRunner();
     const started = h.runner.start("sync", { full: false, dryRun: false });
     await h.done();
@@ -257,7 +257,7 @@ describe("status survives a missed event", () => {
   });
 
   it("reports running while a run is in flight", async () => {
-    await write("a.md", "Q :: A\n");
+    await write("a.md", "Q >> A\n");
     const h = makeRunner();
     h.runner.start("sync", { full: false, dryRun: false });
     expect(h.runner.status().state).toBe("running");
@@ -267,7 +267,7 @@ describe("status survives a missed event", () => {
   it("a new run supersedes the previous result rather than aging it out", async () => {
     // "The most recent run" is a fact about the process. An expiry would mean
     // a UI that renders differently depending on how long the user looked away.
-    await write("a.md", "Q :: A\n");
+    await write("a.md", "Q >> A\n");
     const h = makeRunner();
     h.runner.start("sync", { full: false, dryRun: false });
     await h.done();
@@ -284,7 +284,7 @@ describe("status survives a missed event", () => {
   });
 
   it("status is structured-cloneable, like every other payload", async () => {
-    await write("a.md", "Q :: A\n");
+    await write("a.md", "Q >> A\n");
     const h = makeRunner();
     h.runner.start("sync", { full: false, dryRun: false });
     await h.done();

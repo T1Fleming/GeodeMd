@@ -33,8 +33,8 @@ beforeEach(async () => {
   configFile = path.join(root, "config", "config.json");
   home = path.join(root, "home");
   work = path.join(root, "work");
-  await note(home, "a.md", "H1 :: one\nH2 :: two\n");
-  await note(work, "b.md", "W1 :: one\n");
+  await note(home, "a.md", "H1 >> one\nH2 >> two\n");
+  await note(work, "b.md", "W1 >> one\n");
 
   const env = { XDG_DATA_HOME: path.join(root, "data") } as NodeJS.ProcessEnv;
   homeId = (await initConfig(configFile, home, { dbPath: path.join(root, "data", "home.sqlite"), env })).id;

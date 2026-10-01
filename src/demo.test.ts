@@ -56,15 +56,21 @@ describe("syntax.md keeps its promises", () => {
     const all = `${qs}\n${answers}`;
 
     expect(all, "frontmatter").not.toContain("frontmatter is skipped");
-    expect(all, "fenced code").not.toContain("geode   # not a card");
+    expect(all, "fenced code").not.toContain("not a card either");
     expect(all, "indented code").not.toContain("512");
     expect(all, "table row").not.toContain("reports what it would do");
     expect(all, "blockquote").not.toContain("so quoting someone");
     expect(all, "heading").not.toContain("are skipped as well");
   });
 
+  it("reads neither an escaped separator nor `::`", async () => {
+    const all = (await cardsIn("geodemd/syntax.md")).map((c) => `${c.question} ${c.answer}`).join("\n");
+    expect(all, "escaped").not.toContain("nothing happens");
+    expect(all, "::").not.toContain("not yet");
+  });
+
   it("does not read the inline code span as a card", async () => {
-    // "use `foo :: bar` to declare one" is prose ABOUT the syntax.
+    // "use `foo >> bar` to declare one" is prose ABOUT the syntax.
     const qs = questions(await cardsIn("geodemd/syntax.md"));
     expect(qs.some((q) => q.startsWith("use "))).toBe(false);
   });
@@ -73,7 +79,7 @@ describe("syntax.md keeps its promises", () => {
     const qs = questions(await cardsIn("geodemd/syntax.md"));
     expect(qs).toContain("Where is the review log kept"); // "- "
     expect(qs).toContain("What is the database"); // "* "
-    expect(qs).toContain("What does `geode rebuild` do"); // "1. "
+    expect(qs).toContain("What does a rebuild do"); // "1. "
     expect(qs).toContain("What happens to a card whose note you delete"); // "- [ ] "
     expect(qs).toContain("Does a stamp show up in rendered Markdown"); // "- [x] "
     expect(qs.every((q) => !/^[-*+\d]/.test(q))).toBe(true);
@@ -90,6 +96,6 @@ describe("syntax.md keeps its promises", () => {
     const card = (await cardsIn("geodemd/syntax.md")).find((c) =>
       c.question.includes("How is the separator split"),
     );
-    expect(card?.answer).toContain("::");
+    expect(card?.answer).toContain("a later >> is answer text");
   });
 });

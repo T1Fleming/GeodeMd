@@ -512,7 +512,7 @@ describe("annotating a card", () => {
 
 describe("reading the card's note inside the app", () => {
   const ID = "sr-000000000001";
-  const NOTE = { text: "Intro\n\nQ1 :: A1 <!-- sr-000000000001 -->\n", line: 3 };
+  const NOTE = { text: "Intro\n\nQ1 >> A1 <!-- sr-000000000001 -->\n", line: 3 };
 
   /** Revealed, with the annotation fetch answered, and `o` set to show the note here. */
   function revealed(openIn: "editor" | "inside" = "inside", annotation: string | null = null): Session {

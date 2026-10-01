@@ -65,9 +65,14 @@ async function logLine(name: string, obj: unknown): Promise<void> {
 
 describe("rebuilding from notes and logs", () => {
   it("reproduces cards, files, reviews and card_state IDENTICALLY, in full", async () => {
-    await write("a.md", "A :: 1\nB :: 2\n");
-    await write("sub/c.md", "C :: 3\n");
+    await write("a.md", "A >> 1\nB >> 2\n");
+    // Under a heading and a parent bullet, so `context` is compared at a value
+    // its default could not produce by accident.
+    await write("sub/c.md", "# Topic\n- Parent >> p\n  - C >> 3\n");
     await core.sync(T0);
+    expect(store.getCard("sr-000000000004")!.context).toBe(
+      JSON.stringify([{ text: "Topic" }, { text: "Parent", answer: "p" }]),
+    );
 
     await core.reviewCard("sr-000000000001", 3, new Date("2026-09-02T13:00:00.000Z"));
     await core.reviewCard("sr-000000000002", 1, new Date("2026-09-02T13:01:00.000Z"));
@@ -91,7 +96,7 @@ describe("rebuilding from notes and logs", () => {
     // The pre-rebuild state was built incrementally (reviewCard folds forward);
     // the rebuild replays each history from zero. Section 8 step 7 says this
     // test already keeps the two strategies agreeing, with nothing added.
-    await write("a.md", "A :: 1\n");
+    await write("a.md", "A >> 1\n");
     await core.sync(T0);
     const id = "sr-000000000001";
     for (let d = 0; d < 5; d++) {
@@ -104,7 +109,7 @@ describe("rebuilding from notes and logs", () => {
   });
 
   it("catches cards.reviewed drifting out of agreement with card_state", async () => {
-    await write("a.md", "A :: 1\nB :: 2\n");
+    await write("a.md", "A >> 1\nB >> 2\n");
     await core.sync(T0);
     await core.reviewCard("sr-000000000001", 3, T0);
 
@@ -115,7 +120,7 @@ describe("rebuilding from notes and logs", () => {
 
   it("a card authored while the database was gone still gets its id", async () => {
     // rebuild runs steps 1-7, stamp writes included.
-    await write("a.md", "A :: 1\n");
+    await write("a.md", "A >> 1\n");
     await core.rebuild(T0);
     expect(store.countCards()).toBe(1);
     expect(await fs.readFile(path.join(notes, "a.md"), "utf8")).toContain("<!-- sr-");
@@ -124,7 +129,7 @@ describe("rebuilding from notes and logs", () => {
 
 describe("ingesting the log", () => {
   it("ingesting the same log twice changes nothing", async () => {
-    await write("a.md", "A :: 1\n");
+    await write("a.md", "A >> 1\n");
     await core.sync(T0);
     await core.reviewCard("sr-000000000001", 3, T0);
 
@@ -136,7 +141,7 @@ describe("ingesting the log", () => {
   });
 
   it("merges two shards in timestamp order regardless of read order", async () => {
-    await write("a.md", "A :: 1\n");
+    await write("a.md", "A >> 1\n");
     await core.sync(T0);
     const id = "sr-000000000001";
 
@@ -154,7 +159,7 @@ describe("ingesting the log", () => {
   });
 
   it("a review arriving OUT OF ORDER replays in rated_at order, not ingest order", async () => {
-    await write("a.md", "A :: 1\n");
+    await write("a.md", "A >> 1\n");
     await core.sync(T0);
     const id = "sr-000000000001";
 
@@ -186,7 +191,7 @@ describe("ingesting the log", () => {
   });
 
   it("skips a truncated final line rather than aborting the ingest", async () => {
-    await write("a.md", "A :: 1\n");
+    await write("a.md", "A >> 1\n");
     await core.sync(T0);
     const id = "sr-000000000001";
 
@@ -206,7 +211,7 @@ describe("ingesting the log", () => {
   it("completes a truncated line on the following run", async () => {
     // The offset never advanced past the partial line, so the completed line is
     // picked up in full — the crash log-write-first ordering exists to survive.
-    await write("a.md", "A :: 1\n");
+    await write("a.md", "A >> 1\n");
     await core.sync(T0);
     const id = "sr-000000000001";
     const file = path.join(notes, ".sr", "log", "m-2026-09.jsonl");
@@ -221,7 +226,7 @@ describe("ingesting the log", () => {
   });
 
   it("a copy of a shard under a different name ingests zero new reviews", async () => {
-    await write("a.md", "A :: 1\n");
+    await write("a.md", "A >> 1\n");
     await core.sync(T0);
     await core.reviewCard("sr-000000000001", 3, T0);
 
@@ -235,7 +240,7 @@ describe("ingesting the log", () => {
   });
 
   it("does not open a frozen shard whose size is unchanged", async () => {
-    await write("a.md", "A :: 1\n");
+    await write("a.md", "A >> 1\n");
     await core.sync(T0);
     await core.reviewCard("sr-000000000001", 3, T0);
     await core.ingestLogs(T0);
@@ -246,7 +251,7 @@ describe("ingesting the log", () => {
   });
 
   it("reads only the appended bytes when a shard grows", async () => {
-    await write("a.md", "A :: 1\nB :: 2\n");
+    await write("a.md", "A >> 1\nB >> 2\n");
     await core.sync(T0);
     await core.reviewCard("sr-000000000001", 3, T0);
     await core.ingestLogs(T0);
@@ -259,7 +264,7 @@ describe("ingesting the log", () => {
   });
 
   it("re-reads from zero when a shard shrank", async () => {
-    await write("a.md", "A :: 1\n");
+    await write("a.md", "A >> 1\n");
     await core.sync(T0);
     const id = "sr-000000000001";
     await logLine("m-2026-09.jsonl", { card: id, at: "2026-09-02T10:00:00.000Z", rating: 3 });
@@ -297,16 +302,16 @@ describe("annotations and the database", () => {
     // 0029). If one ever reached a table, this total comparison would still
     // pass only by accident — so the annotation is written BEFORE the first
     // dump, and must survive the rebuild untouched as well.
-    await write("a.md", "A :: 1\nB :: 2\n");
+    await write("a.md", "A >> 1\nB >> 2\n");
     await core.sync(T0);
     await core.reviewCard("sr-000000000001", 3, new Date("2026-09-02T13:00:00.000Z"));
-    await core.setAnnotation("sr-000000000001", "remember :: this is not a card\n");
+    await core.setAnnotation("sr-000000000001", "remember >> this is not a card\n");
     await core.setAnnotation("sr-000000000002", "second\r\n");
 
     const before = dump(store);
     await core.rebuild(new Date("2026-09-04T12:00:00.000Z"));
     expect(dump(store)).toEqual(before);
-    expect(await core.getAnnotation("sr-000000000001")).toBe("remember :: this is not a card\n");
+    expect(await core.getAnnotation("sr-000000000001")).toBe("remember >> this is not a card\n");
     expect(await core.getAnnotation("sr-000000000002")).toBe("second\r\n");
   });
 });
@@ -334,7 +339,7 @@ describe("a database scheduled by a different scheduler", () => {
 
   async function scheduledElsewhere(): Promise<void> {
     const old = new Core(cfg(), store, new Elsewhere());
-    await write("a.md", "A :: 1\nB :: 2\n");
+    await write("a.md", "A >> 1\nB >> 2\n");
     await old.sync(T0);
     await old.adoptScheduler(T0);
     await old.reviewCard("sr-000000000001", 3, new Date("2026-09-02T13:00:00.000Z"));
@@ -362,7 +367,7 @@ describe("a database scheduled by a different scheduler", () => {
 
   it("reaches the schedule of a card whose line is gone, so a restored card comes back right", async () => {
     await scheduledElsewhere();
-    await write("a.md", "B :: 2 <!-- sr-000000000002 -->\n");
+    await write("a.md", "B >> 2 <!-- sr-000000000002 -->\n");
     await core.sync(new Date("2026-09-03T00:00:00.000Z"));
     expect(store.getCard("sr-000000000001")).toBeUndefined();
 

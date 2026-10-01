@@ -15,14 +15,14 @@ stats(now: Date, limit: number)
 
 ```sql
 -- Due, most overdue first. Uses idx_state_due.
-SELECT c.id, c.question, c.answer, c.file_path, c.line_no
+SELECT c.id, c.question, c.answer, c.context, c.file_path, c.line_no
   FROM card_state s JOIN cards c ON c.id = s.card_id
  WHERE s.due <= :now
  ORDER BY s.due
  LIMIT :n;
 
 -- New, in the order they read in the notes. Uses the partial idx_cards_new.
-SELECT id, question, answer, file_path, line_no
+SELECT id, question, answer, context, file_path, line_no
   FROM cards
  WHERE reviewed = 0
  ORDER BY file_path, line_no
@@ -65,6 +65,7 @@ It repairs the one-review gap left by a crash, it keeps the ingest path exercise
 
 Print question → any key → print answer → read `1`–`4` → record → next.
 
+- **The card's parents are shown above the question, at both stages** — the note's name, the headings above it and the bullets it is nested under, as `cells › Biology › Cell › Nucleus → holds DNA`. They are what makes a short question answerable, as in RemNote. They come from `cards.context`, stored at sync, so serving a card reads no note; `host`'s `breadcrumb` joins and shortens them, one segment at a time, so a long parent cannot push the nearest one off the end ([ADR 0031](../decisions/0031-forward-cards-and-context.md)).
 - **`q` quits from either state.** Any key reveals the answer *except* `q`, which quits there and then without recording; it is the one key the "any key" rule excludes.
 - **Legend:** `1 again  2 hard  3 good  4 easy   o open · a annotate · q quit` under the answer, `0 later · q quit` under the question, and `o back to the card · e open in editor` over a note shown in the app. FSRS's four ratings are not guessable from their numbers, and neither is `o`. Which keys belong to which stage is `ACTION_KEYS`'s `stage` field in `host` — both interfaces map it rather than deciding, and `boundaries.test.ts` enforces that.
 - **`0` defers the card**, and is offered *only* before the answer is showing ([ADR 0022](../decisions/0022-defer-a-card-without-rating-it.md)). It records nothing — no log line, no FSRS fold, no write — and moves the card to the back of the queue. It is unavailable once the answer is on screen on purpose: deferring a card you have read the answer to would make the next sighting a sham test, and a card you could not recall is a lapse that `1` already describes honestly.

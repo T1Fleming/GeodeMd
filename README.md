@@ -9,7 +9,7 @@ A spaced repetition system where **everything durable is plain text in an ordina
 Write a card by typing one line in any note:
 
 ```markdown
-Default Lambda timeout :: 3 seconds
+Default Lambda timeout >> 3 seconds
 ```
 
 Sync stamps it with an ID in an HTML comment — invisible in every Markdown renderer — and the card keeps the context it was written in: the reviewer shows you `aws/Lambda.md:142`. No editor-specific syntax anywhere. If this program disappears, the directory is still an ordinary folder of Markdown files.
@@ -58,19 +58,19 @@ The app carries its own documentation: the guides and the configuration referenc
 
 That writes `~/Library/Application Support/GeodeMD/config.json` on macOS (`~/.config/geodemd/config.json` elsewhere) — `notesPath`, `device`, `dbPath`, and an optional `editor` you can add later. The database goes to `~/.local/share/geodemd/db.sqlite` — outside your notes, deliberately, because it is a cache and a live database file is the worst thing to put under a sync or backup tool.
 
-**2. Look before it writes.** The **Preview** button, and it is the step worth not skipping — [the guide walks through it](./docs/guides/first-sync.md). **The first real sync stamps every line in your notes that parses as a card**, which on an existing collection is a diff across the whole tree. A preview writes nothing — not a stamp, not a database row — and tells you exactly how many files and cards it would touch. Read the number and check it against what you expect. If your notes already use `::` somewhere unexpected, this is where you find out, cheaply.
+**2. Look before it writes.** The **Preview** button, and it is the step worth not skipping — [the guide walks through it](./docs/guides/first-sync.md). **The first real sync stamps every line in your notes that parses as a card**, which on an existing collection is a diff across the whole tree. A preview writes nothing — not a stamp, not a database row — and tells you exactly how many files and cards it would touch. Read the number and check it against what you expect. If your notes already use ` >> ` or ` == ` somewhere unexpected, this is where you find out, cheaply.
 
 If your notes are in version control, commit them first. The app asks you to confirm that you have.
 
 **3. Write cards.** Anywhere in any note, on one line:
 
 ```markdown
-Default Lambda timeout :: 3 seconds
-- Max memory :: 10240 MB
-- [ ] Cold start cause :: a new execution environment
+Default Lambda timeout >> 3 seconds
+- Max memory == 10240 MB
+- [ ] Cold start cause >> a new execution environment
 ```
 
-The separator needs whitespace on both sides, so `foo::bar` is not a card. **Sync after editing** — that's the contract. Reviewing deliberately does not walk your notes, so that a session stays fast no matter how large the collection is.
+` >> ` and ` == ` are RemNote's forward card. The separator needs whitespace on both sides, so `a>>b` is not a card, and `x \== y` keeps it literal. ` :: ` is not a card: RemNote reads it as a Concept card, which GeodeMD does not support yet — [the first-sync guide](./docs/guides/first-sync.md#moving-cards-off-the-old-separator) says how to move cards off it without losing their history. A card nested under headings or bullets is shown under them, as `lambda › Lambda › Limits`. **Sync after editing** — that's the contract. Reviewing deliberately does not walk your notes, so that a session stays fast no matter how large the collection is.
 
 **4. Review.** The Review tab. Any key reveals the answer — except `q`, which quits there and then without recording anything. Once the answer is showing: `1` again · `2` hard · `3` good · `4` easy. Before it is showing, `0` defers the card without recording anything at all. Each card shows its source line — `algorithms/Sorting.md:142` — and `o` opens that note at that line in your editor. If any note you opened changed while you were reviewing, the end of the session says so, because the queue holds the text from your last sync.
 
@@ -102,7 +102,7 @@ It jumps to the line for the editors that can be told to (`vim +142`, `code --go
 Exactly one thing: it appends a stamp to lines that are cards.
 
 ```markdown
-Default Lambda timeout :: 3 seconds <!-- sr-a7Kd9mQ2xR4v -->
+Default Lambda timeout >> 3 seconds <!-- sr-a7Kd9mQ2xR4v -->
 ```
 
 That's an HTML comment, so it is invisible in every Markdown renderer — GitHub, Obsidian, VS Code preview, pandoc, any static site generator. The ID is how a card is identified, so moving or renaming a file never loses its scheduling.

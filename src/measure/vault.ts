@@ -75,7 +75,7 @@ async function writeNotes(notes: string, cards: number): Promise<number> {
       const n = d * FILES_PER_DIR + f;
       let body = `# Note ${n}\n\nSome prose, so the parser has lines to skip.\n\n`;
       for (let c = 0; c < CARDS_PER_FILE && written < cards; c++, written++) {
-        body += `- What is fact ${n}-${c} :: The answer to fact ${n}-${c}\n`;
+        body += `- What is fact ${n}-${c} >> The answer to fact ${n}-${c}\n`;
       }
       const abs = path.join(dir, `note-${String(f).padStart(3, "0")}.md`);
       await fs.writeFile(abs, body, "utf8");

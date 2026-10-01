@@ -294,7 +294,7 @@ function Welcome({ onPick }: { onPick: () => void }): React.JSX.Element {
       <h2>GeodeMD</h2>
       <p className="lead">
         Spaced repetition over your own Markdown notes. Cards are ordinary lines in your
-        files — <code>question :: answer</code> — so everything stays readable, and yours,
+        files — <code>{"question >> answer"}</code> — so everything stays readable, and yours,
         with or without this app.
       </p>
       <p className="lead muted">

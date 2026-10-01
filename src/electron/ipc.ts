@@ -83,6 +83,12 @@ export interface VaultSwitched {
  */
 export interface VaultOpened {
   rescheduled: { cards: number } | null;
+  /**
+   * This vault's cards were found under older card syntax, so its next sync
+   * reads every note and may find different cards (ADR 0031). Not taken once
+   * like `rescheduled`: it stays true until a sync has re-read everything.
+   */
+  syntaxChanged: boolean;
 }
 
 /** Why a folder is being picked, which decides the dialog's words. */

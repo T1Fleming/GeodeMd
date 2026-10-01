@@ -4,7 +4,7 @@
  * [ADR 0018](../../../docs/decisions/0018-user-docs-live-in-guides-and-reference.md)
  * chose plain Markdown in the repository and named the gap it did not close:
  * someone who installs a `.app` has no reason to ever visit GitHub and no way
- * to find out what `::` means. This closes it **without a second copy** — the
+ * to find out what `>>` means. This closes it **without a second copy** — the
  * files rendered here are `docs/guides/` and `docs/reference/` verbatim,
  * copied into the bundle at build time. One source, two surfaces.
  *

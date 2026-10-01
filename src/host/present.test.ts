@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  breadcrumb,
+  CRUMB_MAX,
+  syntaxChangedText,
   ACTION_KEYS,
   actionsAt,
   deferralReason,
@@ -253,5 +256,35 @@ describe("what the app says when due dates were worked out again", () => {
     expect(text).toContain("review history");
     expect(text).toContain("Your notes and review log are unchanged");
     expect(rescheduledText({ cards: 1 })).toContain("for 1 card ");
+  });
+});
+
+describe("the breadcrumb above a question", () => {
+  it("is the note's name, then each heading and parent bullet", () => {
+    expect(
+      breadcrumb({
+        filePath: "bio/cells.md",
+        context: [{ text: "Biology" }, { text: "Cell" }, { text: "Nucleus", answer: "holds DNA" }],
+      }),
+    ).toEqual(["cells", "Biology", "Cell", "Nucleus → holds DNA"]);
+  });
+
+  it("is just the note's name for a card with nothing above it", () => {
+    expect(breadcrumb({ filePath: "Lambda.markdown", context: [] })).toEqual(["Lambda"]);
+  });
+
+  it("shortens each long segment on its own", () => {
+    const long = "x".repeat(CRUMB_MAX + 10);
+    const [, crumb, near] = breadcrumb({ filePath: "a.md", context: [{ text: long }, { text: "near" }] });
+    expect([...crumb!]).toHaveLength(CRUMB_MAX);
+    expect(crumb!.endsWith("…")).toBe(true);
+    expect(near).toBe("near");
+  });
+});
+
+describe("what the app says when the card syntax changed", () => {
+  it("names both separators, the one that stopped, and the preview", () => {
+    const text = syntaxChangedText();
+    for (const part of [">>", "==", "::", "preview"]) expect(text).toContain(part);
   });
 });

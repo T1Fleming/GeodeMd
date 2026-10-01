@@ -61,7 +61,8 @@ CREATE TABLE cards (
   question   TEXT NOT NULL,
   answer     TEXT NOT NULL,
   type       TEXT NOT NULL DEFAULT 'basic',
-  reviewed   INTEGER NOT NULL DEFAULT 0
+  reviewed   INTEGER NOT NULL DEFAULT 0,
+  context    TEXT NOT NULL DEFAULT '[]'  -- headings and parent bullets, JSON
 );
 CREATE INDEX idx_cards_path ON cards(file_path, line_no);
 CREATE INDEX idx_cards_new  ON cards(file_path, line_no) WHERE reviewed = 0;
@@ -99,7 +100,7 @@ CREATE TABLE card_state (         -- replay reviews through the scheduler
 CREATE INDEX idx_state_due ON card_state(due);
 
 CREATE TABLE meta (               -- facts about the cache, derived from the code
-  key   TEXT PRIMARY KEY,         -- today only 'scheduler'
+  key   TEXT PRIMARY KEY,         -- 'scheduler' and 'syntax'
   value TEXT NOT NULL
 );
 ```
@@ -120,7 +121,9 @@ It must be set on insert from `EXISTS(SELECT 1 FROM card_state WHERE card_id = ?
 
 **`card_state.learning_steps` is FSRS-6's step counter.** Under `learning_steps: ["1m", "10m"]` a card rated `3` moves to the second step, and its next rating is scheduled from there — so without the column, a replayed card and an incrementally folded one would disagree. It is replayed from the log like every other column, so the rebuild guarantee holds. A database from before the column existed has it added on open (`addMissingColumns`) with a placeholder `0`, which the scheduler check below overwrites before anything reads it.
 
-**`meta` records which scheduler derived `card_state`.** See [Scheduler state](#scheduler-state).
+**`cards.context` is the path from the note down to the card**: the headings above it and the bullets it is nested under, as a JSON array of `{ text, answer? }`, outermost first. The parser derives it from the note alone, so a rebuild reproduces it, and sync treats a change to it as a change to the card — editing a parent rewrites its children's context without touching their lines ([ADR 0031](../decisions/0031-forward-cards-and-context.md)). A database from before the column has it added on open with `'[]'`, which the syntax check below fills in.
+
+**`meta` records which scheduler derived `card_state`, and which card syntax derived `cards`.** See [Scheduler state](#scheduler-state) for the first. The second is the parser's `SYNTAX_VERSION`: a sync against an older one, or none, reads every note rather than trusting the mtime cache, and only a real sync that read every note without an error records the new one. `Core.syntaxChanged()` is what the app asks when it opens a vault ([ADR 0031](../decisions/0031-forward-cards-and-context.md)).
 
 **`type` is defaulted to `'basic'` and nothing branches on it.** It exists so a future card taxonomy has somewhere to land without a migration.
 

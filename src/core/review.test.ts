@@ -43,16 +43,16 @@ async function write(rel: string, content: string): Promise<void> {
 
 describe("the order cards are served in", () => {
   it("orders new cards by (file_path, line_no) — the order they read", async () => {
-    await write("z.md", "Z1 :: 1\nZ2 :: 2\n");
-    await write("a.md", "A1 :: 1\nA2 :: 2\n");
+    await write("z.md", "Z1 >> 1\nZ2 >> 2\n");
+    await write("a.md", "A1 >> 1\nA2 >> 2\n");
     await core.sync(T0);
 
     expect(core.getDueCards(T0).map((c) => c.question)).toEqual(["A1", "A2", "Z1", "Z2"]);
   });
 
   it("is stable across a rebuild", async () => {
-    await write("b.md", "B :: 1\n");
-    await write("a.md", "A :: 1\n");
+    await write("b.md", "B >> 1\n");
+    await write("a.md", "A >> 1\n");
     await core.sync(T0);
     const before = core.getDueCards(T0).map((c) => c.id);
 
@@ -61,7 +61,7 @@ describe("the order cards are served in", () => {
   });
 
   it("serves due cards ahead of new ones, most overdue first", async () => {
-    await write("a.md", "A :: 1\nB :: 2\nC :: 3\n");
+    await write("a.md", "A >> 1\nB >> 2\nC >> 3\n");
     await core.sync(T0);
 
     // Review A and B so they acquire a due date; C stays new.
@@ -78,14 +78,14 @@ describe("the order cards are served in", () => {
   });
 
   it("respects the limit across both queries", async () => {
-    await write("a.md", "A :: 1\nB :: 2\nC :: 3\nD :: 4\n");
+    await write("a.md", "A >> 1\nB >> 2\nC >> 3\nD >> 4\n");
     await core.sync(T0);
     expect(core.getDueCards(T0, 2)).toHaveLength(2);
   });
 
   it("starves new cards when the due backlog exceeds the limit", async () => {
     // Section 9 names this as the intended trade, so it is pinned as behaviour.
-    await write("a.md", "A :: 1\nB :: 2\nC :: 3\n");
+    await write("a.md", "A >> 1\nB >> 2\nC >> 3\n");
     await core.sync(T0);
     await core.reviewCard("sr-000000000001", 1, T0);
     await core.reviewCard("sr-000000000002", 1, new Date(T0.getTime() + 1000));
@@ -96,7 +96,7 @@ describe("the order cards are served in", () => {
   });
 
   it("builds a locator from the notes-relative path and line", async () => {
-    await write("algorithms/Sorting.md", "intro\nQ :: A\n");
+    await write("algorithms/Sorting.md", "intro\nQ >> A\n");
     await core.sync(T0);
     expect(core.getDueCards(T0)[0]!.locator).toBe("algorithms/Sorting.md:2");
   });
@@ -104,7 +104,7 @@ describe("the order cards are served in", () => {
   it("carries the path and line as data, not only as a display string", async () => {
     // The CLI opens the note in an editor, and re-parsing the locator to get
     // there would guess wrong on any path containing a colon.
-    await write("algorithms/Sorting.md", "intro\nQ :: A\n");
+    await write("algorithms/Sorting.md", "intro\nQ >> A\n");
     await core.sync(T0);
     const card = core.getDueCards(T0)[0]!;
     expect(card.filePath).toBe("algorithms/Sorting.md");
@@ -114,7 +114,7 @@ describe("the order cards are served in", () => {
 
 describe("recording a review", () => {
   it("writes the log BEFORE SQLite", async () => {
-    await write("a.md", "A :: 1\n");
+    await write("a.md", "A >> 1\n");
     await core.sync(T0);
     await core.reviewCard("sr-000000000001", 3, T0);
 
@@ -130,7 +130,7 @@ describe("recording a review", () => {
   });
 
   it("omits elapsed and scheduled on a first review, and includes them after", async () => {
-    await write("a.md", "A :: 1\n");
+    await write("a.md", "A >> 1\n");
     await core.sync(T0);
     const id = "sr-000000000001";
 
@@ -150,7 +150,7 @@ describe("recording a review", () => {
   });
 
   it("recovers a review that reached the log but not the database", async () => {
-    await write("a.md", "A :: 1\n");
+    await write("a.md", "A >> 1\n");
     await core.sync(T0);
     const id = "sr-000000000001";
     await core.reviewCard(id, 3, T0);
@@ -169,7 +169,7 @@ describe("recording a review", () => {
   });
 
   it("puts a lapsed card back within minutes, not the same session", async () => {
-    await write("a.md", "A :: 1\n");
+    await write("a.md", "A >> 1\n");
     await core.sync(T0);
     const id = "sr-000000000001";
     await core.reviewCard(id, 1, T0);
@@ -184,7 +184,7 @@ describe("recording a review", () => {
     // to the second of `["1m", "10m"]`; `3` again from there graduates. A step
     // lost on the way through the database would put it back on the first
     // step, and it would be ten more minutes in Learning instead.
-    await write("a.md", "A :: 1\n");
+    await write("a.md", "A >> 1\n");
     await core.sync(T0);
     const id = "sr-000000000001";
     const first = await core.reviewCard(id, 3, T0);
@@ -200,7 +200,7 @@ describe("recording a review", () => {
 
 describe("reporting what is due and what is new", () => {
   it("counts total, due now, due before local midnight, and new", async () => {
-    await write("a.md", "A :: 1\nB :: 2\n");
+    await write("a.md", "A >> 1\nB >> 2\n");
     await core.sync(T0);
     await core.reviewCard("sr-000000000001", 1, T0);
 
@@ -212,7 +212,7 @@ describe("reporting what is due and what is new", () => {
   });
 
   it("reports the counts as exact when nothing hit the cap", async () => {
-    await write("a.md", "A :: 1\nB :: 2\n");
+    await write("a.md", "A >> 1\nB >> 2\n");
     await core.sync(T0);
     await core.reviewCard("sr-000000000001", 1, T0);
     expect(core.stats(T0, CAP).capped).toBe(false);
@@ -224,7 +224,7 @@ describe("reporting what is due and what is new", () => {
     // a floor rather than freezing the main process over a backlog. The cap is
     // an argument, which is what makes this a three-card test rather than a
     // ten-thousand-card one.
-    await write("a.md", "A :: 1\nB :: 2\nC :: 3\n");
+    await write("a.md", "A >> 1\nB >> 2\nC >> 3\n");
     await core.sync(T0);
     await core.reviewCard("sr-000000000001", 1, T0);
     await core.reviewCard("sr-000000000002", 1, T0);
@@ -246,13 +246,13 @@ describe("reporting what is due and what is new", () => {
     // card out of the new queue — so a count over `card_state` alone reports
     // cards that no longer exist. It showed up as a review header reading
     // "1 of 2 due" against a one-card database, and as due + new > total here.
-    await write("a.md", "A :: 1\nB :: 2\n");
+    await write("a.md", "A >> 1\nB >> 2\n");
     await core.sync(T0);
     await core.reviewCard("sr-000000000001", 1, T0);
     expect(store.getState("sr-000000000001")).toBeDefined();
 
     const later = new Date(T0.getTime() + 3_600_000);
-    await write("a.md", "B :: 2 <!-- sr-000000000002 -->\n");
+    await write("a.md", "B >> 2 <!-- sr-000000000002 -->\n");
     await core.sync(later);
     expect(store.getState("sr-000000000001")).toBeDefined();
 

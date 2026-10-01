@@ -6,7 +6,7 @@ The full suite runs in about a second, so there is no speed reason to run a subs
 
 ## The five expensive places
 
-**Parser** (`src/parser/parser.test.ts`) — fixture strings in, expected cards out. Covers each skipped context, `foo::bar` without spaces, already-stamped lines, multiple cards per file, `::` in answer text, list-marker and task-box prefixes, an empty side, and a line ending in some *other* HTML comment.
+**Parser** (`src/parser/parser.test.ts`) — fixture strings in, expected cards out. Covers `>>` and `==`, each skipped context, a separator without spaces, an escaped one, `::` and RemNote's other tokens not being cards, already-stamped lines, multiple cards per file, a later separator in answer text, each rule of a card's context, list-marker and task-box prefixes, an empty side, and a line ending in some *other* HTML comment.
 
 **Sync** (`src/core/sync.test.ts`) — against a temp directory and an in-memory database. Covers: a rename preserves state, edited text preserves state, stamping is idempotent across two runs, a deferred file mints nothing, a duplicated stamped line is re-minted **and its stamp replaced rather than appended to**, a duplicate inside a *deferred* file is skipped, a card copied to a second file is re-minted while one *moved* keeps its ID, a CRLF file differs from its original by exactly the stamped line, a symlinked directory is not descended into, and a missing `notesPath` exits non-zero rather than reporting a zero-card success.
 

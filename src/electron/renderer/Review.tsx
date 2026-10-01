@@ -4,7 +4,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { actionsAt, countText, RATING_KEYS } from "../../host/present.js";
+import { actionsAt, breadcrumb, countText, CRUMB_SEPARATOR, RATING_KEYS } from "../../host/present.js";
 import { cardLineNote } from "../../host/note.js";
 import type { DueCard } from "../../core/index.js";
 import {
@@ -294,7 +294,12 @@ export function Review({
       ) : (
         <>
           <section className="card">
-            <p className="question">{card.question}</p>
+            {/* The card's parents, at both stages: they are what makes a short
+                question answerable (ADR 0031). */}
+            <div className="front">
+              <p className="crumbs">{breadcrumb(card).join(CRUMB_SEPARATOR)}</p>
+              <p className="question">{card.question}</p>
+            </div>
             {session.revealed ? (
               <p className="answer">{card.answer}</p>
             ) : (

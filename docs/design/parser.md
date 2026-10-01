@@ -4,9 +4,13 @@
 
 ## Recognising a card
 
-A card is a single line containing ` :: `. Everything before the **first** separator is the question, everything after it is the answer, both trimmed.
+A card is a single line containing ` >> ` or ` == ` — RemNote's forward card ([ADR 0031](../decisions/0031-forward-cards-and-context.md)). Everything before the **first** separator of either kind is the question, everything after it is the answer, both trimmed.
 
-The separator is matched with lookaround — `/(?<=\s)::(?=\s)/` — so it requires whitespace on both sides. `foo::bar` in code or a `key::value` field is not a card. A second ` :: ` on the same line is ordinary answer text: one line is always at most one card.
+The separator is matched with lookaround — `/(?<=\s)(?:>>|==)(?=\s)/` — so it requires whitespace on both sides. `a>>b` in code is not a card. A second separator on the same line is ordinary answer text: one line is always at most one card.
+
+Two things fall out of the whitespace rule and are promised rather than incidental. **A backslash keeps a separator literal**: in `x \== y` the `==` has a backslash before it, not whitespace, and Markdown renders the note as `x == y`. And **RemNote's longer tokens are not forward cards** — `>>>`, `>>-`, `==-`, `>>A)`, `==A)`, `>>1.` — because none has whitespace after its first two characters. They mean other card types, which are not read yet.
+
+**` :: ` is not a card.** RemNote reads it as a Concept card, tested in both directions, and it is kept for that. Until then a ` :: ` line is only text, though as a parent it still shows only its term (below).
 
 Before splitting, a leading list marker is stripped from the question — bullet or ordered, each optionally followed by a task box:
 
@@ -14,7 +18,7 @@ Before splitting, a leading list marker is stripped from the question — bullet
 /^(?:[-*+]|\d+[.)])[ \t]+(?:\[[ xX]\][ \t]+)?/
 ```
 
-So `- [ ] Cold start cause :: a new execution environment` yields the question `Cold start cause`, not `- [ ]  Cold start cause`.
+So `- [ ] Cold start cause >> a new execution environment` yields the question `Cold start cause`, not `- [ ]  Cold start cause`.
 
 Both sides must be non-empty after trimming, or the line is not a card.
 
@@ -36,6 +40,17 @@ A line 4+ columns from the margin is read only when it opens a list item, nested
 Frontmatter only counts when `---` opens line 1 **and** a closing delimiter exists; without one, the file has no frontmatter and the parser does not swallow the whole note.
 
 This list is longer than a card parser looks like it needs. The reason is that a false positive here does not merely produce a junk card — sync writes a stamp into the line, so a false positive **edits the user's note**. See [ADR 0002](../decisions/0002-one-line-card-syntax.md).
+
+## Context
+
+Each card carries `context`: the headings above it, then the list items it is nested under, outermost first. It is what the review screen shows above the question, so `Nucleolus >> makes ribosomes` arrives under `Biology › Cell › Nucleus`. The note's name is added by `host`, which knows the path.
+
+- **Headings form a stack.** A heading at level *n* replaces the previous one at *n* and clears everything deeper. Only a heading outside a list counts — the open-item stack is empty after the margin check. One inside a list item belongs to that item.
+- **Parent bullets are the open list items**, from the same stack ADR 0030 keeps for the indentation rule, so a sibling is never a parent and a paragraph, heading or fence at the margin ends the path.
+- **What an ancestor shows:** a forward card, its question and its answer, as RemNote shows a Basic parent; a ` :: ` line, only what is before the `::`, as RemNote shows a Concept parent; anything else, its text. Each is cleaned the way a question is — marker, task box, trailing comments and stamps off, trimmed — and an empty one is left out.
+- **Nothing in a skipped context is context**: a heading in a fence, a blockquote or frontmatter is not one, and `#tag` with no space after the `#` is not a heading.
+
+`SYNTAX_VERSION` names these rules, together with the separator. Bump it whenever the same note would parse differently: a sync against an older version reads every note once ([data model](data-model.md)).
 
 ## Stamps
 

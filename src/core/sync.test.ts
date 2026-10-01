@@ -54,13 +54,13 @@ async function read(rel: string): Promise<string> {
 
 describe("stamping", () => {
   it("mints an id, writes it to the note, and creates the card row", async () => {
-    await write("a.md", "Default Lambda timeout :: 3 seconds\n");
+    await write("a.md", "Default Lambda timeout >> 3 seconds\n");
     const s = await core.sync(T0);
 
     expect(s.cardsFound).toBe(1);
     expect(s.cardsNew).toBe(1);
     expect(await read("a.md")).toBe(
-      "Default Lambda timeout :: 3 seconds <!-- sr-000000000001 -->\n",
+      "Default Lambda timeout >> 3 seconds <!-- sr-000000000001 -->\n",
     );
     const card = store.getCard("sr-000000000001")!;
     expect(card.file_path).toBe("a.md");
@@ -69,7 +69,7 @@ describe("stamping", () => {
   });
 
   it("is idempotent across two runs", async () => {
-    await write("a.md", "Q :: A\n");
+    await write("a.md", "Q >> A\n");
     await core.sync(T0);
     const afterFirst = await read("a.md");
 
@@ -80,58 +80,127 @@ describe("stamping", () => {
   });
 
   it("preserves a CRLF file byte-for-byte apart from the stamped line", async () => {
-    const original = "intro\r\nQ :: A\r\ntail\r\n";
+    const original = "intro\r\nQ >> A\r\ntail\r\n";
     await write("a.md", original);
     await core.sync(T0);
 
     const after = await read("a.md");
-    expect(after).toBe("intro\r\nQ :: A <!-- sr-000000000001 -->\r\ntail\r\n");
+    expect(after).toBe("intro\r\nQ >> A <!-- sr-000000000001 -->\r\ntail\r\n");
     // Every other line keeps its CRLF; no whole-file conversion.
     expect(after.split("\r\n")).toHaveLength(original.split("\r\n").length);
   });
 
   it("preserves a missing final newline", async () => {
-    await write("a.md", "Q :: A");
+    await write("a.md", "Q >> A");
     await core.sync(T0);
-    expect(await read("a.md")).toBe("Q :: A <!-- sr-000000000001 -->");
+    expect(await read("a.md")).toBe("Q >> A <!-- sr-000000000001 -->");
   });
 
   it("stamps every card in a file in one write", async () => {
-    await write("a.md", "A :: 1\nB :: 2\nC :: 3\n");
+    await write("a.md", "A >> 1\nB >> 2\nC >> 3\n");
     await core.sync(T0);
     const after = await read("a.md");
     expect(after).toBe(
-      "A :: 1 <!-- sr-000000000001 -->\n" +
-        "B :: 2 <!-- sr-000000000002 -->\n" +
-        "C :: 3 <!-- sr-000000000003 -->\n",
+      "A >> 1 <!-- sr-000000000001 -->\n" +
+        "B >> 2 <!-- sr-000000000002 -->\n" +
+        "C >> 3 <!-- sr-000000000003 -->\n",
     );
   });
 
   it("does not stamp inside a code block", async () => {
-    await write("a.md", "```\nnot :: a card\n```\nreal :: card\n");
+    await write("a.md", "```\nnot >> a card\n```\nreal >> card\n");
     await core.sync(T0);
     const after = await read("a.md");
-    expect(after).toContain("not :: a card\n");
-    expect(after).not.toMatch(/not :: a card <!--/);
+    expect(after).toContain("not >> a card\n");
+    expect(after).not.toMatch(/not >> a card <!--/);
     expect(store.countCards()).toBe(1);
+  });
+});
+
+describe("a card's context follows its note", () => {
+  it("is stored when the card is found", async () => {
+    await write("a.md", "# Biology\n- Cell\n  - Nucleus >> holds DNA\n");
+    await core.sync(T0);
+    expect(JSON.parse(store.getCard("sr-000000000001")!.context)).toEqual([
+      { text: "Biology" },
+      { text: "Cell" },
+    ]);
+    expect(core.getDueCards(T0, 10)[0]!.context).toEqual([{ text: "Biology" }, { text: "Cell" }]);
+  });
+
+  it("changes when a parent is edited, without the card's own line changing", async () => {
+    await write("a.md", "- Cell\n  - Nucleus >> holds DNA\n");
+    await core.sync(T0);
+    const stamped = await read("a.md");
+
+    await write("a.md", stamped.replace("- Cell", "- Eukaryotic cell"));
+    const s = await core.sync(new Date(T0.getTime() + 60_000));
+    expect(s.cardsUpdated).toBe(1);
+    expect(JSON.parse(store.getCard("sr-000000000001")!.context)).toEqual([
+      { text: "Eukaryotic cell" },
+    ]);
+  });
+});
+
+describe("a change of card syntax", () => {
+  it("makes the next sync read every note, once", async () => {
+    await write("a.md", "Q >> A\n");
+    await write("b.md", "R >> B\n");
+    await core.sync(T0);
+    const later = new Date(T0.getTime() + 60_000);
+    expect((await core.sync(later)).filesRead).toBe(0);
+
+    store.setMeta("syntax", "1");
+    expect(core.syntaxChanged()).toBe(true);
+    expect((await core.sync(later)).filesRead).toBe(2);
+    expect(core.syntaxChanged()).toBe(false);
+    expect((await core.sync(later)).filesRead).toBe(0);
+  });
+
+  it("is not reported for a vault that has never synced", () => {
+    expect(core.syntaxChanged()).toBe(false);
+  });
+
+  it("is still owed after a preview, which records nothing", async () => {
+    await write("a.md", "Q >> A\n");
+    await core.sync(T0);
+    store.setMeta("syntax", "1");
+    await core.sync(T0, { dryRun: true });
+    expect(core.syntaxChanged()).toBe(true);
+  });
+
+  it("drops cards written with `::`, keeping their history for when the line comes back", async () => {
+    await write("a.md", "Q >> A\n");
+    await core.sync(T0);
+    await core.reviewCard("sr-000000000001", 3, T0);
+    const stamped = await read("a.md");
+
+    await write("a.md", stamped.replace(" >> ", " :: "));
+    expect((await core.sync(new Date(T0.getTime() + 60_000))).cardsPruned).toBe(1);
+    expect(store.getCard("sr-000000000001")).toBeUndefined();
+
+    // One byte longer than the `::` version, so it reads as edited.
+    await write("a.md", `${stamped}\n`);
+    await core.sync(new Date(T0.getTime() + 120_000));
+    expect(store.getCard("sr-000000000001")!.reviewed).toBe(1);
   });
 });
 
 describe("the write guard", () => {
   it("mints nothing in a file whose mtime is inside the deferral window", async () => {
     const abs = path.join(notes, "a.md");
-    await fs.writeFile(abs, "Q :: A\n", "utf8"); // mtime = now
+    await fs.writeFile(abs, "Q >> A\n", "utf8"); // mtime = now
 
     const s = await core.sync(new Date());
     expect(s.filesDeferred).toBe(1);
-    expect(await read("a.md")).toBe("Q :: A\n");
+    expect(await read("a.md")).toBe("Q >> A\n");
     // Steps 4-5's invariant: nothing minted but unwritten may enter the DB.
     expect(store.countCards()).toBe(0);
   });
 
   it("syncs already-stamped cards in a deferred file", async () => {
     const abs = path.join(notes, "a.md");
-    await fs.writeFile(abs, "Q :: A <!-- sr-aaaaaaaaaaaa -->\n", "utf8");
+    await fs.writeFile(abs, "Q >> A <!-- sr-aaaaaaaaaaaa -->\n", "utf8");
 
     const s = await core.sync(new Date());
     expect(s.filesDeferred).toBe(1);
@@ -143,7 +212,7 @@ describe("the write guard", () => {
     // next sync's fast path skip the file, so "waits for the next sync"
     // silently becomes "waits forever" and the card is never stamped.
     const abs = path.join(notes, "a.md");
-    await fs.writeFile(abs, "Q :: A\n", "utf8");
+    await fs.writeFile(abs, "Q >> A\n", "utf8");
 
     const first = await core.sync(new Date());
     expect(first.filesDeferred).toBe(1);
@@ -156,7 +225,7 @@ describe("the write guard", () => {
   it("still records a deferred file that needed no minting", async () => {
     // Nothing was left undone, so the fast path may legitimately skip it later.
     const abs = path.join(notes, "a.md");
-    await fs.writeFile(abs, "Q :: A <!-- sr-aaaaaaaaaaaa -->\n", "utf8");
+    await fs.writeFile(abs, "Q >> A <!-- sr-aaaaaaaaaaaa -->\n", "utf8");
 
     expect((await core.sync(new Date())).filesDeferred).toBe(1);
     expect((await core.sync(new Date())).filesUnchanged).toBe(1);
@@ -164,7 +233,7 @@ describe("the write guard", () => {
 
   it("picks the deferred card up once the file goes quiet", async () => {
     const abs = path.join(notes, "a.md");
-    await fs.writeFile(abs, "Q :: A\n", "utf8");
+    await fs.writeFile(abs, "Q >> A\n", "utf8");
     await core.sync(new Date());
     expect(store.countCards()).toBe(0);
 
@@ -178,7 +247,7 @@ describe("the write guard", () => {
 
 describe("identity across moves and copies", () => {
   it("a renamed file keeps the card id and its row follows the new path", async () => {
-    await write("old.md", "Q :: A\n");
+    await write("old.md", "Q >> A\n");
     await core.sync(T0);
     const id = "sr-000000000001";
     expect(store.getCard(id)!.file_path).toBe("old.md");
@@ -194,13 +263,13 @@ describe("identity across moves and copies", () => {
   });
 
   it("an edited question keeps the id and does not reset scheduling", async () => {
-    await write("a.md", "Q :: A\n");
+    await write("a.md", "Q >> A\n");
     await core.sync(T0);
     const id = "sr-000000000001";
     await core.reviewCard(id, 3, T0);
     const before = store.getState(id)!;
 
-    await write("a.md", "Q edited :: A edited <!-- sr-000000000001 -->\n");
+    await write("a.md", "Q edited >> A edited <!-- sr-000000000001 -->\n");
     const s = await core.sync(new Date(T0.getTime() + 60_000));
 
     expect(s.cardsUpdated).toBe(1);
@@ -209,14 +278,14 @@ describe("identity across moves and copies", () => {
   });
 
   it("re-mints a duplicated stamped line and REPLACES its stamp", async () => {
-    await write("a.md", "Q :: A <!-- sr-aaaaaaaaaaaa -->\nQ2 :: A2 <!-- sr-aaaaaaaaaaaa -->\n");
+    await write("a.md", "Q >> A <!-- sr-aaaaaaaaaaaa -->\nQ2 >> A2 <!-- sr-aaaaaaaaaaaa -->\n");
     const s = await core.sync(T0);
 
     expect(s.duplicatesReminted).toBe(1);
     const after = await read("a.md");
     // Section 4: never `<!-- old --> <!-- new -->`.
     expect(after).toBe(
-      "Q :: A <!-- sr-aaaaaaaaaaaa -->\nQ2 :: A2 <!-- sr-000000000001 -->\n",
+      "Q >> A <!-- sr-aaaaaaaaaaaa -->\nQ2 >> A2 <!-- sr-000000000001 -->\n",
     );
     expect(store.countCards()).toBe(2);
     expect(store.getCard("sr-aaaaaaaaaaaa")!.question).toBe("Q"); // first occurrence kept it
@@ -224,7 +293,7 @@ describe("identity across moves and copies", () => {
 
   it("skips a duplicate inside a DEFERRED file rather than overwriting the original", async () => {
     const abs = path.join(notes, "a.md");
-    await fs.writeFile(abs, "Q :: A <!-- sr-aaaaaaaaaaaa -->\nCopy :: B <!-- sr-aaaaaaaaaaaa -->\n");
+    await fs.writeFile(abs, "Q >> A <!-- sr-aaaaaaaaaaaa -->\nCopy >> B <!-- sr-aaaaaaaaaaaa -->\n");
 
     await core.sync(new Date());
     // Its id IS on disk, but it belongs to the first occurrence; upserting
@@ -234,12 +303,12 @@ describe("identity across moves and copies", () => {
   });
 
   it("re-mints a card COPIED into a second file", async () => {
-    await write("a.md", "Q :: A\n");
+    await write("a.md", "Q >> A\n");
     await core.sync(T0);
     const id = "sr-000000000001";
 
     // The same stamped line now exists in both files.
-    await write("b.md", `Q :: A <!-- ${id} -->\n`);
+    await write("b.md", `Q >> A <!-- ${id} -->\n`);
     await core.sync(new Date());
 
     expect(store.getCard(id)!.file_path).toBe("a.md"); // original untouched
@@ -252,8 +321,8 @@ describe("identity across moves and copies", () => {
     // in the file, before the transaction opens, because a transaction cannot
     // await. A file holding one of each is what catches a pre-pass that
     // over-skips, or that lets one card's outcome decide another's.
-    await write("orig/keep.md", "Kept :: A\n");
-    await write("orig/gone.md", "Moved :: B\n");
+    await write("orig/keep.md", "Kept >> A\n");
+    await write("orig/gone.md", "Moved >> B\n");
     await core.sync(T0);
     // By path, not by mint order — which file gets id 1 is the walk's business.
     const keptId = store.cardIdsInFile("orig/keep.md")[0]!;
@@ -264,7 +333,7 @@ describe("identity across moves and copies", () => {
     // keep.md stays put and its line is ALSO copied into a new file — a copy.
     // gone.md is deleted, so its line in the new file is a move.
     await fs.rm(path.join(notes, "orig/gone.md"));
-    await write("mixed.md", `Kept :: A <!-- ${keptId} -->\nMoved :: B <!-- ${movedId} -->\n`);
+    await write("mixed.md", `Kept >> A <!-- ${keptId} -->\nMoved >> B <!-- ${movedId} -->\n`);
     await core.sync(new Date());
 
     expect(store.getCard(keptId)!.file_path).toBe("orig/keep.md"); // original untouched
@@ -277,12 +346,12 @@ describe("identity across moves and copies", () => {
   });
 
   it("keeps the id for a card MOVED to a second file", async () => {
-    await write("a.md", "Q :: A\n");
+    await write("a.md", "Q >> A\n");
     await core.sync(T0);
     const id = "sr-000000000001";
 
     await fs.rm(path.join(notes, "a.md"));
-    await write("b.md", `Q :: A <!-- ${id} -->\n`);
+    await write("b.md", `Q >> A <!-- ${id} -->\n`);
     await core.sync(new Date());
 
     expect(store.getCard(id)!.file_path).toBe("b.md");
@@ -311,7 +380,7 @@ describe("configuration errors versus skips", () => {
 
 describe("incremental sync", () => {
   it("writes NOTHING when nothing changed", async () => {
-    await write("a.md", "Q :: A\n");
+    await write("a.md", "Q >> A\n");
     await core.sync(T0);
 
     const before = store.totalChanges();
@@ -325,19 +394,19 @@ describe("incremental sync", () => {
   });
 
   it("does not open an unchanged file, and does open a changed one", async () => {
-    await write("a.md", "Q :: A\n");
-    await write("b.md", "R :: B\n");
+    await write("a.md", "Q >> A\n");
+    await write("b.md", "R >> B\n");
     await core.sync(T0);
 
-    await write("b.md", "R :: B changed <!-- sr-000000000002 -->\n");
+    await write("b.md", "R >> B changed <!-- sr-000000000002 -->\n");
     const s = await core.sync(new Date());
     expect(s.filesRead).toBe(1);
     expect(s.filesUnchanged).toBe(1);
   });
 
   it("--full reads every file even when unchanged", async () => {
-    await write("a.md", "Q :: A\n");
-    await write("b.md", "R :: B\n");
+    await write("a.md", "Q >> A\n");
+    await write("b.md", "R >> B\n");
     await core.sync(T0);
 
     const s = await core.sync(new Date(), { full: true });
@@ -347,7 +416,7 @@ describe("incremental sync", () => {
 
   it("records the POST-write mtime so the next run sees no change", async () => {
     // Recording the pre-write values would make the file look changed forever.
-    await write("a.md", "Q :: A\n");
+    await write("a.md", "Q >> A\n");
     await core.sync(T0);
 
     const s = await core.sync(new Date(T0.getTime() + 60_000));
@@ -356,11 +425,11 @@ describe("incremental sync", () => {
   });
 
   it("loses exactly the cards deleted from a file", async () => {
-    await write("a.md", "A :: 1\nB :: 2\n");
+    await write("a.md", "A >> 1\nB >> 2\n");
     await core.sync(T0);
     expect(store.countCards()).toBe(2);
 
-    await write("a.md", "A :: 1 <!-- sr-000000000001 -->\n");
+    await write("a.md", "A >> 1 <!-- sr-000000000001 -->\n");
     await core.sync(new Date());
 
     expect(store.countCards()).toBe(1);
@@ -369,8 +438,8 @@ describe("incremental sync", () => {
   });
 
   it("triggers the reconciliation pass only when a file vanished", async () => {
-    await write("a.md", "Q :: A\n");
-    await write("b.md", "R :: B\n");
+    await write("a.md", "Q >> A\n");
+    await write("b.md", "R >> B\n");
     await core.sync(T0);
 
     expect((await core.sync(new Date())).reconciled).toBe(false);
@@ -385,7 +454,7 @@ describe("progress reporting", () => {
     // Per CANDIDATE, not per file read — a bar has to advance on a no-change
     // sync too, and it is a hot path precisely because it fires for cached
     // files.
-    for (let i = 0; i < 5; i++) await write(`n${i}.md`, "Q :: A\n");
+    for (let i = 0; i < 5; i++) await write(`n${i}.md`, "Q >> A\n");
     await core.sync(T0);
 
     const seen: Array<[number, number, string]> = [];
@@ -401,7 +470,7 @@ describe("progress reporting", () => {
     // Without this a bar sits pinned at the end of the file loop through prune
     // and ingest, which on a first ingest of a large log is the longest part of
     // the run.
-    await write("a.md", "Q :: A\n");
+    await write("a.md", "Q >> A\n");
     const phases: string[] = [];
     await core.sync(T0, { onProgress: (_d, _t, p) => phases.push(p) });
 
@@ -411,15 +480,15 @@ describe("progress reporting", () => {
   });
 
   it("is optional — a caller that passes nothing is unaffected", async () => {
-    await write("a.md", "Q :: A\n");
+    await write("a.md", "Q >> A\n");
     await expect(core.sync(T0)).resolves.toBeTruthy();
   });
 });
 
 describe("filesStamped", () => {
   it("counts files edited, not cards — one file with many new cards is one", async () => {
-    await write("many.md", "A :: 1\nB :: 2\nC :: 3\n");
-    await write("one.md", "D :: 4\n");
+    await write("many.md", "A >> 1\nB >> 2\nC >> 3\n");
+    await write("one.md", "D >> 4\n");
     const s = await core.sync(T0);
 
     expect(s.cardsNew).toBe(4);
@@ -427,7 +496,7 @@ describe("filesStamped", () => {
   });
 
   it("is zero on a second sync, when nothing needs a stamp", async () => {
-    await write("a.md", "Q :: A\n");
+    await write("a.md", "Q >> A\n");
     await core.sync(T0);
     expect((await core.sync(new Date())).filesStamped).toBe(0);
   });
@@ -438,7 +507,7 @@ describe("filesStamped", () => {
     //
     // Written directly rather than through `write`, which backdates mtime to
     // keep files out of the deferral window on purpose.
-    await fs.writeFile(path.join(notes, "fresh.md"), "Q :: A\n", "utf8"); // mtime = now
+    await fs.writeFile(path.join(notes, "fresh.md"), "Q >> A\n", "utf8"); // mtime = now
     const s = await core.sync(new Date());
     expect(s.filesDeferred).toBe(1);
     expect(s.filesStamped).toBe(0);
@@ -449,8 +518,8 @@ describe("--dry-run", () => {
   it("reports how many files it WOULD edit, having edited none", async () => {
     // The point of the flag: the first sync of an existing collection rewrites
     // every file holding a card, and this is the number that says how many.
-    await write("a.md", "Q :: A\n");
-    await write("b.md", "R :: B\n");
+    await write("a.md", "Q >> A\n");
+    await write("b.md", "R >> B\n");
     const before = store.totalChanges();
 
     const s = await core.sync(T0, { dryRun: true });
@@ -460,12 +529,12 @@ describe("--dry-run", () => {
   });
 
   it("writes neither a stamp nor a row, and still reports what would happen", async () => {
-    await write("a.md", "Q :: A\n");
+    await write("a.md", "Q >> A\n");
     const before = store.totalChanges();
 
     const s = await core.sync(T0, { dryRun: true });
 
-    expect(await read("a.md")).toBe("Q :: A\n");
+    expect(await read("a.md")).toBe("Q >> A\n");
     expect(store.totalChanges()).toBe(before);
     expect(store.countCards()).toBe(0);
     expect(s.cardsFound).toBe(1);
@@ -473,7 +542,7 @@ describe("--dry-run", () => {
   });
 
   it("leaves the real sync free to do the work afterwards", async () => {
-    await write("a.md", "Q :: A\n");
+    await write("a.md", "Q >> A\n");
     await core.sync(T0, { dryRun: true });
     await core.sync(T0);
     expect(store.countCards()).toBe(1);
@@ -482,7 +551,7 @@ describe("--dry-run", () => {
 
 describe("prune", () => {
   it("removes card rows but leaves reviews and card_state untouched", async () => {
-    await write("a.md", "Q :: A\n");
+    await write("a.md", "Q >> A\n");
     await core.sync(T0);
     const id = "sr-000000000001";
     await core.reviewCard(id, 3, T0);
@@ -498,7 +567,7 @@ describe("prune", () => {
   });
 
   it("restores a card on its original schedule, NOT queued as new", async () => {
-    await write("a.md", "Q :: A\n");
+    await write("a.md", "Q >> A\n");
     await core.sync(T0);
     const id = "sr-000000000001";
     await core.reviewCard(id, 3, T0);
@@ -536,7 +605,7 @@ describe("sync conflict copies", () => {
   const CONFLICT = "a.sync-conflict-20260101-120000-ABCDEFG.md";
 
   it("does not mint a second id for every card in the copy", async () => {
-    await write("a.md", "Q1 :: A1\nQ2 :: A2\n");
+    await write("a.md", "Q1 >> A1\nQ2 >> A2\n");
     await core.sync(T0);
     const stamped = await read("a.md");
     expect(store.countCards()).toBe(2);
@@ -552,7 +621,7 @@ describe("sync conflict copies", () => {
   });
 
   it("leaves the copy's bytes untouched", async () => {
-    await write("a.md", "Q :: A\n");
+    await write("a.md", "Q >> A\n");
     await core.sync(T0);
     const stamped = await read("a.md");
 
@@ -564,7 +633,7 @@ describe("sync conflict copies", () => {
   });
 
   it("does not disturb the original or its history", async () => {
-    await write("a.md", "Q :: A\n");
+    await write("a.md", "Q >> A\n");
     await core.sync(T0);
     const id = core.getDueCards(T0, 1)[0]!.id;
     await core.reviewCard(id, 3, T0);
@@ -579,7 +648,7 @@ describe("sync conflict copies", () => {
   it("reports the count on every sync, not only the first", async () => {
     // The file is still there until the user deals with it, and a warning
     // shown once is a warning that gets missed.
-    await write("a.md", "Q :: A\n");
+    await write("a.md", "Q >> A\n");
     await core.sync(T0);
     await write(CONFLICT, await read("a.md"));
 
@@ -590,7 +659,7 @@ describe("sync conflict copies", () => {
   it("counts it as a conflict rather than as unchanged", async () => {
     // It would otherwise be swallowed by the mtime cache on the second run,
     // and the line the user needs would disappear.
-    await write("a.md", "Q :: A\n");
+    await write("a.md", "Q >> A\n");
     await core.sync(T0);
     await write(CONFLICT, await read("a.md"));
     await core.sync(T0);
@@ -601,8 +670,8 @@ describe("sync conflict copies", () => {
   });
 
   it("still enumerates it, so nothing is pruned by its absence", async () => {
-    await write("a.md", "Q :: A\n");
-    await write(CONFLICT, "Q :: A\n");
+    await write("a.md", "Q >> A\n");
+    await write(CONFLICT, "Q >> A\n");
     const s = await core.sync(T0);
 
     expect(s.filesEnumerated).toBe(2);
@@ -611,8 +680,8 @@ describe("sync conflict copies", () => {
   });
 
   it("does not read it, so its cards are not counted as found", async () => {
-    await write("a.md", "Q :: A\n");
-    await write(CONFLICT, "Q :: A\nExtra :: card\n");
+    await write("a.md", "Q >> A\n");
+    await write(CONFLICT, "Q >> A\nExtra >> card\n");
     const s = await core.sync(T0);
 
     expect(s.cardsFound).toBe(1);
@@ -621,8 +690,8 @@ describe("sync conflict copies", () => {
 
   it("leaves an ordinary file that merely looks similar alone", async () => {
     // The guard against over-matching: these are real names people use.
-    await write("a 2.md", "Q :: A\n");
-    await write("b (1).md", "Q2 :: A2\n");
+    await write("a 2.md", "Q >> A\n");
+    await write("b (1).md", "Q2 >> A2\n");
     const s = await core.sync(T0);
 
     expect(s.filesSyncConflict).toBe(0);
@@ -632,15 +701,15 @@ describe("sync conflict copies", () => {
 
 /**
  * Annotations live in the notes folder (ADR 0029), so sync has to leave them
- * alone as firmly as it leaves the log alone: one that contains ` :: ` is not
+ * alone as firmly as it leaves the log alone: one that contains ` >> ` is not
  * a card, and stamping it would write an id into the user's annotation.
  */
 describe("annotation files", () => {
   it("are never enumerated or stamped, even with a card-shaped line in them", async () => {
-    await write("a.md", "Q :: A\n");
+    await write("a.md", "Q >> A\n");
     await core.sync(T0);
     const [card] = core.getDueCards(T0, 10);
-    const text = "confused with :: the other card\n";
+    const text = "confused with >> the other card\n";
     await core.setAnnotation(card!.id, text);
     const rel = `.sr/annotations/${card!.id}.md`;
     await fs.utimes(path.join(notes, rel), MTIME, MTIME);

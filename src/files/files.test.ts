@@ -64,7 +64,7 @@ describe("walking the notes tree", () => {
   });
 
   it("does not descend into a symlinked directory, and counts it", async () => {
-    await write("real/note.md", "Q :: A");
+    await write("real/note.md", "Q >> A");
     await fs.symlink(path.join(root, "real"), path.join(root, "link"), "dir");
     const { candidates, symlinkedDirs } = await enumerate(root);
     expect(candidates.map((c) => c.relPath)).toEqual(["real/note.md"]);
@@ -72,7 +72,7 @@ describe("walking the notes tree", () => {
   });
 
   it("does not follow a symlinked file either", async () => {
-    await write("real.md", "Q :: A");
+    await write("real.md", "Q >> A");
     await fs.symlink(path.join(root, "real.md"), path.join(root, "alias.md"));
     const { candidates } = await enumerate(root);
     expect(candidates.map((c) => c.relPath)).toEqual(["real.md"]);
@@ -90,7 +90,7 @@ describe("walking the notes tree", () => {
     // file sorting after a directory must follow that directory's whole
     // subtree — more than one level down, which nothing else here covers.
     for (const p of ["a.md", "m/b.md", "m/n/c.md", "m/z.md", "n2/d.md", "z.md"]) {
-      await write(p, "Q :: A");
+      await write(p, "Q >> A");
     }
     const { candidates } = await enumerate(root);
     expect(candidates.map((c) => c.relPath)).toEqual([
@@ -369,9 +369,9 @@ describe("a card's annotation", () => {
     }
   });
 
-  it("is never walked as a note, so a ` :: ` inside one is not a card", async () => {
-    await write("a.md", "Q :: A\n");
-    await writeAnnotation(root, ID, "compare :: the other card\n");
+  it("is never walked as a note, so a ` >> ` inside one is not a card", async () => {
+    await write("a.md", "Q >> A\n");
+    await writeAnnotation(root, ID, "compare >> the other card\n");
     const { candidates } = await enumerate(root);
     expect(candidates.map((c) => c.relPath)).toEqual(["a.md"]);
   });

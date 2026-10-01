@@ -9,4 +9,4 @@ export type { CardState } from "./store/index.js";
 export { FsrsScheduler, FSRS_PARAMS, fold } from "./scheduler/index.js";
 export type { Scheduler } from "./scheduler/index.js";
 export { parse, parseLine, stampLine, splitLines, ID_PATTERN } from "./parser/index.js";
-export type { ParsedCard } from "./parser/index.js";
+export type { ContextEntry, ParsedCard } from "./parser/index.js";

@@ -11,11 +11,11 @@ app do*, and *where is that proven*. What it deliberately cannot tell you is wha
 app does **untested** — an area that looks thin here is thinly covered, and that is
 worth reading as a finding rather than a gap in the document.
 
-646 behaviours in 12 areas, which follow [the guides](../guides/) rather than the source tree.
+698 behaviours in 12 areas, which follow [the guides](../guides/) rather than the source tree.
 
-- [Reviewing](#reviewing) — 183
-- [Recognising a card](#recognising-a-card) — 71
-- [Syncing notes](#syncing-notes) — 74
+- [Reviewing](#reviewing) — 187
+- [Recognising a card](#recognising-a-card) — 107
+- [Syncing notes](#syncing-notes) — 80
 - [Recovery and the log](#recovery-and-the-log) — 43
 - [Moving between machines](#moving-between-machines) — 16
 - [Keeping several vaults](#keeping-several-vaults) — 45
@@ -24,13 +24,13 @@ worth reading as a finding rather than a gap in the document.
 - [The database as a cache](#the-database-as-a-cache) — 7
 - [At scale](#at-scale) — 9
 - [Rules the project enforces on itself](#rules-the-project-enforces-on-itself) — 34
-- [The documentation tells the truth](#the-documentation-tells-the-truth) — 51
+- [The documentation tells the truth](#the-documentation-tells-the-truth) — 57
 
 ## Reviewing
 
 _A session: which card is next, what the keys mean, what a rating records, and what comes back before the sitting ends._
 
-**183 behaviours.**
+**187 behaviours.**
 
 ### the order cards are served in
 
@@ -154,6 +154,20 @@ _3 · `host/present.test.ts`_
 - stays quiet about ratings that were never given
 - reports in rating order, not insertion order
 - is empty for a session with no answers in it
+
+### the breadcrumb above a question
+
+_3 · `host/present.test.ts`_
+
+- is the note's name, then each heading and parent bullet
+- is just the note's name for a card with nothing above it
+- shortens each long segment on its own
+
+### what the app says when the card syntax changed
+
+_1 · `host/present.test.ts`_
+
+- names both separators, the one that stopped, and the preview
 
 ### which program opens a note
 
@@ -388,13 +402,13 @@ _7 · `files/files.test.ts`_
 - refuses an id that is not a stamp, before it becomes a path
 - leaves no partial or temporary file behind, whether the write succeeds or fails
 - comes back byte-identical, CRLF and missing final newline included
-- is never walked as a note, so a ` :: ` inside one is not a card
+- is never walked as a note, so a ` >> ` inside one is not a card
 
 ## Recognising a card
 
 _Text in, cards out. Also — and mostly — the shapes that are deliberately NOT cards, because a false positive writes a stamp into someone's note._
 
-**71 behaviours.**
+**107 behaviours.**
 
 ### the basic form
 
@@ -404,43 +418,83 @@ _3 · `parser/parser.test.ts`_
 - reports a 0-based lineIndex
 - finds multiple cards in one document
 
-### `::` without surrounding whitespace is not a separator
+### `>>` and `==` both make a forward card
 
 _4 · `parser/parser.test.ts`_
 
-- foo::bar
+- Q >> A
+- Q == A
+- - Covalent bond == a shared pair of electrons
+- splits on whichever separator comes first
+
+### a separator without whitespace on both sides is not a separator
+
+_5 · `parser/parser.test.ts`_
+
+- foo>>bar
+- a ==b
+- a== b
+- x<<y >>z
 - key::value in a field
-- a ::b
-- a:: b
+
+### a backslash keeps a separator literal
+
+_4 · `parser/parser.test.ts`_
+
+- x \== y
+- a \>> b
+- - if x \== y then stop
+- still splits on an unescaped separator later in the line
+
+### `::` is not a card
+
+_2 · `parser/parser.test.ts`_
+
+- Mitochondria :: produce ATP
+- - Q :: A <!-- sr-a7Kd9mQ2xR4v -->
+
+### RemNote's other tokens are not forward cards
+
+_9 · `parser/parser.test.ts`_
+
+- Q >>> A
+- Q >>- A
+- Q ==- A
+- Q ==A) A
+- Q >>A) A
+- Q >>1. A
+- Q << A
+- Q <> A
+- Q ;; A
 
 ### a later separator is answer text
 
 _1 · `parser/parser.test.ts`_
 
-- keeps `::` in the answer — one line is always at most one card
+- keeps `>>` in the answer — one line is always at most one card
 
 ### leading list markers are stripped from the question
 
 _9 · `parser/parser.test.ts`_
 
-- - Q :: A
-- * Q :: A
-- + Q :: A
-- 1. Q :: A
-- 12. Q :: A
-- 1) Q :: A
-- - [ ] Q :: A
-- - [x] Q :: A
--   - Q :: A
+- - Q >> A
+- * Q >> A
+- + Q >> A
+- 1. Q >> A
+- 12. Q >> A
+- 1) Q >> A
+- - [ ] Q >> A
+- - [x] Q >> A
+-   - Q >> A
 
 ### an empty side is not a card
 
 _5 · `parser/parser.test.ts`_
 
-- " :: A"
-- "Q :: "
-- " :: "
-- "- :: A"
+- " >> A"
+- "Q >> "
+- " >> "
+- "- >> A"
 - is empty when the answer is nothing but a comment
 
 ### stamps
@@ -499,6 +553,27 @@ _8 · `parser/parser.test.ts`_
 - skips an indented bullet with no list above it
 - leaves every shallower line as it was
 
+### a card's context is the headings and bullets above it
+
+_16 · `parser/parser.test.ts`_
+
+- is the parent bullets, outermost first, under the headings
+- is empty for a card with no heading or bullet above it
+- gives a card outside a list the headings above it
+- replaces a heading with the next one at its level, and clears deeper ones
+- skips a level that was never opened
+- strips a closing sequence, comments and stamps from what it shows
+- shows only the term of a `::` ancestor, as a Concept card would
+- drops a bullet that leaves the list, and a sibling is not a parent
+- drops the list at a heading
+- keeps a parent across blank lines between items
+- leaves out an empty bullet
+- does not take a heading in a fence
+- does not take a heading in a blockquote
+- does not take a heading in frontmatter
+- does not take a tag, which is not a heading
+- does not take a heading inside a list item
+
 ### splitLines keeps each terminator
 
 _5 · `parser/parser.test.ts`_
@@ -531,7 +606,7 @@ _2 · `parser/parser.test.ts`_
 
 _Finding what changed, stamping it, pruning what is gone, and saying what happened._
 
-**74 behaviours.**
+**80 behaviours.**
 
 ### which counts a sync summary shows
 
@@ -569,6 +644,22 @@ _6 · `core/sync.test.ts`_
 - preserves a missing final newline
 - stamps every card in a file in one write
 - does not stamp inside a code block
+
+### a card's context follows its note
+
+_2 · `core/sync.test.ts`_
+
+- is stored when the card is found
+- changes when a parent is edited, without the card's own line changing
+
+### a change of card syntax
+
+_4 · `core/sync.test.ts`_
+
+- makes the next sync read every note, once
+- is not reported for a vault that has never synced
+- is still owed after a preview, which records nothing
+- drops cards written with `::`, keeping their history for when the line comes back
 
 ### the write guard
 
@@ -1366,7 +1457,7 @@ _5 · `behaviours/areas.test.ts`_
 
 _Documents that make checkable claims, checked._
 
-**51 behaviours.**
+**57 behaviours.**
 
 ### the demo collection
 
@@ -1377,9 +1468,10 @@ _2 · `demo.test.ts`_
 
 ### syntax.md keeps its promises
 
-_5 · `demo.test.ts`_
+_6 · `demo.test.ts`_
 
 - skips every shape it demonstrates
+- reads neither an escaped separator nor `::`
 - does not read the inline code span as a card
 - strips list markers and task boxes from the question
 - strips a trailing comment that is not a stamp
@@ -1387,12 +1479,14 @@ _5 · `demo.test.ts`_
 
 ### the examples the guide shows a reader
 
-_5 · `journeys/first-sync.test.ts`_
+_7 · `journeys/first-sync.test.ts`_
 
 - shows a stamped line that really is one
 - shows three shapes that are cards, and they all are
 - is right that a nested bullet is a card at any depth
-- is right that `foo::bar` is not one
+- is right that `a>>b` is not one
+- is right that a backslash keeps a separator literal
+- is right that ` :: ` is not a card
 - is right about every context it says is skipped
 
 ### looking before it writes
@@ -1408,6 +1502,19 @@ _2 · `journeys/first-sync.test.ts`_
 
 - edits every file that contains a card, and only those
 - leaves a second run with nothing to do, so the edit happens once
+
+### moving cards off ` :: `
+
+_2 · `journeys/first-sync.test.ts`_
+
+- keeps a card's id, and so its history, through the guide's command
+- previews how many lines stop being cards before anything is written
+
+### the guide's breadcrumb is the one a card is shown under
+
+_1 · `journeys/reviewing.test.ts`_
+
+- shows its example card under the path the guide says
 
 ### the guide's four ratings are the four the app honours
 

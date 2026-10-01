@@ -49,7 +49,7 @@ describe("what the guide says is durable, and where it says it lives", () => {
 
   it("writes a log line at the path it promised, for a real review", async () => {
     open = await newCollection("desktop");
-    await open.write("a.md", "Q1 :: A1\n");
+    await open.write("a.md", "Q1 >> A1\n");
     await open.core.sync(T0);
     await open.core.reviewCard(open.core.getDueCards(T0, 1)[0]!.id, 3, T0);
 
@@ -65,7 +65,7 @@ describe("deleting the database", () => {
     expect(await recovery()).toContain("The database is a cache, and you can delete it");
 
     open = await newCollection();
-    await open.write("a.md", "Q1 :: A1\nQ2 :: A2\nQ3 :: A3\n");
+    await open.write("a.md", "Q1 >> A1\nQ2 >> A2\nQ3 >> A3\n");
     await open.core.sync(T0);
 
     const queue = open.core.getDueCards(T0, 10);
@@ -96,7 +96,7 @@ describe("deleting the database", () => {
     // rebuild test's job; this is the other half — a rebuild of an unchanged
     // collection must not rewrite a single note.
     open = await newCollection();
-    await open.write("a.md", "Q1 :: A1\n");
+    await open.write("a.md", "Q1 >> A1\n");
     await open.core.sync(T0);
     const stamped = await open.read("a.md");
 
@@ -116,8 +116,8 @@ describe("what rebuilding does not fix", () => {
     expect(text).toContain("comes back on its original schedule rather than as new");
 
     open = await newCollection();
-    await open.write("a.md", "Q1 :: A1\n");
-    await open.write("b.md", "Q2 :: A2\n");
+    await open.write("a.md", "Q1 >> A1\n");
+    await open.write("b.md", "Q2 >> A2\n");
     await open.core.sync(T0);
 
     // Both cards are reviewed, so "new" below means "has no history at all"
