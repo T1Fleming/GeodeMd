@@ -219,9 +219,15 @@ export interface RunStarted {
   joined: boolean;
 }
 
+/**
+ * What a long run does. `fresh` sets the vault's review history aside and
+ * derives the database again (ADR 0034); like `rebuild`, nothing joins it.
+ */
+export type RunKind = "sync" | "rebuild" | "fresh";
+
 export interface RunProgress {
   runId: string;
-  kind: "sync" | "rebuild";
+  kind: RunKind;
   phase: SyncPhase;
   done: number;
   total: number;
@@ -239,7 +245,7 @@ export interface RunProgress {
 
 export interface RunFinished {
   runId: string;
-  kind: "sync" | "rebuild";
+  kind: RunKind;
   dryRun: boolean;
   result: Result<SyncSummary>;
 }
@@ -305,7 +311,7 @@ export interface GeodeApi {
   statsRead(): Promise<Result<Stats>>;
   cardsDue(limit: number): Promise<Result<DueCard[]>>;
   cardsReview(cardId: string, rating: 1 | 2 | 3 | 4): Promise<Result<Rated>>;
-  runStart(kind: "sync" | "rebuild", req: SyncRequest): Promise<Result<RunStarted>>;
+  runStart(kind: RunKind, req: SyncRequest): Promise<Result<RunStarted>>;
   runStatus(): Promise<Result<RunStatus>>;
   /** Open a card's note. `filePath` is relative to notesPath, as stored. */
   noteOpen(filePath: string, line: number | null): Promise<Result<NoteOpened>>;

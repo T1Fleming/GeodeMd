@@ -16,6 +16,8 @@ See [ADR 0008](../decisions/0008-incremental-sync-costs-what-changed.md).
 
 The code carries these step numbers as comments, so they are the same landmarks in both places.
 
+**Before step 1: a fresh start.** If `.sr/reset.json` holds a time other than the database's `meta.reset`, the vault was started fresh here or on another device. The sync drops every table, records the marker and reads everything, as a rebuild would. A preview leaves this to the real sync ([ADR 0034](../decisions/0034-start-a-vault-fresh.md)).
+
 ### 1. Enumerate — the seam
 
 Produce `(path, mtime, size)` for every `.md` file, walking recursively and sorting directory entries so order is deterministic across machines. Skips:
@@ -137,7 +139,7 @@ A file that **failed to read** was still enumerated and still has a `files` row,
 
 ### 7. Ingest logs
 
-For each `.jsonl` in `<notes>/.sr/log/`, stat it and compare to its `log_files` row:
+For each `.jsonl` in `<notes>/.sr/log/`, stat it and compare to its `log_files` row. **A review dated before `.sr/reset.json`'s time is skipped**: that history was set aside by a fresh start, and a restored shard must not bring it back ([ADR 0034](../decisions/0034-start-a-vault-fresh.md)).
 
 - `offset == size` → nothing new; **do not open the file.** This is what makes frozen monthly shards free to skip.
 - `size < offset` → truncated or replaced; reset to 0 and read whole. `INSERT OR IGNORE` makes that harmless.

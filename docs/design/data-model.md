@@ -47,6 +47,8 @@ Two things the arrows are saying.
 - Writes are `O_APPEND`, one `write()` per review, `fsync` before SQLite is touched.
 - Uniqueness is `(card_id, rated_at)`. `device` names the file and appears in the line but is **never part of identity**.
 
+**A fresh start** writes `.sr/reset.json` (`{ "at": "<ISO>" }`) and moves every shard whole to `.sr/archive/<at>/log/`, which nothing reads. Ingest skips reviews dated before the marker, and a database whose `meta.reset` differs from it is derived again ([ADR 0034](../decisions/0034-start-a-vault-fresh.md)). The marker is durable state like the log; the archive is kept only so the start can be undone.
+
 `reviewCard` appends to the log first, then updates SQLite. A crash between the two leaves a review in the log and not the database, and the next ingest folds it in. See [ADR 0005](../decisions/0005-append-only-review-log.md).
 
 ## The schema
@@ -168,6 +170,6 @@ The app runs it when it opens a vault (`Active.ensure`), before any read. The re
 
 `rebuild` drops every table and runs a full sync — steps 1 through 8, stamp writes included, so a card authored while the database was gone still gets its ID. It is a normal sync against an empty database, not a separate code path, which is the only reason it can be trusted to stay working.
 
-Because nothing in the schema is non-derivable, it recovers the database *completely*, which is why the rebuild test asserts full-table equality with no carve-outs. `meta` is derived from the code rather than from the notes or the log, like the schema itself; a rebuild writes the running scheduler's version into it.
+Because nothing in the schema is non-derivable, it recovers the database *completely*, which is why the rebuild test asserts full-table equality with no carve-outs. `meta` is derived from the code rather than from the notes or the log, like the schema itself; a rebuild writes the running scheduler's version into it, and the reset time from `.sr/reset.json` when there is one.
 
 At the top of the scale range it is minutes, not milliseconds. It is the recovery path; the [incremental sync](sync.md) is the daily one.

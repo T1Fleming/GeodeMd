@@ -13,13 +13,14 @@
 import { PHASE_LABEL } from "../../../host/present.js";
 import type {
   ErrorKind,
+  RunKind,
   RunFinished,
   RunProgress,
   RunStatus,
   SyncSummary,
 } from "../../ipc.js";
 
-export type RunKind = "sync" | "rebuild";
+export type { RunKind };
 
 export type RunView =
   /** Nothing has run in this process, or nothing since the last one was shown. */

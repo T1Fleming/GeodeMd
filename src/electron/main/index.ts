@@ -43,6 +43,7 @@ import type {
   PickPurpose,
   Rated,
   Result,
+  RunKind,
   Stats,
   SyncRequest,
   VaultList,
@@ -191,7 +192,7 @@ function register(): void {
     }),
   );
 
-  ipcMain.handle(CH.runStart, async (_e, kind: "sync" | "rebuild", req: SyncRequest) => {
+  ipcMain.handle(CH.runStart, async (_e, kind: RunKind, req: SyncRequest) => {
     const r = await guard(async () => (await active.ensure()).runner.start(kind, req));
     // `start` returns a Result of its own; unwrap rather than nest.
     return r.ok ? r.value : r;

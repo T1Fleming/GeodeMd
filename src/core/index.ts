@@ -153,6 +153,12 @@ const UNNESTED_SHOWN = 10;
 /** The `meta` key naming the card syntax that derived `cards` (ADR 0031). */
 const SYNTAX_KEY = "syntax";
 
+/**
+ * The `meta` key holding the reset time this database was derived under, or
+ * absent when the vault was never started fresh (ADR 0034).
+ */
+const RESET_KEY = "reset";
+
 /** The `meta` key naming the rules that derived `cards.context` (ADR 0032). */
 const CONTEXT_KEY = "context";
 
@@ -210,7 +216,24 @@ export class Core {
     const summary = emptySummary();
     const { notesPath } = this.config;
     const dryRun = opts.dryRun === true;
-    // Cards found under older rules stay in the database until their note is
+    // A notesPath that is missing or is not a directory is a CONFIGURATION
+    // error: every count the run would report is meaningless, a silent
+    // zero-card sync looks like success, and an empty directory would prune the
+    // entire collection in step 6.
+    await assertNotesDir(notesPath);
+
+    // A fresh start anywhere — on this device or one sharing the folder —
+    // means this database holds history the vault has set aside. Derive it
+    // again under the marker, as a rebuild would (ADR 0034). A preview writes
+    // nothing, so it leaves this to the real sync.
+    const reset = await files.readReset(notesPath);
+    if (!dryRun && reset !== (this.store.getMeta(RESET_KEY) ?? null)) {
+      this.store.dropAll();
+      this.store.setMeta(SCHEDULER_KEY, this.scheduler.version);
+      if (reset !== null) this.store.setMeta(RESET_KEY, reset);
+    }
+
+    // After the reset check, which may have emptied `meta`. Cards found under older rules stay in the database until their note is
     // read again, and the mtime cache would never read an untouched note. So a
     // change of syntax makes this one sync read everything (ADR 0031).
     const syntaxStale = this.store.getMeta(SYNTAX_KEY) !== SYNTAX_VERSION;
@@ -218,12 +241,6 @@ export class Core {
     // card — so it is caught up silently, with no notice (ADR 0032).
     const contextStale = this.store.getMeta(CONTEXT_KEY) !== CONTEXT_VERSION;
     const full = opts.full === true || syntaxStale || contextStale;
-
-    // A notesPath that is missing or is not a directory is a CONFIGURATION
-    // error: every count the run would report is meaningless, a silent
-    // zero-card sync looks like success, and an empty directory would prune the
-    // entire collection in step 6.
-    await assertNotesDir(notesPath);
 
     // `known` is taken BEFORE the walk so that files inserted during this pass
     // cannot skew step 6's comparison.
@@ -589,6 +606,11 @@ export class Core {
     let linesSkipped = 0;
 
     const shards = await files.listShards(this.config.notesPath);
+    // Reviews from before a fresh start are history the vault set aside. They
+    // may still arrive — a shard restored by a file syncer, or written by a
+    // device that had not caught up — and are skipped, not counted as bad
+    // lines (ADR 0034). Fixed-width UTC sorts as a string.
+    const reset = await files.readReset(this.config.notesPath);
     /** card id -> earliest rated_at that actually inserted this pass. */
     const inserted = new Map<string, string>();
 
@@ -625,6 +647,7 @@ export class Core {
             linesSkipped++;
             continue;
           }
+          if (reset !== null && obj.at < reset) continue;
           rows.push({ card: obj.card, at: obj.at, rating: obj.rating });
         } catch {
           // The expected malformed line is a truncated final line from a crash
@@ -826,6 +849,23 @@ export class Core {
    */
   syntaxChanged(): boolean {
     return this.store.countFiles() > 0 && this.store.getMeta(SYNTAX_KEY) !== SYNTAX_VERSION;
+  }
+
+  /**
+   * Set the vault's review history aside and start every card from new
+   * (ADR 0034). Card ids stay, so no note is edited; annotations stay.
+   *
+   * In the order that survives a crash: the marker first, because it is the
+   * whole decision — a sync anywhere that finds it derives the database again
+   * under it — then the log moves to `.sr/archive/`, then this database is
+   * derived again by the sync that the marker forces.
+   */
+  async startFresh(now: Date, opts: SyncOptions = {}): Promise<SyncSummary> {
+    await assertNotesDir(this.config.notesPath);
+    const at = files.formatAt(now);
+    await files.writeReset(this.config.notesPath, at);
+    await files.archiveLogs(this.config.notesPath, at);
+    return this.sync(now, { ...opts, dryRun: false });
   }
 
   async rebuild(now: Date, opts: SyncOptions = {}): Promise<SyncSummary> {

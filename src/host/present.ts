@@ -487,3 +487,10 @@ export function restingText(cards: number, at: Date): string {
 export function dueNowText(count: number, capped: boolean): string {
   return `${countText(count, capped)} due now`;
 }
+
+/** What each kind of long run is called on screen (ADR 0034 added `fresh`). */
+export const RUN_LABEL: Readonly<Record<"sync" | "rebuild" | "fresh", string>> = {
+  sync: "sync",
+  rebuild: "rebuild",
+  fresh: "fresh start",
+};

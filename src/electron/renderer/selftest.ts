@@ -264,6 +264,8 @@ export async function runSelfTest(): Promise<void> {
     await runHelpChecks();
     // Last: it waits a real minute, and rates every card left in the vault.
     await runRestingChecks();
+    // After the resting checks, so the vault has real history to set aside.
+    await runFreshChecks();
 
     const failed = results.some((r) => r.includes("FAIL"));
     console.log(["SELFTEST", ...results].join("\n"));
@@ -1020,6 +1022,39 @@ async function runRestingChecks(): Promise<void> {
     await click(".done .review-due", "Review");
     check("and clicking Review starts a sitting with that card", (await until(".question")) && text(".question") === last, text(".question"));
   }
+}
+
+/**
+ * Start fresh, for real (ADR 0034): two clicks on the Sync screen, then every
+ * card in the vault is new again, by the Vault screen's own counts.
+ */
+async function runFreshChecks(): Promise<void> {
+  await click(".tabs .tab", "Sync");
+  await click(".fresh button", "Start this vault fresh");
+  check("start fresh asks first", exists(".fresh .confirm"), text(".fresh .confirm p"));
+  await shot("sync-04-fresh-confirm");
+  await click(".fresh .confirm button", "Start fresh");
+  let finished = false;
+  for (let i = 0; i < 100 && !finished; i++) {
+    finished = text(".summary").includes("fresh start finished");
+    if (!finished) await settle(50);
+  }
+  check("and reports back as a fresh start", finished, text(".summary .muted"));
+
+  await click(".tabs .tab", "Vault");
+  await until(".tiles");
+  const tile = (label: string): string => {
+    const t = Array.from(document.querySelectorAll(".tile")).find(
+      (e) => e.querySelector(".label")?.textContent?.trim() === label,
+    );
+    return t?.querySelector(".value")?.textContent?.trim() ?? "";
+  };
+  check(
+    "after which every card is new and none is due",
+    tile("new") === tile("cards in total") && tile("due now") === "0",
+    `new ${tile("new")} of ${tile("cards in total")}, due now ${tile("due now")}`,
+  );
+  await shot("stats-02-fresh");
 }
 
 async function runHelpChecks(): Promise<void> {
