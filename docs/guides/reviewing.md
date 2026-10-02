@@ -74,9 +74,13 @@ A card you have been reviewing for months, rated `1`, comes back in 10 minutes. 
 Two things follow that you will see on screen:
 
 - **The counter grows.** `3/23` becoming `3/24` is a second look being earned, not a miscount. The second number is *answers still owed*, and a card on a short step owes one.
-- **"Finished" means nothing is owed**, not "you have seen every card once". A session of 23 cards is often 40-odd answers.
+- **A session of 23 cards is often 40-odd answers**, because cards you saw early in it come back before the end.
 
-When the only cards left are due a few minutes out, they are shown **early** rather than making you wait — nothing ever counts down, and there is no timer. And a card you keep pressing `1` on keeps coming back, which is the point; `q` always works, and quitting is not a failure.
+**A card is never shown before it is due.** When the only cards left are due a few minutes out, the session ends and says when they come back — `1 card comes back at 12:06`. A card shown again seconds after you rated it is a review the scheduler barely counts, and rating it `hard` there makes the scheduler think you remember it *less* well than before.
+
+**Leave the window open and the finished screen offers them when they are due**: `1 due now`, and a **Review** button. It checks just after the time it named, every minute otherwise, whenever the window comes back to the front, and when you press **Check again**. The *Nothing due* screen does the same for cards that come due while the app is open — tomorrow's reviews, if you leave it running overnight. Neither ever starts a session by itself, so the tally of the one you just finished stays on screen until you choose.
+
+A card you keep pressing `1` on keeps coming back, which is the point; `q` always works, and quitting is not a failure.
 
 ## `0 later` — the key for "not now"
 

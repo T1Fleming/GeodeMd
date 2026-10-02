@@ -197,8 +197,29 @@ export function current(s: Session): DueCard | null {
   return s.card;
 }
 
+/**
+ * The session has nothing more to show: the user quit, nothing is owed, or —
+ * since ADR 0033 — nothing on screen and nothing in flight, which means the
+ * last keypress found no card it was allowed to show. Cards still waiting on
+ * a learning step are not shown early; see `resting`.
+ *
+ * No clock: whether a card was servable was decided on that keypress, and the
+ * finished screen takes over from there.
+ */
 export function isOver(s: Session): boolean {
-  return s.quit || queue.isEmpty(s.queue);
+  return s.quit || queue.isEmpty(s.queue) || (s.card === null && s.queue.inFlight.length === 0);
+}
+
+/**
+ * Cards this sitting still owes that are not due yet, and when the first one
+ * is — what the finished screen says will come back, and when it wakes to
+ * offer them (ADR 0033). Null when nothing is waiting, or the user quit: a
+ * session stopped early says so instead.
+ */
+export function resting(s: Session): { cards: number; at: number } | null {
+  if (s.quit) return null;
+  const at = queue.nextDueAt(s.queue);
+  return at === null ? null : { cards: s.queue.waiting.length, at };
 }
 
 /** Cards answered so far. Not a position in the queue — a card can return. */

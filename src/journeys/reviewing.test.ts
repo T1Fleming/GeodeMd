@@ -31,6 +31,7 @@ import { cardLineNote, noteMarkdown } from "../host/note.js";
 import { initConfig, readConfig, setEditor, setViewNotesInside } from "../host/config.js";
 import type { Machine } from "../host/editor.js";
 import { FsrsScheduler } from "../scheduler/index.js";
+import { IDLE_RECHECK_MS, nextDueAt, openQueue, rated, scheduled, serve } from "../host/queue.js";
 import { codeSpans, fences, guide, plain, tableAfter } from "./guide.js";
 import { newCollection } from "./collection.js";
 import type { Collection } from "./collection.js";
@@ -259,6 +260,25 @@ describe("the intervals the guide quotes are the ones FSRS produces", () => {
       const expected = unit!.startsWith("day") ? Number(n) * 1440 : Number(n);
       expect(minutes, `the guide says \`${key}\` gives ${stated}`).toBe(expected);
     }
+  });
+
+  it("is right that a card is never shown before it is due, and the finished screen says when", async () => {
+    const text = await reviewing();
+    expect(text).toContain("**A card is never shown before it is due.**");
+    expect(text).toContain("every minute otherwise");
+    expect(IDLE_RECHECK_MS).toBe(60_000);
+
+    // The real scheduler and the real queue: a new card rated `hard` with
+    // nothing else left is not served until its time comes.
+    const scheduler = new FsrsScheduler();
+    const card = { id: "sr-000000000001", question: "Q", answer: "A", filePath: "a.md", lineNo: 1, locator: "a.md:1", context: [] };
+    const next = scheduler.next(scheduler.initial(T0), 2, T0);
+    let q = rated(openQueue([card]), card);
+    q = scheduled(q, card.id, { due: next.due, state: next.state }, T0);
+    const dueAt = nextDueAt(q)!;
+    expect(dueAt).toBeGreaterThan(T0.getTime());
+    expect(serve(q, new Date(dueAt - 1))).toBeNull();
+    expect(serve(q, new Date(dueAt))?.id).toBe(card.id);
   });
 
   it("is right that a long-standing card rated `1` comes back in ten minutes", async () => {

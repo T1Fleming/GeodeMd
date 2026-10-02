@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  dueNowText,
+  restingText,
   unnestedReason,
   ANCESTORS_SHOWN,
   cardContext,
@@ -362,5 +364,18 @@ describe("what the app says about card lines that are not nested", () => {
     const text = unnestedReason({ cardLinesUnnested: 12, unnestedAt: ["a.md:1", "a.md:2"] })!;
     expect(text).toContain("12 lines look like cards");
     expect(text).toContain("a.md:1, a.md:2, and 10 more");
+  });
+});
+
+describe("what the app says about cards not due yet, and cards due now", () => {
+  it("names how many cards come back, and at what time", () => {
+    const at = new Date(2026, 9, 2, 12, 6);
+    expect(restingText(1, at)).toMatch(/^1 card comes back at 12:06/);
+    expect(restingText(2, at)).toMatch(/^2 cards come back at 12:06/);
+  });
+
+  it("counts cards due now, as a floor when the count stopped at the cap", () => {
+    expect(dueNowText(3, false)).toBe("3 due now");
+    expect(dueNowText(10000, true)).toBe("10000+ due now");
   });
 });

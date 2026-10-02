@@ -18,6 +18,7 @@ import { Sync } from "./Sync.js";
 import type { OpenIn, Session } from "./model/session.js";
 import { choose, leftNote, switcherOptions } from "./model/vaults.js";
 import type { Scheduled } from "../../host/queue.js";
+import { IdleCheck } from "./IdleCheck.js";
 import { backlogCapped, rescheduledText, syntaxChangedText } from "../../host/present.js";
 
 declare global {
@@ -424,6 +425,8 @@ function ReviewScreen({
         <p className="muted">
           {screen.total} cards in this vault. Sync after writing more.
         </p>
+        {/* Cards that come due while this sits open are offered (#67). */}
+        <IdleCheck nextDueAt={null} onReview={() => void load()} />
       </main>
     );
   }
@@ -448,6 +451,7 @@ function ReviewScreen({
       // the same condition as the backlog chip, and the replacement for the
       // CLI's `-n` (ADR 0025).
       onMore={screen.backlog > screen.queue.length ? () => void load() : undefined}
+      onAgain={() => void load()}
     />
   );
 }

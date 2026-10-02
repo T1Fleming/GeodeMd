@@ -80,25 +80,43 @@ export function isEmpty(q: ReviewQueue): boolean {
 /**
  * Which card to show, at this instant.
  *
- * Three rules, in order:
+ * Two rules, in order:
  *
  * 1. **A waiting card whose time has come goes first.** It is genuinely due,
  *    and re-testing it ten minutes later is the entire point of the learning
  *    steps — holding it behind thirty unseen cards would defeat them.
  * 2. **Otherwise the next unseen card**, in the snapshot's order.
- * 3. **Otherwise the earliest waiting card, early.** Nothing else is left, so
- *    showing it now beats idling until it ripens: the session never waits, and
- *    no timer ever has to fire (ADR 0023).
  *
- * Returns null when there is nothing to show *yet* — every remaining card is
- * in flight. Ask `isEmpty` to tell that apart from a finished session.
+ * **A waiting card is never shown before it is due.** When neither rule finds
+ * a card, this returns null and the session ends for now: the waiting cards
+ * come back when they are due, offered by the finished screen (ADR 0033). A
+ * card shown seconds after it was rated is a review FSRS barely credits, and
+ * one rated `hard` that way loses stability. ADR 0023 served it early instead,
+ * because a finished screen had no way to say when to come back; it has now.
+ *
+ * Also null while every remaining card is in flight. Ask `isEmpty` whether
+ * anything is owed at all, and `nextDueAt` when the next one is due.
  */
 export function serve(q: ReviewQueue, now: Date): DueCard | null {
   const soonest = q.waiting[0];
   if (soonest && soonest.dueAt <= now.getTime()) return soonest.card;
   if (q.fresh.length > 0) return q.fresh[0]!;
-  return soonest ? soonest.card : null;
+  return null;
 }
+
+/** When the soonest waiting card is due, in epoch ms; null when none is waiting. */
+export function nextDueAt(q: ReviewQueue): number | null {
+  return q.waiting[0]?.dueAt ?? null;
+}
+
+/**
+ * How often a review screen with no card on it checks whether anything has
+ * come due, when it does not know a due time to wake for (#67, ADR 0033).
+ *
+ * A timer is safe there and nowhere else: the no-timer rule exists so a card
+ * never changes under someone reading it, and these screens have no card.
+ */
+export const IDLE_RECHECK_MS = 60_000;
 
 /**
  * `0 later` — the card moves, and nothing is recorded (ADR 0022).
@@ -108,12 +126,12 @@ export function serve(q: ReviewQueue, now: Date): DueCard | null {
  * way loses its due time, and that is correct: it had already ripened, or it
  * would not have been on screen.
  *
- * Deferring the only *unseen* card returns it immediately rather than pulling a
- * waiting card early, even when one is a minute away. That is deliberate: the
- * back of the unseen cards is a place a card can always be served from, where
- * "behind everything, including the waiting cards" is not — a card that keeps
- * re-entering a learning step would keep being served early ahead of it, and a
- * deferred card could be starved for the rest of the session. `q` always works.
+ * Deferring the only *unseen* card returns it immediately, even when a waiting
+ * card is a minute from due. That is deliberate: the back of the unseen cards
+ * is a place a card can always be served from, where "behind everything,
+ * including the waiting cards" is not — a card that keeps re-entering a
+ * learning step would keep ripening ahead of it, and a deferred card could be
+ * starved for the rest of the session. `q` always works.
  */
 export function setAside(q: ReviewQueue, card: DueCard): ReviewQueue {
   return {
