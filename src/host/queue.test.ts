@@ -7,7 +7,7 @@
 import { describe, expect, it } from "vitest";
 import type { DueCard } from "../core/index.js";
 import { FsrsScheduler, inShortTermSteps } from "../scheduler/index.js";
-import { isEmpty, openQueue, owed, rated, scheduled, serve, setAside } from "./queue.js";
+import { isEmpty, nextDueAt, openQueue, owed, rated, scheduled, serve, setAside } from "./queue.js";
 import type { ReviewQueue, Scheduled } from "./queue.js";
 
 const card = (n: number): DueCard => ({
@@ -110,21 +110,28 @@ describe("a card that was rated", () => {
 });
 
 describe("the end of the queue", () => {
-  it("serves a waiting card early rather than idling", () => {
-    // The chosen policy: nothing else is left, so show it now. No timer ever
-    // has to fire, and the session stays finite.
+  it("never shows a waiting card before it is due", () => {
+    // ADR 0033: nothing else is left, so the session ends for now and the
+    // card comes back when it is due, offered by the finished screen.
     let q = rated(openQueue([card(1)]), card(1));
     q = scheduled(q, card(1).id, learning(10), T0);
-    expect(shown(q, T0)).toBe("Q1");
+    expect(serve(q, at(9))).toBeNull();
+    expect(isEmpty(q)).toBe(false);
+    expect(shown(q, at(10))).toBe("Q1");
   });
 
-  it("serves the earliest of several early", () => {
+  it("says when the soonest of several waiting cards is due", () => {
     let q = openQueue([card(1), card(2)]);
     q = rated(q, card(1));
     q = rated(q, card(2));
     q = scheduled(q, card(1).id, learning(10), T0);
     q = scheduled(q, card(2).id, learning(5), T0);
-    expect(shown(q, T0)).toBe("Q2");
+    expect(nextDueAt(q)).toBe(at(5).getTime());
+    expect(shown(q, at(5))).toBe("Q2");
+  });
+
+  it("has no next due time when nothing is waiting", () => {
+    expect(nextDueAt(openQueue([card(1)]))).toBeNull();
   });
 
   it("is over only when every card has graduated", () => {

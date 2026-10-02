@@ -262,6 +262,8 @@ export async function runSelfTest(): Promise<void> {
     await runViewerChecks();
     await runVaultChecks();
     await runHelpChecks();
+    // Last: it waits a real minute, and rates every card left in the vault.
+    await runRestingChecks();
 
     const failed = results.some((r) => r.includes("FAIL"));
     console.log(["SELFTEST", ...results].join("\n"));
@@ -973,6 +975,53 @@ async function runSetupChecks(): Promise<void> {
  * is one source and two surfaces, and a Help window that silently shipped a
  * stale copy would look identical.
  */
+/**
+ * A sitting whose only card left is not due yet ends instead of showing it
+ * early, says when it comes back, and offers it once it is due (ADR 0033, #67).
+ *
+ * Run for real, against the wall clock: every card but the last is rated
+ * `easy` so it graduates, the last `again`, which FSRS puts one minute out.
+ * The minute is then waited out — the only way to show that the timer, the
+ * stats call and the button are wired to each other, which no API check can.
+ */
+async function runRestingChecks(): Promise<void> {
+  await click(".tabs .tab", "Review");
+  await until(".question, .done");
+
+  let last = "";
+  for (let i = 0; i < 200 && exists(".question"); i++) {
+    const [at, of] = text(".meta span").split("/").map((n) => Number(n.trim()));
+    last = text(".question");
+    await key(" ");
+    await key(at === of ? "1" : "4");
+    await settle(150);
+  }
+  check("a sitting whose last card is on a learning step ends", exists(".done"), text(".done h2"));
+  check(
+    "and says when that card comes back, rather than showing it early",
+    text(".done .resting").startsWith("1 card comes back at"),
+    text(".done .resting"),
+  );
+  check("it offers to check again", exists(".done .check-again"), "");
+  await click(".done .check-again", "Check again");
+  await settle(300);
+  check("and has nothing to offer before the card is due", !exists(".done .due-now"), text(".done .due-now"));
+  await shot("review-05-resting");
+
+  // FSRS's `again` step is one minute; the screen wakes just after it.
+  let offered = false;
+  for (let i = 0; i < 150 && !offered; i++) {
+    offered = exists(".done .due-now");
+    if (!offered) await settle(500);
+  }
+  check("once it is due, the finished screen offers it", offered, text(".done .due-now"));
+  await shot("review-06-due-now");
+  if (offered) {
+    await click(".done .review-due", "Review");
+    check("and clicking Review starts a sitting with that card", (await until(".question")) && text(".question") === last, text(".question"));
+  }
+}
+
 async function runHelpChecks(): Promise<void> {
   await click(".tabs .tab", "Help");
   check("the documentation ships with the app", await until(".doclist"), "");

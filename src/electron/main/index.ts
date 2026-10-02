@@ -604,11 +604,14 @@ async function createWindow(): Promise<void> {
 
   // A self-test that hangs looks exactly like one that is slow, and the last
   // two times something in this app went wrong it presented as a silent wait.
+  // Three minutes: the run itself takes well under one, then waits out a real
+  // one-minute learning step to see the finished screen offer the card
+  // (`runRestingChecks`, ADR 0033).
   if (SELFTEST) {
     setTimeout(() => {
       process.stderr.write("SELFTEST timed out — no report from the renderer\n");
       app.exit(1);
-    }, 60_000).unref();
+    }, 180_000).unref();
   }
 }
 

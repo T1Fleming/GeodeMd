@@ -2,6 +2,7 @@
 
 - **Status:** Accepted
 - **Date:** 2026-09-22
+- **Amended by:** [ADR 0033](0033-a-card-is-never-shown-early.md) — rule 3 is gone: a card is never shown before it is due, and a session with only such cards left ends
 
 ## Context
 

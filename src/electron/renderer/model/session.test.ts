@@ -10,6 +10,7 @@
 import { describe, expect, it } from "vitest";
 import type { DueCard } from "../../../core/index.js";
 import {
+  resting,
   annotating,
   annotationFetched,
   annotationSaved,
@@ -158,16 +159,15 @@ describe("a card on a learning step", () => {
     expect(current(s)?.question).toBe(showing);
   });
 
-  it("is answered again, and counted again", () => {
-    let s = begin([cards[0]!]);
-    s = rate(s, "1", learning(1));
-    expect(isOver(s)).toBe(false);
-    // Nothing else left, so it is served early rather than idling.
+  it("is answered again once due, and counted again", () => {
+    let s = begin([cards[0]!, cards[1]!]);
+    s = rate(s, "1", learning(1)); // Q1 owed again at +1
+    s = rate(s, "4", graduated, at(2)); // Q2 answered after Q1 ripened
     expect(current(s)?.question).toBe("Q1");
-    s = rate(s, "3", graduated, at(1));
+    s = rate(s, "3", graduated, at(2));
     expect(isOver(s)).toBe(true);
-    expect(reviewed(s)).toBe(2);
-    expect(s.counts).toEqual({ 1: 1, 2: 0, 3: 1, 4: 0 });
+    expect(reviewed(s)).toBe(3);
+    expect(s.counts).toEqual({ 1: 1, 2: 0, 3: 1, 4: 1 });
   });
 
   it("makes the counter's denominator grow, because a second answer is owed", () => {
@@ -185,8 +185,44 @@ describe("a card on a learning step", () => {
     expect(isOver(inFlight)).toBe(false);
     expect(current(inFlight)).toBeNull();
 
+    // Then the answer arrives: owed again in a minute, so not shown before
+    // that — the session ends for now, saying when it comes back.
     const back = scheduled(inFlight, "sr-000000000001", learning(1), T0);
-    expect(current(back)?.question).toBe("Q1");
+    expect(current(back)).toBeNull();
+    expect(isOver(back)).toBe(true);
+  });
+});
+
+describe("a session whose only cards left are not due yet", () => {
+  it("ends for now rather than showing one early", () => {
+    // ADR 0033. A card shown seconds after it was rated is a review FSRS
+    // barely credits, and one rated hard that way loses stability.
+    const s = rate(begin([cards[0]!]), "2", learning(6));
+    expect(current(s)).toBeNull();
+    expect(isOver(s)).toBe(true);
+    expect(resting(s)).toEqual({ cards: 1, at: at(6).getTime() });
+  });
+
+  it("says when the first of several comes back", () => {
+    let s = begin([cards[0]!, cards[1]!]);
+    s = rate(s, "3", learning(10));
+    s = rate(s, "1", learning(1), at(0));
+    expect(isOver(s)).toBe(true);
+    expect(resting(s)).toEqual({ cards: 2, at: at(1).getTime() });
+  });
+
+  it("has nothing coming back when every card graduated", () => {
+    const s = rate(begin([cards[0]!]), "4", graduated);
+    expect(isOver(s)).toBe(true);
+    expect(resting(s)).toBeNull();
+  });
+
+  it("is stopped early, not resting, when the user quit", () => {
+    let s = begin([cards[0]!, cards[1]!]);
+    s = rate(s, "2", learning(6));
+    s = after(s, "q");
+    expect(isOver(s)).toBe(true);
+    expect(resting(s)).toBeNull();
   });
 
   it("does not come back when the scheduler graduated it", () => {

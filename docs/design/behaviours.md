@@ -11,9 +11,9 @@ app do*, and *where is that proven*. What it deliberately cannot tell you is wha
 app does **untested** — an area that looks thin here is thinly covered, and that is
 worth reading as a finding rather than a gap in the document.
 
-728 behaviours in 12 areas, which follow [the guides](../guides/) rather than the source tree.
+744 behaviours in 12 areas, which follow [the guides](../guides/) rather than the source tree.
 
-- [Reviewing](#reviewing) — 195
+- [Reviewing](#reviewing) — 210
 - [Recognising a card](#recognising-a-card) — 121
 - [Syncing notes](#syncing-notes) — 85
 - [Recovery and the log](#recovery-and-the-log) — 43
@@ -24,13 +24,13 @@ worth reading as a finding rather than a gap in the document.
 - [The database as a cache](#the-database-as-a-cache) — 7
 - [At scale](#at-scale) — 9
 - [Rules the project enforces on itself](#rules-the-project-enforces-on-itself) — 34
-- [The documentation tells the truth](#the-documentation-tells-the-truth) — 60
+- [The documentation tells the truth](#the-documentation-tells-the-truth) — 61
 
 ## Reviewing
 
 _A session: which card is next, what the keys mean, what a rating records, and what comes back before the sitting ends._
 
-**195 behaviours.**
+**210 behaviours.**
 
 ### the order cards are served in
 
@@ -95,10 +95,11 @@ _6 · `host/queue.test.ts`_
 
 ### the end of the queue
 
-_3 · `host/queue.test.ts`_
+_4 · `host/queue.test.ts`_
 
-- serves a waiting card early rather than idling
-- serves the earliest of several early
+- never shows a waiting card before it is due
+- says when the soonest of several waiting cards is due
+- has no next due time when nothing is waiting
 - is over only when every card has graduated
 
 ### the order waiting cards come back in
@@ -182,6 +183,13 @@ _3 · `host/present.test.ts`_
 - names where they are, why, and the fix
 - says how many more there are than it names
 
+### what the app says about cards not due yet, and cards due now
+
+_2 · `host/present.test.ts`_
+
+- names how many cards come back, and at what time
+- counts cards due now, as a floor when the count stopped at the cap
+
 ### which program opens a note
 
 _2 · `host/editor.test.ts`_
@@ -263,14 +271,23 @@ _3 · `electron/renderer/model/session.test.ts`_
 
 ### a card on a learning step
 
-_9 · `electron/renderer/model/session.test.ts`_
+_6 · `electron/renderer/model/session.test.ts`_
 
 - comes back in the same session
 - goes ahead of a card that has not been seen yet, once it is due
 - does not replace the card being read the moment it ripens
-- is answered again, and counted again
+- is answered again once due, and counted again
 - makes the counter's denominator grow, because a second answer is owed
 - keeps the session alive while the rating is in flight
+
+### a session whose only cards left are not due yet
+
+_7 · `electron/renderer/model/session.test.ts`_
+
+- ends for now rather than showing one early
+- says when the first of several comes back
+- has nothing coming back when every card graduated
+- is stopped early, not resting, when the user quit
 - does not come back when the scheduler graduated it
 - does not come back when the write failed and its state is unknown
 - ignores a key pressed while nothing is on screen
@@ -347,6 +364,24 @@ _11 · `electron/renderer/model/session.test.ts`_
 - does not open the note while annotating — `o` is text there
 - does not open the annotation while the note is showing
 - lets the keys it does not use through to the page, so the note can scroll
+
+### when a screen with no card checks for cards coming due
+
+_5 · `electron/renderer/model/idle.test.ts`_
+
+- checks every regular interval when it knows no due time
+- wakes just after a known due time inside the next interval
+- wakes after, never on, a due time exactly one interval away
+- checks at the regular interval when the due time is further off
+- falls back to the regular interval once the due time has passed, never zero
+
+### what a check offers
+
+_3 · `electron/renderer/model/idle.test.ts`_
+
+- starts only one check at a time
+- offers cards that are due, and nothing when none are
+- keeps what it showed when a check fails, and lets the next one start
 
 ### launching an editor without holding the app open
 
@@ -1509,7 +1544,7 @@ _5 · `behaviours/areas.test.ts`_
 
 _Documents that make checkable claims, checked._
 
-**60 behaviours.**
+**61 behaviours.**
 
 ### the demo collection
 
@@ -1591,9 +1626,10 @@ _4 · `journeys/reviewing.test.ts`_
 
 ### the intervals the guide quotes are the ones FSRS produces
 
-_2 · `journeys/reviewing.test.ts`_
+_3 · `journeys/reviewing.test.ts`_
 
 - matches every row of the table, against the real scheduler
+- is right that a card is never shown before it is due, and the finished screen says when
 - is right that a long-standing card rated `1` comes back in ten minutes
 
 ### a rating is safe the moment it is given

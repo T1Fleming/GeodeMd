@@ -472,3 +472,18 @@ function shorten(text: string): string {
   const chars = [...text];
   return chars.length <= CRUMB_MAX ? text : `${chars.slice(0, CRUMB_MAX - 1).join("").trimEnd()}…`;
 }
+
+/**
+ * What the finished screen says about cards a sitting still owes but cannot
+ * show yet: they are on a learning step and not due (ADR 0033). A clock time
+ * rather than a countdown, so the screen has nothing to redraw every second.
+ */
+export function restingText(cards: number, at: Date): string {
+  const time = at.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  return cards === 1 ? `1 card comes back at ${time}` : `${cards} cards come back at ${time}`;
+}
+
+/** What a review screen with no card on it offers once cards are due (#67). */
+export function dueNowText(count: number, capped: boolean): string {
+  return `${countText(count, capped)} due now`;
+}

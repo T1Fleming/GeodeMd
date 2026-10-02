@@ -11,7 +11,9 @@ import {
   countText,
   CRUMB_SEPARATOR,
   RATING_KEYS,
+  restingText,
 } from "../../host/present.js";
+import { IdleCheck } from "./IdleCheck.js";
 import { cardLineNote } from "../../host/note.js";
 import type { DueCard } from "../../core/index.js";
 import {
@@ -24,6 +26,7 @@ import {
   editAnnotation,
   isOver,
   keyIsText,
+  resting,
   mayLeave,
   noteRead,
   owed,
@@ -79,6 +82,12 @@ interface Props {
    * there is nothing to explain to someone who has finished everything.
    */
   onMore?: (() => void) | undefined;
+  /**
+   * Start a new sitting from what is due now. Offered by the finished screen
+   * once a card comes due — one this sitting is owed but would not show early,
+   * or one due anyway (#67, ADR 0033).
+   */
+  onAgain: () => void;
 }
 
 export function Review({
@@ -96,6 +105,7 @@ export function Review({
   onDone,
   onRegisterFlush,
   onMore,
+  onAgain,
 }: Props): React.JSX.Element {
   const [session, setSession] = useState<Session>(() => begin(queue, openIn));
 
@@ -272,7 +282,7 @@ export function Review({
   const card = current(session);
 
   if (isOver(session)) {
-    return <Finished session={session} stale={stale} onMore={onMore} />;
+    return <Finished session={session} stale={stale} onMore={onMore} onAgain={onAgain} />;
   }
 
   // Nothing to show *yet*: the last card was rated and the scheduler's answer
@@ -489,12 +499,15 @@ function Finished({
   session,
   stale,
   onMore,
+  onAgain,
 }: {
   session: Session;
   stale: string[] | null;
   onMore?: (() => void) | undefined;
+  onAgain: () => void;
 }): React.JSX.Element {
   const done = reviewed(session);
+  const waiting = resting(session);
   const breakdown = RATING_KEYS.filter(([k]) => session.counts[Number(k) as 1 | 2 | 3 | 4] > 0);
 
   return (
@@ -519,10 +532,16 @@ function Finished({
           the queue holds text from the last sync and a rewritten card is stale
           in the database until the next one. Saying "you opened 3 notes, run
           sync" after three read-only glances trains the user to ignore it. */}
-      {onMore && (
+      {/* Owed, but not due: shown when due, not before (ADR 0033). */}
+      {waiting && <p className="resting">{restingText(waiting.cards, new Date(waiting.at))}</p>}
+      {onMore ? (
         <button className="primary more" onClick={onMore}>
           Review more
         </button>
+      ) : (
+        // More is due than this sitting held, so "Review more" already covers
+        // it; otherwise watch for cards coming due (#67).
+        <IdleCheck nextDueAt={waiting?.at ?? null} onReview={onAgain} />
       )}
       {stale !== null && stale.length > 0 && (
         <p className="stale">
