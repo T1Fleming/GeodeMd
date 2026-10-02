@@ -224,3 +224,9 @@ Three substitutions keep the harness runnable rather than invasive:
 - `GEODE_SELFTEST_FOLDER` answers the folder picker, because a native modal has no DOM to click — everything downstream of the pick is driven for real. `GEODE_SELFTEST_SECOND_FOLDER` answers it when the harness adds a second vault
 
 With no config present and that variable set, the harness drives the whole first-run sequence and then continues into the review checks against the vault it just set up. **It performs a real first sync**, so point it at a copy. With the second variable set as well, it adds that folder as a second vault, switches to it and back through the tab bar, and checks that the Vault screen's counts follow — another real first sync, so another copy, and one that does not hold the same notes as the first, or the counts cannot tell the vaults apart.
+
+**The last three steps change the copies for real, and one of them waits out the clock**, so a full run takes about a minute and a half and the main process allows it three:
+
+- **It rates every card in the first vault**, the last one `again`, then waits a real minute for the finished screen to offer that card and clicks Review (`runRestingChecks`, [ADR 0033](../decisions/0033-a-card-is-never-shown-early.md)). Nothing short of the wall clock proves the timer, the due count and the button are wired together.
+- **It starts the first vault fresh** (`runFreshChecks`, [ADR 0034](../decisions/0034-start-a-vault-fresh.md)): the first copy ends with its history in `.sr/archive/` and a `.sr/reset.json`.
+- **It erases GeodeMD from the second vault** (`runEraseChecks`, [ADR 0035](../decisions/0035-removing-a-vault.md)): the second copy ends with no stamps and no `.sr/`, and the vault is gone from the list. `diff -r demo <second copy>` afterwards should print nothing.
