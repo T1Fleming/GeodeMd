@@ -199,7 +199,7 @@ describe("host, which the interface draws from", () => {
 
     for (const dir of ["electron"]) {
       expect(await readAll(dir), `${dir} defines its own rating table`).not.toMatch(
-        /\["1",\s*"again"\]/,
+        /\["1",\s*"forgot"\]/,
       );
     }
   });

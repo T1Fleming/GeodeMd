@@ -738,6 +738,13 @@ async function totalCards(): Promise<number> {
  * user's. The switch is driven through the tab bar's `<select>`, because a
  * switcher wired to the wrong handler passes every channel-level check.
  */
+/**
+ * Whether `runVaultChecks` added a second vault. Without
+ * GEODE_SELFTEST_SECOND_FOLDER it does not, and the erase checks have nothing
+ * to erase — a skip, not a failure.
+ */
+let secondVaultAdded = false;
+
 async function runVaultChecks(): Promise<void> {
   await click(".tabs .tab", "Vault");
   check("the switcher names the open vault in the tab bar", await until(".vault-menu select"), "");
@@ -764,6 +771,7 @@ async function runVaultChecks(): Promise<void> {
     await until(".tabs");
     return;
   }
+  secondVaultAdded = true;
   await shot("vaults-02-add-folder");
   await click(".controls.wizard button", "Continue");
   check("the new vault's settings are shown before they are written", await until(".settings"), text(".setup h2"));
@@ -1067,6 +1075,10 @@ async function runFreshChecks(): Promise<void> {
  * `core/erase.test.ts` and `main/removal.test.ts`, which can read files.
  */
 async function runEraseChecks(): Promise<void> {
+  if (!secondVaultAdded) {
+    check("(no second vault — the erase checks are skipped)", true);
+    return;
+  }
   await click(".tabs .tab", "Vault");
   await until(".vaults");
   const row = document.querySelector(".vaults .vault:not(.on)");

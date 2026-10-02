@@ -80,6 +80,7 @@ export const TS_FSRS_VERSION = "5.4.2";
  */
 export const SCHEDULER_VERSION = `ts-fsrs@${TS_FSRS_VERSION} ${JSON.stringify(FSRS_PARAMS)}`;
 
+// `Rating.Again` is the library's name; the app calls it *forgot* (ADR 0036).
 const RATINGS = {
   1: Rating.Again,
   2: Rating.Hard,

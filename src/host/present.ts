@@ -16,9 +16,13 @@ import type { DueCard, Rescheduled, SyncPhase, SyncSummary } from "../core/index
 /**
  * The four FSRS ratings, and what they are called. Spec section 9: the numbers
  * are not guessable, so the words travel with them everywhere they are shown.
+ *
+ * The number is FSRS's and is what the log records; the word is ours. `1` is
+ * *forgot* rather than Anki's *again*, because it is the one failing rating
+ * ([ADR 0036](../../docs/decisions/0036-rating-one-is-called-forgot.md)).
  */
 export const RATING_KEYS: ReadonlyArray<readonly [key: string, label: string]> = [
-  ["1", "again"],
+  ["1", "forgot"],
   ["2", "hard"],
   ["3", "good"],
   ["4", "easy"],
