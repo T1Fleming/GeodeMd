@@ -604,27 +604,49 @@ export async function renameVault(
 /**
  * Take a vault out of the list, and hand back what it was.
  *
- * **Its notes and its log are never touched** — they are the user's, and they
- * are the only durable part of a vault. The database is a cache; whether to
- * delete it is the caller's choice, through `removeDatabase`.
+ * **Its notes and its log are not touched here** — they are the user's, and
+ * erasing GeodeMD from them is a separate, deliberate step (ADR 0035). The
+ * database is a cache; whether to delete it is the caller's choice, through
+ * `removeDatabase`.
  *
- * The active vault cannot be removed. Something has to be open afterwards, and
- * choosing which is the user's decision, not this function's — switch first.
+ * Any vault can be removed, the open one included (ADR 0035). Removing the
+ * open one opens the first that is left. Removing the last leaves a config
+ * with no vaults — read as first-run setup — that still holds this machine's
+ * `device` and `editor`, so setting up again does not split this machine's
+ * history under a new device name. The caller closes the open vault first:
+ * in the app, `Active.change`.
  */
 export async function removeVault(
   file: string,
   id: string,
   env: NodeJS.ProcessEnv = process.env,
-): Promise<{ removed: Vault; settings: Settings }> {
+): Promise<{ removed: Vault; settings: Settings | null }> {
   const { settings, value } = await update(file, env, (s) => {
     const v = find(s, id);
-    if (s.active === id) {
-      throw new VaultRefused("switch to another vault before removing this one");
-    }
     s.vaults = s.vaults.filter((x) => x.id !== id);
+    if (s.active === id) s.active = s.vaults[0]?.id ?? "";
     return v;
   });
-  return { removed: value, settings };
+  return { removed: value, settings: settings.vaults.length > 0 ? settings : null };
+}
+
+/**
+ * The machine-wide keys of a config that lists no vaults — what removing the
+ * last one leaves (ADR 0035). Null when there is no such file.
+ */
+async function leftoverMachineKeys(
+  file: string,
+): Promise<Pick<Settings, "device" | "editor" | "viewNotesInside"> | null> {
+  try {
+    const parsed = JSON.parse(await fs.readFile(file, "utf8")) as Record<string, unknown>;
+    if (typeof parsed["device"] !== "string") return null;
+    const keys: Pick<Settings, "device" | "editor" | "viewNotesInside"> = { device: parsed["device"] };
+    if (typeof parsed["editor"] === "string" && parsed["editor"].trim() !== "") keys.editor = parsed["editor"];
+    if (parsed["viewNotesInside"] === true) keys.viewNotesInside = true;
+    return keys;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -675,8 +697,12 @@ export async function initConfig(
 
   if (!existing) {
     const id = newVaultId();
+    // A config whose last vault was removed still names this machine; a new
+    // device name here would split its history across two log files.
+    const kept = await leftoverMachineKeys(file);
     const settings: Settings = {
-      device: defaultDevice(),
+      ...kept,
+      device: kept?.device ?? defaultDevice(),
       active: id,
       vaults: [
         {

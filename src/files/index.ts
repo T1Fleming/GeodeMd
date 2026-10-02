@@ -418,6 +418,53 @@ async function writeAtomically(file: string, text: string): Promise<void> {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Erasing GeodeMD from a vault (ADR 0035)
+// ---------------------------------------------------------------------------
+
+/** What `.sr/` in the notes root holds, for the preview before an erase. */
+export interface SrContents {
+  /** Whether there is a `.sr` directory at all. */
+  exists: boolean;
+  logShards: number;
+  annotations: number;
+  /** Fresh starts archived under `.sr/archive/` (ADR 0034). */
+  archives: number;
+}
+
+async function countIn(dir: string, keep: (name: string) => boolean): Promise<number> {
+  try {
+    return (await fs.readdir(dir)).filter(keep).length;
+  } catch {
+    return 0;
+  }
+}
+
+export async function describeSr(root: string): Promise<SrContents> {
+  const sr = path.join(root, ".sr");
+  const st = await fs.lstat(sr).catch(() => null);
+  if (!st?.isDirectory()) return { exists: false, logShards: 0, annotations: 0, archives: 0 };
+  return {
+    exists: true,
+    logShards: await countIn(path.join(root, LOG_DIR), (n) => n.endsWith(".jsonl")),
+    annotations: await countIn(path.join(root, ".sr", "annotations"), (n) => n.endsWith(".md") && !n.startsWith(".")),
+    archives: await countIn(path.join(root, ARCHIVE_DIR), () => true),
+  };
+}
+
+/**
+ * Delete `.sr/` from the notes root: the review log, annotations, archives and
+ * any reset marker. Only a real directory named `.sr` directly in the root —
+ * never one reached through a symlink, which could point anywhere.
+ */
+export async function removeSrDir(root: string): Promise<void> {
+  const sr = path.join(root, ".sr");
+  const st = await fs.lstat(sr).catch(() => null);
+  if (st === null) return;
+  if (!st.isDirectory()) throw new Error(`${sr} is not a directory, so it was left alone`);
+  await fs.rm(sr, { recursive: true });
+}
+
 export interface ShardInfo {
   name: string;
   size: number;

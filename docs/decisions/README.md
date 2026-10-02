@@ -42,6 +42,7 @@ New decisions from here get an ADR when they are made, not in a later sweep — 
 | [0032](0032-show-parents-as-remnote-does.md) | Show a card's parents as RemNote does | Accepted |
 | [0033](0033-a-card-is-never-shown-early.md) | A card is never shown before it is due | Accepted |
 | [0034](0034-start-a-vault-fresh.md) | Starting a vault fresh: archive the log, and a reset marker | Accepted |
+| [0035](0035-removing-a-vault.md) | Removing a vault: unlink it, or erase GeodeMD from its notes | Accepted |
 
 ## Writing one
 

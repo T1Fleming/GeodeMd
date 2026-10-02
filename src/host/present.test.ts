@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  erasePreviewText,
   dueNowText,
   restingText,
   unnestedReason,
@@ -377,5 +378,28 @@ describe("what the app says about cards not due yet, and cards due now", () => {
   it("counts cards due now, as a floor when the count stopped at the cap", () => {
     expect(dueNowText(3, false)).toBe("3 due now");
     expect(dueNowText(10000, true)).toBe("10000+ due now");
+  });
+});
+
+describe("what an erase says it will remove", () => {
+  const sr = { exists: true, logShards: 2, annotations: 1, archives: 0 };
+
+  it("counts id comments, notes and what .sr/ holds", () => {
+    expect(erasePreviewText({ stamps: { files: 3, stamps: 40, unreadable: [] }, sr })).toBe(
+      "40 id comments in 3 notes will be taken out; .sr/ holds 2 review log files, 1 annotation and 0 archived fresh starts.",
+    );
+  });
+
+  it("says so when there is nothing to take out, and no .sr/", () => {
+    const none = { exists: false, logShards: 0, annotations: 0, archives: 0 };
+    expect(erasePreviewText({ stamps: { files: 0, stamps: 0, unreadable: [] }, sr: none })).toBe(
+      "No note holds an id comment; there is no .sr/ folder.",
+    );
+  });
+
+  it("warns that unreadable notes will stop it", () => {
+    expect(erasePreviewText({ stamps: { files: 1, stamps: 1, unreadable: ["x.md"] }, sr })).toContain(
+      "1 note could not be read, so the erase will stop before deleting anything",
+    );
   });
 });

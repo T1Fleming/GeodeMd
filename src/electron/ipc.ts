@@ -69,6 +69,12 @@ export interface VaultList {
  * switch the notes it opened can no longer be asked about — so the answer is
  * computed on the way out and carried here. Null when nothing was open.
  */
+/** What an erase would remove (ADR 0035). Counts only: nothing here is a function. */
+export interface ErasePreview {
+  stamps: { files: number; stamps: number; unreadable: string[] };
+  sr: { exists: boolean; logShards: number; annotations: number; archives: number };
+}
+
 export interface VaultSwitched {
   config: AppConfig;
   left: { vault: string; changed: string[] } | null;
@@ -295,6 +301,8 @@ export const CH = {
   vaultsSwitch: "geode:vaults/switch",
   vaultsRename: "geode:vaults/rename",
   vaultsRemove: "geode:vaults/remove",
+  vaultsErasePreview: "geode:vaults/erase-preview",
+  vaultsErase: "geode:vaults/erase",
   vaultsOpen: "geode:vaults/open",
   linkOpen: "geode:link/open",
   editorsList: "geode:editors/list",
@@ -373,10 +381,19 @@ export interface GeodeApi {
   vaultsSwitch(id: string): Promise<Result<VaultSwitched>>;
   vaultsRename(id: string, name: string): Promise<Result<VaultList>>;
   /**
-   * Take a vault out of the list. Its notes and log are never touched;
-   * `deleteDatabase` also deletes its cache. The open vault cannot be removed.
+   * Take a vault out of the list. Its notes and `.sr/` are not touched;
+   * `deleteDatabase` also deletes its cache. Any vault, the open one included
+   * (ADR 0035). Null when none is left, which the app reads as first-run setup.
    */
-  vaultsRemove(id: string, deleteDatabase: boolean): Promise<Result<VaultList>>;
+  vaultsRemove(id: string, deleteDatabase: boolean): Promise<Result<VaultList | null>>;
+  /** What erasing a vault would remove from its notes folder. Writes nothing. */
+  vaultsErasePreview(id: string): Promise<Result<ErasePreview>>;
+  /**
+   * Erase GeodeMD from a vault: every stamp out of its notes, `.sr/` deleted,
+   * then out of the list with its database. `typed` must be its name. Null
+   * when no vault is left.
+   */
+  vaultsErase(id: string, typed: string): Promise<Result<VaultList | null>>;
   /**
    * Open the active vault now, rather than on the first read, and say what
    * that took. Asked once each time the app arrives at a vault, so a

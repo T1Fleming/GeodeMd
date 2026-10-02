@@ -20,8 +20,6 @@ import {
   configPath,
   ensureSettings,
   initConfig,
-  removeDatabase,
-  removeVault,
   renameVault,
   setEditor,
   setViewNotesInside,
@@ -38,6 +36,7 @@ import type {
   AppConfig,
   ConfigProposal,
   EditorChoices,
+  ErasePreview,
   FolderReport,
   NoteOpened,
   PickPurpose,
@@ -51,6 +50,7 @@ import type {
   VaultSwitched,
 } from "../ipc.js";
 import { Active } from "./active.js";
+import { erase, erasePreview, unlink } from "./removal.js";
 import { outside, readNote, withinNotes } from "./note.js";
 import { openDetached } from "./open.js";
 import { counts, dueCards } from "./reads.js";
@@ -454,15 +454,25 @@ function register(): void {
   );
 
   /**
-   * Take a vault out of the list. Never the open one — `removeVault` refuses
-   * that — so no Store in use is ever deleted from under the app. The notes
-   * and their log are not touched either way.
+   * Take a vault out of the list, or erase GeodeMD from its notes as well
+   * (ADR 0035). Any vault, the open one included: `removal.ts` closes it
+   * through `active.change` first, so no Store in use is deleted from under
+   * the app. Null when none is left.
    */
+  const removing = { configFile, active };
   ipcMain.handle(CH.vaultsRemove, (_e, id: string, deleteDatabase: boolean) =>
-    guard<VaultList>(async () => {
-      const { removed, settings } = await removeVault(configFile, id);
-      if (deleteDatabase) await removeDatabase(removed);
-      return list(settings);
+    guard<VaultList | null>(async () => {
+      const s = await unlink(removing, id, deleteDatabase);
+      return s ? list(s) : null;
+    }),
+  );
+  ipcMain.handle(CH.vaultsErasePreview, (_e, id: string) =>
+    guard<ErasePreview>(() => erasePreview(removing, id)),
+  );
+  ipcMain.handle(CH.vaultsErase, (_e, id: string, typed: string) =>
+    guard<VaultList | null>(async () => {
+      const s = await erase(removing, id, typed);
+      return s ? list(s) : null;
     }),
   );
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parse, parseLine, parseNote, readStamp, splitLines, stampLine } from "./index.js";
+import { parse, parseLine, parseNote, readStamp, splitLines, stampLine, unstamp } from "./index.js";
 
 /**
  * Spec section 10, "Parser". Fixture strings in, expected cards out.
@@ -493,5 +493,38 @@ describe("reading a stamp back off a line", () => {
 
   it("returns null when there is no stamp", () => {
     expect(readStamp("Q >> A")).toBeNull();
+  });
+});
+
+describe("taking every stamp out of a note", () => {
+  const ID2 = "sr-Zz9Yy8Xx7Ww6";
+
+  it("gives back the line exactly as it was before it was stamped", () => {
+    const line = "- Default Lambda timeout >> 3 seconds <!-- TODO check -->";
+    expect(unstamp(stampLine(line, ID))).toEqual({ text: line, stamps: 1 });
+  });
+
+  it("keeps every line terminator, CRLF and a missing final newline included", () => {
+    const note = `Q1 >> A1 <!-- ${ID} -->\r\nprose\r\nQ2 >> A2 <!-- ${ID2} -->`;
+    expect(unstamp(note)).toEqual({ text: "Q1 >> A1\r\nprose\r\nQ2 >> A2", stamps: 2 });
+  });
+
+  it("finds a stamp a user typed after, and two on one line", () => {
+    expect(unstamp(`Q >> A <!-- ${ID} --> more`).text).toBe("Q >> A more");
+    expect(unstamp(`Q >> A <!-- ${ID} --> <!-- ${ID2} -->`)).toEqual({ text: "Q >> A", stamps: 2 });
+  });
+
+  it("finds stamps on lines that are no longer cards", () => {
+    const note = `Old :: card <!-- ${ID} -->\n\`\`\`\ncode >> x <!-- ${ID2} -->\n\`\`\`\n`;
+    expect(unstamp(note)).toEqual({ text: "Old :: card\n\`\`\`\ncode >> x\n\`\`\`\n", stamps: 2 });
+  });
+
+  it.each([
+    ["another comment", "Q >> A <!-- note -->"],
+    ["an id one character short", "Q >> A <!-- sr-a7Kd9mQ2xR4 -->"],
+    ["an id with a character it cannot hold", "Q >> A <!-- sr-a7Kd9mQ2xR4! -->"],
+    ["an id without its prefix", "Q >> A <!-- a7Kd9mQ2xR4v -->"],
+  ])("leaves %s alone", (_name, line) => {
+    expect(unstamp(line)).toEqual({ text: line, stamps: 0 });
   });
 });

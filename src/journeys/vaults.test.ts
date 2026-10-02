@@ -23,6 +23,7 @@ import {
   vaultDbPath,
 } from "../host/config.js";
 import { openCore } from "../host/open.js";
+import { eraseNotesFolder } from "../host/erase.js";
 import { fences, guide, paragraphWith, plain, tableAfter } from "./guide.js";
 
 const T0 = new Date("2026-09-22T12:00:00.000Z");
@@ -161,5 +162,41 @@ describe("what the guide says removing a vault keeps", () => {
     const { summary, stats } = await syncActive();
     expect(summary.reviewsIngested).toBe(1);
     expect(stats.newCards).toBe(0);
+  });
+});
+
+describe("erasing GeodeMD from a vault's notes", () => {
+  it("leaves the notes exactly as they were before GeodeMD, and no .sr/", async () => {
+    expect(await vaults()).toContain("**Erase GeodeMD from these notes** removes every trace");
+    expect(await vaults()).toContain("type the vault's name");
+
+    const homeDir = path.join(root, "home");
+    const original = "- Default Lambda timeout >> 3 seconds\nprose\n";
+    await note(homeDir, "a.md", original);
+    const home = await initConfig(configFile, homeDir, { env });
+    {
+      const { core, store: cache } = openCore(home);
+      try {
+        await core.sync(T0);
+        await core.reviewCard(core.getDueCards(T0, 1)[0]!.id, 3, T0);
+      } finally {
+        cache.close();
+      }
+    }
+    expect(await fs.readFile(path.join(homeDir, "a.md"), "utf8")).toContain("<!-- sr-");
+
+    await eraseNotesFolder(homeDir);
+    expect(await fs.readFile(path.join(homeDir, "a.md"), "utf8")).toBe(original);
+    await expect(fs.stat(path.join(homeDir, ".sr"))).rejects.toThrow();
+  });
+
+  it("can remove the only vault, and setup after it keeps this machine's name", async () => {
+    expect(await vaults()).toContain("Setting up again keeps this machine's device name");
+    const homeDir = path.join(root, "home");
+    await fs.mkdir(homeDir, { recursive: true });
+    const home = await initConfig(configFile, homeDir, { env });
+    await removeVault(configFile, home.id, env);
+    const again = await initConfig(configFile, homeDir, { env });
+    expect(again.device).toBe(home.device);
   });
 });

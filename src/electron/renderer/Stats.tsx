@@ -14,10 +14,10 @@
  */
 
 import { useCallback, useEffect, useState } from "react";
-import { backlogCapped, countText } from "../../host/present.js";
-import type { AppConfig, EditorChoices, Stats as StatsData, VaultList } from "../ipc.js";
+import { backlogCapped, countText, erasePreviewText } from "../../host/present.js";
+import type { AppConfig, EditorChoices, ErasePreview, Stats as StatsData, VaultList } from "../ipc.js";
 import { OTHER, SYSTEM_DEFAULT, editorView, onChoose } from "./model/editor.js";
-import { cannotRemove } from "./model/vaults.js";
+import { afterRemoving, eraseConfirmed } from "./model/vaults.js";
 
 export function Stats({
   config,
@@ -26,6 +26,7 @@ export function Stats({
   onAddVault,
   onSwitch,
   onVaults,
+  onOpenGone,
 }: {
   config: AppConfig;
   vaults: VaultList;
@@ -33,6 +34,8 @@ export function Stats({
   onAddVault: () => void;
   onSwitch: (id: string) => void;
   onVaults: (list: VaultList) => void;
+  /** The open vault was removed: the app opens what is left, or setup. */
+  onOpenGone: () => void;
 }): React.JSX.Element {
   const [data, setData] = useState<StatsData | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -79,7 +82,13 @@ export function Stats({
           For when these notes have moved. To keep a second set of notes beside these, add a
           vault instead.
         </p>
-        <Vaults list={vaults} onAdd={onAddVault} onSwitch={onSwitch} onVaults={onVaults} />
+        <Vaults
+          list={vaults}
+          onAdd={onAddVault}
+          onSwitch={onSwitch}
+          onVaults={onVaults}
+          onOpenGone={onOpenGone}
+        />
         <EditorSetting />
       </div>
     </main>
@@ -90,25 +99,62 @@ export function Stats({
  * Every vault, and what can be done to each: open it, rename it, remove it.
  *
  * Removing asks first and says exactly what it does, because "remove" next to
- * a folder of notes reads as deleting them. It never touches the notes or the
- * log; the database is offered separately, and said to be a cache.
+ * a folder of notes reads as deleting them. There are two ways out (ADR 0035):
+ * **remove from the list**, which leaves the notes and `.sr/` alone and offers
+ * the database separately as a cache; and **erase**, which takes every stamp
+ * out of the notes and deletes `.sr/` — previewed first, and confirmed by
+ * typing the vault's name, because it edits notes and cannot be undone.
  */
 function Vaults({
   list,
   onAdd,
   onSwitch,
   onVaults,
+  onOpenGone,
 }: {
   list: VaultList;
   onAdd: () => void;
   onSwitch: (id: string) => void;
   onVaults: (list: VaultList) => void;
+  onOpenGone: () => void;
 }): React.JSX.Element {
   const [renaming, setRenaming] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [removing, setRemoving] = useState<string | null>(null);
   const [dropDb, setDropDb] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  /** The erase panel for one vault: its preview once read, and what is typed. */
+  const [erasing, setErasing] = useState<{ id: string; preview: ErasePreview | null; typed: string; busy: boolean } | null>(null);
+
+  /** After a removal: the list as it is now, or the app re-opened. */
+  const gone = (id: string, next: VaultList | null): void => {
+    setError(null);
+    setRemoving(null);
+    setErasing(null);
+    if (next === null || id === list.active) return onOpenGone();
+    onVaults(next);
+  };
+
+  const startErase = async (id: string): Promise<void> => {
+    setRemoving(null);
+    setErasing({ id, preview: null, typed: "", busy: false });
+    const r = await window.geode.vaultsErasePreview(id);
+    if (!r.ok) {
+      setErasing(null);
+      return setError(r.message);
+    }
+    setErasing((e) => (e && e.id === id ? { ...e, preview: r.value } : e));
+  };
+
+  const erase = async (id: string, typed: string): Promise<void> => {
+    setErasing((e) => (e ? { ...e, busy: true } : e));
+    const r = await window.geode.vaultsErase(id, typed);
+    if (!r.ok) {
+      setErasing((e) => (e ? { ...e, busy: false } : e));
+      return setError(r.message);
+    }
+    gone(id, r.value);
+  };
 
   const rename = async (id: string): Promise<void> => {
     const r = await window.geode.vaultsRename(id, name);
@@ -121,9 +167,7 @@ function Vaults({
   const remove = async (id: string): Promise<void> => {
     const r = await window.geode.vaultsRemove(id, dropDb);
     if (!r.ok) return setError(r.message);
-    setError(null);
-    setRemoving(null);
-    onVaults(r.value);
+    gone(id, r.value);
   };
 
   return (
@@ -174,12 +218,11 @@ function Vaults({
                     Rename…
                   </button>
                   <button
-                    disabled={cannotRemove(list, v.id) !== null}
-                    title={cannotRemove(list, v.id) ?? ""}
                     onClick={() => {
                       setDropDb(true);
                       setRemoving(v.id);
                       setRenaming(null);
+                      setErasing(null);
                     }}
                   >
                     Remove…
@@ -194,6 +237,7 @@ function Vaults({
                   where they are, in <code>{v.notesPath}</code> — adding the folder again later
                   brings the vault back with its history.
                 </p>
+                {afterRemoving(list, v.id) && <p className="muted">{afterRemoving(list, v.id)}</p>}
                 <label className="check">
                   <input type="checkbox" checked={dropDb} onChange={(e) => setDropDb(e.target.checked)} />
                   Also delete its database. It is a cache, rebuilt from the notes and the log
@@ -204,6 +248,53 @@ function Vaults({
                     Remove from list
                   </button>
                   <button onClick={() => setRemoving(null)}>Cancel</button>
+                </div>
+                <button className="quiet erase-start" onClick={() => void startErase(v.id)}>
+                  Erase GeodeMD from these notes instead…
+                </button>
+              </div>
+            )}
+            {erasing?.id === v.id && (
+              <div className="confirm erase">
+                <p>
+                  Erase GeodeMD from <code>{v.notesPath}</code>? Every id comment it wrote
+                  into your notes is taken out, <code>.sr/</code> is deleted with your review
+                  history and annotations in it, and the vault leaves the list. Your notes
+                  keep every word you wrote. <strong>This cannot be undone.</strong>
+                </p>
+                {erasing.preview === null ? (
+                  <p className="muted">Reading the notes…</p>
+                ) : (
+                  <p>{erasePreviewText(erasing.preview)}</p>
+                )}
+                <p className="muted">
+                  If another device still uses this folder, remove the vault there first:
+                  it would write the ids back on its next sync.
+                </p>
+                {afterRemoving(list, v.id) && <p className="muted">{afterRemoving(list, v.id)}</p>}
+                <label className="typed">
+                  Type <strong>{v.name}</strong> to confirm
+                  <input
+                    type="text"
+                    value={erasing.typed}
+                    spellCheck={false}
+                    onChange={(e) => {
+                      const typed = e.target.value;
+                      setErasing((x) => (x ? { ...x, typed } : x));
+                    }}
+                  />
+                </label>
+                <div className="controls">
+                  <button
+                    className="primary danger"
+                    disabled={erasing.preview === null || erasing.busy || !eraseConfirmed(v.name, erasing.typed)}
+                    onClick={() => void erase(v.id, erasing.typed)}
+                  >
+                    {erasing.busy ? "Erasing…" : "Erase"}
+                  </button>
+                  <button disabled={erasing.busy} onClick={() => setErasing(null)}>
+                    Cancel
+                  </button>
                 </div>
               </div>
             )}
