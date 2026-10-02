@@ -123,8 +123,8 @@ describe("rating", () => {
 /**
  * FSRS's short-term steps, honoured — ADR 0023.
  *
- * Our pinned parameters put a new card rated *again* one minute out, *hard*
- * five and *good* ten, all of them still `Learning`. The scheduler has been
+ * Our pinned parameters put a new card rated *forgot* one minute out, *hard*
+ * six and *good* ten, all of them still `Learning`. The scheduler has been
  * saying so all along; until this the session computed it and threw it away.
  */
 describe("a card on a learning step", () => {

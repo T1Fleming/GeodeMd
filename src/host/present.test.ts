@@ -56,7 +56,7 @@ describe("the shared vocabulary", () => {
     // Spec section 9: the numbers are not guessable, so the words travel with
     // them. Both interfaces read this table rather than writing their own.
     expect(RATING_KEYS.map(([k]) => k)).toEqual(["1", "2", "3", "4"]);
-    expect(RATING_KEYS.map(([, l]) => l)).toEqual(["again", "hard", "good", "easy"]);
+    expect(RATING_KEYS.map(([, l]) => l)).toEqual(["forgot", "hard", "good", "easy"]);
   });
 
   it("agrees with interpretKey about every key it advertises", () => {
@@ -140,7 +140,7 @@ describe("which ratings a session summary mentions", () => {
 
   it("reports in rating order, not insertion order", () => {
     const counts = { 1: 2, 2: 0, 3: 1, 4: 7 };
-    expect(ratingBreakdown(counts).map((r) => r.label)).toEqual(["again", "good", "easy"]);
+    expect(ratingBreakdown(counts).map((r) => r.label)).toEqual(["forgot", "good", "easy"]);
   });
 
   it("is empty for a session with no answers in it", () => {

@@ -34,19 +34,21 @@ Any key flips the card over. Then:
 
 | | | |
 |---|---|---|
-| `1` | **again** | I could not recall it |
+| `1` | **forgot** | I could not recall it |
 | `2` | **hard** | I got there, but it was a struggle |
 | `3` | **good** | I recalled it |
 | `4` | **easy** | Instant, and the interval could have been longer |
 
 That is the whole vocabulary. There is no "mark known", no bury, no suspend.
 
-### When to press `hard` rather than `again`
+Coming from Anki? `forgot` is the button Anki calls *Again*, and the other three have the same names there. The word is different because `1` is the only rating that counts as a failure, and *again* sounds like "show me this once more".
+
+### When to press `hard` rather than `forgot`
 
 This is the question every spaced-repetition user eventually asks, and it has a real answer: **did you produce the answer?**
 
 - You produced it, slowly, with effort, maybe after a false start → `2 hard`.
-- You did not produce it. You recognised it when you saw it, or nearly had it, or would have got it with one more second → `1 again`.
+- You did not produce it. You recognised it when you saw it, or nearly had it, or would have got it with one more second → `1 forgot`.
 
 Recognising an answer is not recalling it, and the difference is the thing being measured. "I knew that really" after the answer appears is the most reliable feeling in all of studying and it is almost always wrong — this is *hindsight bias*, and it is exactly what a rating is supposed to see through. If you did not say it before you looked, it was `1`.
 
@@ -64,7 +66,7 @@ A **new** card rated anything but `4 easy` is due again in **minutes**, not days
 
 | you press | a new card comes back in |
 |---|---|
-| `1` again | 1 minute |
+| `1` forgot | 1 minute |
 | `2` hard | 6 minutes |
 | `3` good | 10 minutes |
 | `4` easy | 8 days — graduated, and gone for the session |
@@ -86,7 +88,7 @@ A card you keep pressing `1` on keeps coming back, which is the point; `q` alway
 
 Offered **only before you have seen the answer**, and it is the one action that records nothing at all: no rating, no history, no change to the card's schedule. The card moves to the back of the session and you will be asked again.
 
-Use it when you have not attempted the card. Interrupted, distracted, someone spoke to you, or it is the kind of card that deserves attention you cannot give it right now. That is not a fact about your memory, so it is not recorded as one — and `1 again` would have been a lie the scheduler believes.
+Use it when you have not attempted the card. Interrupted, distracted, someone spoke to you, or it is the kind of card that deserves attention you cannot give it right now. That is not a fact about your memory, so it is not recorded as one — and `1 forgot` would have been a lie the scheduler believes.
 
 **It disappears once the answer is showing, on purpose.** Deferring a card whose answer you have just read would make the next sighting a sham: you would see it again with the answer fresh, rate it well, and the schedule would record a success you never earned. At that point the honest keys are the ratings — if you could not recall it, `1` already says so.
 
