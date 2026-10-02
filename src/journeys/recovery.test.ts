@@ -39,11 +39,11 @@ describe("what the guide says is durable, and where it says it lives", () => {
     expect(stated).toBe(`<notes>/${real.split(path.sep).join("/")}`.replace("2026-09", "YYYY-MM"));
   });
 
-  it("names three things, and calls exactly one of them a cache", async () => {
+  it("names four things, and calls exactly one of them a cache", async () => {
     const rows = tableAfter(await recovery(), "## What is actually durable");
-    expect(rows).toHaveLength(3);
+    expect(rows).toHaveLength(4);
     const verdicts = rows.map((cells) => plain(cells[2]!));
-    expect(verdicts.filter((v) => v === "durable")).toHaveLength(2);
+    expect(verdicts.filter((v) => v === "durable")).toHaveLength(3);
     expect(verdicts.filter((v) => v === "a cache")).toHaveLength(1);
   });
 
@@ -155,6 +155,53 @@ describe("what rebuilding does not fix", () => {
     for (const claim of ["takes minutes", "cannot be stopped once started"]) {
       expect(await recovery(), `the guide no longer says it ${claim}`).toContain(claim);
       expect(dialog, `the app no longer says it ${claim}`).toContain(claim);
+    }
+  });
+});
+
+describe("starting a vault fresh", () => {
+  it("makes every card new without editing a note, as the guide says", async () => {
+    const text = await recovery();
+    expect(text).toContain("**Card ids and annotations stay, and no note is edited.**");
+
+    open = await newCollection();
+    await open.write("a.md", "Q1 >> A1\nQ2 >> A2\n");
+    await open.core.sync(T0);
+    const [first] = open.core.getDueCards(T0, 1);
+    await open.core.reviewCard(first!.id, 3, T0);
+    const before = await open.read("a.md");
+
+    const later = new Date(T0.getTime() + 86_400_000);
+    await open.core.startFresh(later);
+    expect(await open.read("a.md")).toBe(before);
+    expect(open.core.stats(later, 100)).toMatchObject({ total: 2, newCards: 2 });
+  });
+
+  it("archives the history where the guide says, and is undone the way it says", async () => {
+    expect(await recovery()).toContain("move the files in `.sr/archive/<time>/log/` back into `.sr/log/`, delete `.sr/reset.json`, and sync");
+
+    open = await newCollection("desktop");
+    await open.write("a.md", "Q1 >> A1\n");
+    await open.core.sync(T0);
+    await open.core.reviewCard(open.core.getDueCards(T0, 1)[0]!.id, 3, T0);
+    const later = new Date(T0.getTime() + 86_400_000);
+    await open.core.startFresh(later);
+
+    const archived = path.join(open.notes, ".sr", "archive", later.toISOString().replace(/:/g, "-"), "log");
+    const shards = await fs.readdir(archived);
+    expect(shards).toEqual(["desktop-2026-09.jsonl"]);
+
+    for (const name of shards) await fs.rename(path.join(archived, name), path.join(open.notes, ".sr", "log", name));
+    await fs.rm(path.join(open.notes, ".sr", "reset.json"));
+    await open.core.sync(later);
+    expect(open.core.stats(later, 100)).toMatchObject({ newCards: 0 });
+  });
+
+  it("says in the guide what the app's own dialog says", async () => {
+    const dialog = await fs.readFile(path.join(SRC, "electron", "renderer", "Sync.tsx"), "utf8");
+    for (const claim of ["Every device that shares this folder starts fresh too", "no note is edited"]) {
+      expect(await recovery(), `the guide no longer says ${claim}`).toContain(claim);
+      expect(dialog, `the app no longer says ${claim}`).toContain(claim);
     }
   });
 });

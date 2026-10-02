@@ -3,6 +3,9 @@ import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
 import {
+  archiveLogs,
+  readReset,
+  writeReset,
   appendLog,
   enumerate,
   hasAnnotation,
@@ -374,5 +377,35 @@ describe("a card's annotation", () => {
     await writeAnnotation(root, ID, "compare >> the other card\n");
     const { candidates } = await enumerate(root);
     expect(candidates.map((c) => c.relPath)).toEqual(["a.md"]);
+  });
+});
+
+describe("the reset marker and the log archive", () => {
+  it("has no reset time until one is written, then reads it back", async () => {
+    expect(await readReset(root)).toBeNull();
+    await writeReset(root, "2026-09-03T12:00:00.000Z");
+    expect(await readReset(root)).toBe("2026-09-03T12:00:00.000Z");
+  });
+
+  it("refuses a reset time not in the log's own format", async () => {
+    await fs.mkdir(path.join(root, ".sr"), { recursive: true });
+    await fs.writeFile(path.join(root, ".sr/reset.json"), JSON.stringify({ at: "2026-09-03" }));
+    await expect(readReset(root)).rejects.toThrow();
+  });
+
+  it("moves nothing, and makes no archive, when there is no log", async () => {
+    expect(await archiveLogs(root, "2026-09-03T12:00:00.000Z")).toBe(0);
+    await expect(fs.stat(path.join(root, ".sr/archive"))).rejects.toThrow();
+  });
+
+  it("moves only shards, byte for byte", async () => {
+    const log = path.join(root, ".sr/log");
+    await fs.mkdir(log, { recursive: true });
+    await fs.writeFile(path.join(log, "laptop-2026-09.jsonl"), "line\n");
+    await fs.writeFile(path.join(log, "notes.txt"), "not a shard");
+    expect(await archiveLogs(root, "2026-09-03T12:00:00.000Z")).toBe(1);
+    const moved = path.join(root, ".sr/archive/2026-09-03T12-00-00.000Z/log/laptop-2026-09.jsonl");
+    expect(await fs.readFile(moved, "utf8")).toBe("line\n");
+    expect((await fs.readdir(log)).sort()).toEqual(["notes.txt"]);
   });
 });

@@ -106,6 +106,7 @@ export const BY_FILE: Readonly<Record<string, string>> = {
   "files/files.test.ts": "Syncing notes",
 
   "core/rebuild.test.ts": "Recovery and the log",
+  "core/fresh.test.ts": "Recovery and the log",
   "scheduler/scheduler.test.ts": "Recovery and the log",
   "core/two-devices.test.ts": "Moving between machines",
 

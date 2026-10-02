@@ -326,6 +326,98 @@ export async function appendLog(root: string, device: string, line: LogLine): Pr
   }
 }
 
+// ---------------------------------------------------------------------------
+// Starting a vault fresh (ADR 0034)
+// ---------------------------------------------------------------------------
+
+/**
+ * When the vault's review history was set aside. Plain text in the notes
+ * folder, beside the log it governs, so it syncs to every device that shares
+ * the folder and survives the database the way the log does.
+ */
+export const RESET_FILE = path.join(".sr", "reset.json");
+
+/** Where the log is moved to by a fresh start: `.sr/archive/<at>/log/`. */
+export const ARCHIVE_DIR = path.join(".sr", "archive");
+
+const AT_SHAPE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/;
+
+/**
+ * The reset time, or null when the vault has never been started fresh.
+ *
+ * Only the exact `formatAt` shape counts: it is compared against review times
+ * as a string, and the two must sort the same way. A marker that does not
+ * read is reported rather than ignored — ignoring it would quietly bring the
+ * whole archived history back.
+ */
+export async function readReset(root: string): Promise<string | null> {
+  let text: string;
+  try {
+    text = await fs.readFile(path.join(root, RESET_FILE), "utf8");
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") return null;
+    throw err;
+  }
+  let at: unknown;
+  try {
+    at = (JSON.parse(text) as { at?: unknown }).at;
+  } catch {
+    at = undefined;
+  }
+  if (typeof at !== "string" || !AT_SHAPE.test(at)) {
+    throw new Error(`${RESET_FILE} does not say when the vault was started fresh`);
+  }
+  return at;
+}
+
+/** Record the reset time: temp file, fsync, rename, as an annotation is written. */
+export async function writeReset(root: string, at: string): Promise<void> {
+  await writeAtomically(path.join(root, RESET_FILE), `${JSON.stringify({ at })}\n`);
+}
+
+/**
+ * Move every shard out of the log into `.sr/archive/<at>/log/`, whole. Nothing
+ * is rewritten (ADR 0005), and moving them back undoes it. Returns how many
+ * moved. Inside a dotted directory, so neither enumeration nor `listShards`
+ * reads them again.
+ */
+export async function archiveLogs(root: string, at: string): Promise<number> {
+  const from = path.join(root, LOG_DIR);
+  let names: string[];
+  try {
+    names = (await fs.readdir(from)).filter((n) => n.endsWith(".jsonl"));
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") return 0;
+    throw err;
+  }
+  if (names.length === 0) return 0;
+  // A colon is not a legal file-name character everywhere the folder may sync to.
+  const to = path.join(root, ARCHIVE_DIR, at.replace(/:/g, "-"), "log");
+  await fs.mkdir(to, { recursive: true });
+  for (const name of names) await fs.rename(path.join(from, name), path.join(to, name));
+  return names.length;
+}
+
+/** Temp file in the same directory, fsync, rename: a crash leaves old or new. */
+async function writeAtomically(file: string, text: string): Promise<void> {
+  const dir = path.dirname(file);
+  await fs.mkdir(dir, { recursive: true });
+  const tmp = path.join(dir, `.${path.basename(file)}.${process.pid}.${randomBytes(4).toString("hex")}.tmp`);
+  try {
+    const handle = await fs.open(tmp, "w", 0o644);
+    try {
+      await handle.writeFile(text, "utf8");
+      await handle.sync();
+    } finally {
+      await handle.close();
+    }
+    await fs.rename(tmp, file);
+  } catch (err) {
+    await fs.rm(tmp, { force: true });
+    throw err;
+  }
+}
+
 export interface ShardInfo {
   name: string;
   size: number;

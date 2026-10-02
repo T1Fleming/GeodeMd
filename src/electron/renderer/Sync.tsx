@@ -7,9 +7,9 @@
  */
 
 import { useCallback, useEffect, useState } from "react";
-import { deferralReason, summaryFields, unnestedReason } from "../../host/present.js";
+import { deferralReason, RUN_LABEL, summaryFields, unnestedReason } from "../../host/present.js";
 import type { SummaryField } from "../../host/present.js";
-import type { SyncSummary } from "../ipc.js";
+import type { RunKind, SyncSummary } from "../ipc.js";
 import { fromStatus, idle, isRunning, onFinished, onProgress, percent } from "./model/run.js";
 import type { RunView } from "./model/run.js";
 
@@ -17,6 +17,7 @@ export function Sync(): React.JSX.Element {
   const [run, setRun] = useState<RunView>(idle);
   const [full, setFull] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const [confirmingFresh, setConfirmingFresh] = useState(false);
   const [refused, setRefused] = useState<string | null>(null);
 
   useEffect(() => {
@@ -35,9 +36,10 @@ export function Sync(): React.JSX.Element {
   }, []);
 
   const start = useCallback(
-    async (kind: "sync" | "rebuild", dryRun: boolean) => {
+    async (kind: RunKind, dryRun: boolean) => {
       setRefused(null);
       setConfirming(false);
+      setConfirmingFresh(false);
       const r = await window.geode.runStart(kind, { full, dryRun });
       // A refusal is not an error worth a dialog: it means something else is
       // already running, which the screen is about to show anyway.
@@ -83,7 +85,7 @@ export function Sync(): React.JSX.Element {
       {run.at === "done" && <Summary summary={run.summary} dryRun={run.dryRun} kind={run.kind} />}
       {run.at === "failed" && (
         <p className="error inline">
-          {run.kind} failed — {run.message}
+          {RUN_LABEL[run.kind]} failed — {run.message}
         </p>
       )}
 
@@ -93,6 +95,14 @@ export function Sync(): React.JSX.Element {
         onAsk={() => setConfirming(true)}
         onCancel={() => setConfirming(false)}
         onConfirm={() => void start("rebuild", false)}
+      />
+
+      <StartFresh
+        running={running}
+        confirming={confirmingFresh}
+        onAsk={() => setConfirmingFresh(true)}
+        onCancel={() => setConfirmingFresh(false)}
+        onConfirm={() => void start("fresh", false)}
       />
     </main>
   );
@@ -133,7 +143,7 @@ function Summary({
 }: {
   summary: SyncSummary;
   dryRun: boolean;
-  kind: "sync" | "rebuild";
+  kind: RunKind;
 }): React.JSX.Element {
   const fields = summaryFields(summary);
   const deferred = deferralReason(summary);
@@ -148,7 +158,7 @@ function Summary({
         ))}
       </dl>
       <p className="muted small">
-        {kind} finished in {summary.elapsedMs}ms
+        {RUN_LABEL[kind]} finished in {summary.elapsedMs}ms
       </p>
       {/* Shown, not invented. Without it the counts read "3 cards found, 0
           new", which in a window — with no scrollback to reason from — looks
@@ -210,6 +220,54 @@ function Rebuild({
           <div className="controls">
             <button className="primary" onClick={onConfirm}>
               Rebuild
+            </button>
+            <button onClick={onCancel}>Cancel</button>
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
+/**
+ * Start fresh, behind two clicks and a sentence, like Rebuild.
+ *
+ * Unlike Rebuild it changes what the vault remembers: every card is new again.
+ * Nothing is deleted — the review log moves to `.sr/archive/` and moving it
+ * back undoes this — and no note is edited (ADR 0034). The sentence says all
+ * three, and that every device sharing the folder follows, because that is
+ * the part nobody would guess.
+ */
+function StartFresh({
+  running,
+  confirming,
+  onAsk,
+  onCancel,
+  onConfirm,
+}: {
+  running: boolean;
+  confirming: boolean;
+  onAsk: () => void;
+  onCancel: () => void;
+  onConfirm: () => void;
+}): React.JSX.Element {
+  return (
+    <section className="rebuild fresh">
+      {!confirming ? (
+        <button className="quiet" disabled={running} onClick={onAsk}>
+          Start this vault fresh…
+        </button>
+      ) : (
+        <div className="confirm">
+          <p>
+            Every card becomes new again, as if you had never reviewed it. Your review
+            history is not deleted: it moves to <code>.sr/archive/</code> in your notes
+            folder. Card ids and annotations stay, and no note is edited.
+            Every device that shares this folder starts fresh too, on its next sync.
+          </p>
+          <div className="controls">
+            <button className="primary" onClick={onConfirm}>
+              Start fresh
             </button>
             <button onClick={onCancel}>Cancel</button>
           </div>

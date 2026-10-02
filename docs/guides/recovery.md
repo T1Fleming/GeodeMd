@@ -10,9 +10,10 @@ That sentence reads like a trap the first time, so it is worth being precise abo
 |---|---|---|
 | **Your cards** | in your notes, as the lines you wrote | durable |
 | **Your review history** | `<notes>/.sr/log/<device>-YYYY-MM.jsonl` | durable |
-| **Everything else** | `~/.local/share/geodemd/db.sqlite` | a cache |
+| **Your annotations** | `<notes>/.sr/annotations/<card-id>.md` | durable |
+| **Everything else** | `~/.local/share/geodemd/`: `db.sqlite` for your first vault, `vaults/<id>/db.sqlite` for each one added later | a cache |
 
-Both durable halves are plain text inside your notes directory. They are what you back up. If GeodeMD disappeared tomorrow, the first is still an ordinary folder of Markdown and the second is still a readable list of what you reviewed and when.
+All three durable parts are plain text inside your notes directory. They are what you back up. If GeodeMD disappeared tomorrow, the first is still an ordinary folder of Markdown and the second is still a readable list of what you reviewed and when.
 
 The database holds **no column that does not come from one of those two**. Card text comes from your notes. Review history comes from the log. Scheduling comes from replaying that history. There is nothing else in there.
 
@@ -43,6 +44,18 @@ It is slower than a normal sync, because it re-reads everything and replays ever
 Its *history* is not gone, though. Review history is keyed on the card's ID and is never filtered by what currently exists, so if you restore that note a year later, the card comes back on its original schedule rather than as new.
 
 **A wrong system clock cannot be repaired.** Reviews are ordered by the timestamp recorded when you gave them, so if your clock was badly wrong, the order is wrong in the log itself and a rebuild faithfully reproduces it.
+
+## Starting a vault fresh
+
+Sometimes you want a clean slate: every card new again, as if you had never reviewed any of them. **Sync → Start this vault fresh…** does that. It asks first.
+
+- **Your review history is not deleted.** It moves to `.sr/archive/<time>/log/` in your notes folder, where nothing reads it.
+- **Card ids and annotations stay, and no note is edited.** Only scheduling and history start over.
+- **Every device that shares this folder starts fresh too**, on its next sync. The decision is a small file, `.sr/reset.json`, that travels with your notes, and a review from before it is ignored even if an old log file reappears.
+
+**To undo it**, move the files in `.sr/archive/<time>/log/` back into `.sr/log/`, delete `.sr/reset.json`, and sync.
+
+To remove a vault rather than restart it, see [Keeping several vaults](vaults.md).
 
 ## Backing up
 

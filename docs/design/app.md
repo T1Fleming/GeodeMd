@@ -37,6 +37,7 @@ What ADR 0024 changed, and what it left: every count that can grow without bound
 - a second **sync** while a sync is running **joins** it and gets the same `runId` — two windows asking to sync meant one sync, and an error there answers a question nobody asked
 - a **rebuild** is refused while anything is running, because `dropAll` is destructive and a joiner would receive a summary for a database it did not expect
 - nothing may join a rebuild, for the same reason
+- a **fresh start** (`fresh`, [ADR 0034](../decisions/0034-start-a-vault-fresh.md)) follows the rebuild rules exactly: it drops the database too
 
 This guards *this process only*. A second copy of the app running at the same time is fine and is designed for — WAL, the busy timeout, and the re-stat before each write. Do not add a lock file.
 

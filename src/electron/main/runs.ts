@@ -11,6 +11,7 @@ import { classify } from "../../host/errors.js";
 import type {
   Result,
   RunFinished,
+  RunKind,
   RunProgress,
   RunStarted,
   RunStatus,
@@ -36,7 +37,7 @@ export interface RunnerDeps {
 
 interface InFlight {
   runId: string;
-  kind: "sync" | "rebuild";
+  kind: RunKind;
   dryRun: boolean;
   latest: RunProgress;
 }
@@ -67,15 +68,15 @@ export class Runner {
    * same runId — two windows asking to sync meant one sync, and an error there
    * would be answering a question nobody asked.
    *
-   * A `rebuild` cannot join anything and nothing can join a rebuild: `dropAll`
-   * is destructive, so a joiner would receive a summary for a database it did
+   * A `rebuild` or a `fresh` start cannot join anything and nothing can join
+   * one: both drop the database, so a joiner would receive a summary for a database it did
    * not expect. It is refused while anything is in flight.
    *
    * This guards THIS process only. A second copy of the app at the
    * same time is fine and is designed for — WAL, the busy timeout, and the
    * re-stat before each write. Do not add a lock file.
    */
-  start(kind: "sync" | "rebuild", req: SyncRequest): Result<RunStarted> {
+  start(kind: RunKind, req: SyncRequest): Result<RunStarted> {
     if (this.inFlight) {
       if (kind === "sync" && this.inFlight.kind === "sync") {
         return { ok: true, value: { runId: this.inFlight.runId, joined: true } };
@@ -104,7 +105,7 @@ export class Runner {
     return { ok: true, value: { runId, joined: false } };
   }
 
-  private async run(runId: string, kind: "sync" | "rebuild", req: SyncRequest): Promise<void> {
+  private async run(runId: string, kind: RunKind, req: SyncRequest): Promise<void> {
     const now = this.deps.now ?? (() => new Date());
     const schedule = this.deps.schedule ?? defaultSchedule;
 
@@ -133,7 +134,9 @@ export class Runner {
       const summary =
         kind === "sync"
           ? await this.deps.core.sync(now(), { ...req, onProgress })
-          : await this.deps.core.rebuild(now(), { ...req, onProgress });
+          : kind === "rebuild"
+            ? await this.deps.core.rebuild(now(), { ...req, onProgress })
+            : await this.deps.core.startFresh(now(), { ...req, onProgress });
       result = { ok: true, value: summary };
     } catch (err) {
       // Tagged here, while the error still has its prototype.

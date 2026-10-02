@@ -11,20 +11,20 @@ app do*, and *where is that proven*. What it deliberately cannot tell you is wha
 app does **untested** — an area that looks thin here is thinly covered, and that is
 worth reading as a finding rather than a gap in the document.
 
-744 behaviours in 12 areas, which follow [the guides](../guides/) rather than the source tree.
+763 behaviours in 12 areas, which follow [the guides](../guides/) rather than the source tree.
 
 - [Reviewing](#reviewing) — 210
 - [Recognising a card](#recognising-a-card) — 121
-- [Syncing notes](#syncing-notes) — 85
-- [Recovery and the log](#recovery-and-the-log) — 43
+- [Syncing notes](#syncing-notes) — 89
+- [Recovery and the log](#recovery-and-the-log) — 54
 - [Moving between machines](#moving-between-machines) — 16
 - [Keeping several vaults](#keeping-several-vaults) — 45
 - [Setting up this machine](#setting-up-this-machine) — 82
-- [The app's long runs](#the-apps-long-runs) — 31
+- [The app's long runs](#the-apps-long-runs) — 32
 - [The database as a cache](#the-database-as-a-cache) — 7
 - [At scale](#at-scale) — 9
 - [Rules the project enforces on itself](#rules-the-project-enforces-on-itself) — 34
-- [The documentation tells the truth](#the-documentation-tells-the-truth) — 61
+- [The documentation tells the truth](#the-documentation-tells-the-truth) — 64
 
 ## Reviewing
 
@@ -678,7 +678,7 @@ _2 · `parser/parser.test.ts`_
 
 _Finding what changed, stamping it, pruning what is gone, and saying what happened._
 
-**85 behaviours.**
+**89 behaviours.**
 
 ### which counts a sync summary shows
 
@@ -870,11 +870,20 @@ _4 · `files/files.test.ts`_
 - leaves ordinary filenames alone, including the ambiguous ones
 - judges the filename, not the folder it sits in
 
+### the reset marker and the log archive
+
+_4 · `files/files.test.ts`_
+
+- has no reset time until one is written, then reads it back
+- refuses a reset time not in the log's own format
+- moves nothing, and makes no archive, when there is no log
+- moves only shards, byte for byte
+
 ## Recovery and the log
 
 _The append-only review log, and rebuilding the database from nothing but notes and logs._
 
-**43 behaviours.**
+**54 behaviours.**
 
 ### what the app says when due dates were worked out again
 
@@ -950,6 +959,22 @@ _6 · `core/rebuild.test.ts`_
 _1 · `core/rebuild.test.ts`_
 
 - opens, gains the column, and has every schedule re-derived
+
+### starting a vault fresh
+
+_11 · `core/fresh.test.ts`_
+
+- makes every card new, with no history and no schedule
+- edits no note and keeps every annotation
+- moves the log whole into a dated archive, leaving the log empty
+- records reviews made after it as usual
+- ignores a review from before it, even when its shard comes back
+- is followed by another device sharing the folder, on its next sync
+- is finished by the next sync when it stopped after the marker
+- is undone by moving the log back and removing the marker
+- is left alone by a preview, which writes nothing
+- does not report a change of card syntax
+- refuses a marker that does not say when, rather than ignoring it
 
 ### the scheduler is FSRS-6, pinned
 
@@ -1319,14 +1344,15 @@ _1 · `electron/renderer/model/setup.test.ts`_
 
 _Single-flight, progress, and how a window that missed an event catches up._
 
-**31 behaviours.**
+**32 behaviours.**
 
 ### single-flight
 
-_3 · `electron/main/runs.test.ts`_
+_4 · `electron/main/runs.test.ts`_
 
 - a second sync JOINS the first rather than failing
 - a rebuild cannot join a sync
+- a fresh start cannot join a sync, and nothing joins a fresh start
 - frees the slot when the run ends
 
 ### progress
@@ -1544,7 +1570,7 @@ _5 · `behaviours/areas.test.ts`_
 
 _Documents that make checkable claims, checked._
 
-**61 behaviours.**
+**64 behaviours.**
 
 ### the demo collection
 
@@ -1660,7 +1686,7 @@ _4 · `journeys/reviewing.test.ts`_
 _3 · `journeys/recovery.test.ts`_
 
 - names the log path the code actually writes to
-- names three things, and calls exactly one of them a cache
+- names four things, and calls exactly one of them a cache
 - writes a log line at the path it promised, for a real review
 
 ### deleting the database
@@ -1676,6 +1702,14 @@ _2 · `journeys/recovery.test.ts`_
 
 - leaves a deleted card out of the queue, but keeps its history
 - warns in the same words the app's own dialog does
+
+### starting a vault fresh
+
+_3 · `journeys/recovery.test.ts`_
+
+- makes every card new without editing a note, as the guide says
+- archives the history where the guide says, and is undone the way it says
+- says in the guide what the app's own dialog says
 
 ### what the guide says two machines need in order to agree
 

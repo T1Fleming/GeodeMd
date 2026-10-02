@@ -41,6 +41,7 @@ New decisions from here get an ADR when they are made, not in a later sweep — 
 | [0031](0031-forward-cards-and-context.md) | RemNote's forward card: `>>` and `==`, with its parents above it | Accepted |
 | [0032](0032-show-parents-as-remnote-does.md) | Show a card's parents as RemNote does | Accepted |
 | [0033](0033-a-card-is-never-shown-early.md) | A card is never shown before it is due | Accepted |
+| [0034](0034-start-a-vault-fresh.md) | Starting a vault fresh: archive the log, and a reset marker | Accepted |
 
 ## Writing one
 

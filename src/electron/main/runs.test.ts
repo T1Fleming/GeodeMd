@@ -119,6 +119,26 @@ describe("single-flight", () => {
     await h.done();
   });
 
+  it("a fresh start cannot join a sync, and nothing joins a fresh start", async () => {
+    // Both drop the database, like a rebuild (ADR 0034).
+    await write("a.md", "Q >> A\n");
+    const h = makeRunner();
+
+    h.runner.start("sync", { full: false, dryRun: false });
+    const fresh = h.runner.start("fresh", { full: false, dryRun: false });
+    expect(fresh.ok).toBe(false);
+    await h.done();
+
+    const h2 = makeRunner();
+    h2.runner.start("fresh", { full: false, dryRun: false });
+    const sync = h2.runner.start("sync", { full: false, dryRun: false });
+    expect(sync.ok).toBe(false);
+    if (!sync.ok) expect(sync.message).toContain("fresh");
+    await h2.done();
+    expect(h2.finished[0]).toMatchObject({ kind: "fresh", result: { ok: true } });
+    await expect(fs.readFile(path.join(notes, ".sr/reset.json"), "utf8")).resolves.toContain(T0.toISOString());
+  });
+
   it("frees the slot when the run ends", async () => {
     await write("a.md", "Q >> A\n");
     const h = makeRunner();
