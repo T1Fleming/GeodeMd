@@ -19,8 +19,10 @@ A card is shown where it sits, the way RemNote shows it: the note's name and the
 cells › Biology
 • Cell
    • Nucleus → holds DNA
-      • Nucleolus
+      • Nucleolus → ?
 ```
+
+**The line being asked ends in a highlighted `?`**, and the answer appears in its place when you reveal it. A parent that is a card shows its answer, so the `?` is what tells you which line the question is.
 
 That is what lets a card deep in an outline have a short question. It shows the text from your last sync, like the card itself.
 

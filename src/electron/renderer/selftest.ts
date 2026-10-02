@@ -85,6 +85,8 @@ export async function runSelfTest(): Promise<void> {
 
     check("the review screen renders a card", exists(".question"), text(".question"));
     check("the answer starts hidden", !exists(".answer") && exists(".prompt"));
+    // ADR 0037: the line being asked is marked, and the mark is on that line.
+    check("the line being asked ends in a ?", text(".card-line .blank") === "?", text(".card-line"));
     check("the locator is shown", text(".meta .locator").includes(".md"), text(".meta .locator"));
 
     // `0 later` is offered at the QUESTION, where `o open` is not — the two
@@ -126,12 +128,13 @@ export async function runSelfTest(): Promise<void> {
     }
     check("a nested card is drawn under its parent bullets", nested, text(".parents"));
     check("with the note's name on the path line", text(".crumbs").startsWith("lambda"), text(".crumbs"));
-    check("and the question as the last bullet", exists(".question.bulleted"), text(".question"));
+    check("and the question as the last bullet", exists(".card-line.bulleted .question"), text(".question"));
     await shot("review-04-parents");
 
     const first = text(".question");
     await key(" ");
     check("any key reveals the answer", exists(".answer"), text(".answer"));
+    check("in place of the ?, on the line being asked", exists(".card-line .answer") && !exists(".blank"), text(".card-line"));
     check("the question stays visible beside it", text(".question") === first);
     await shot("review-02-revealed");
 

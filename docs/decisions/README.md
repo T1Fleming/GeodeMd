@@ -44,6 +44,7 @@ New decisions from here get an ADR when they are made, not in a later sweep — 
 | [0034](0034-start-a-vault-fresh.md) | Starting a vault fresh: archive the log, and a reset marker | Accepted |
 | [0035](0035-removing-a-vault.md) | Removing a vault: unlink it, or erase GeodeMD from its notes | Accepted |
 | [0036](0036-rating-one-is-called-forgot.md) | Rating `1` is called *forgot* | Accepted |
+| [0037](0037-mark-the-line-being-asked.md) | Mark the line being asked, and reveal the answer in its place | Accepted |
 
 ## Writing one
 

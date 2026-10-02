@@ -7,6 +7,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   actionsAt,
   ANCESTOR_LINES,
+  ANSWER_ARROW,
+  ANSWER_BLANK,
   cardContext,
   countText,
   CRUMB_SEPARATOR,
@@ -314,11 +316,8 @@ export function Review({
             {/* Keyed by card, so what was expanded for one card is not
                 expanded for the next. */}
             <Front key={card.id} card={card} revealed={session.revealed} />
-            {session.revealed ? (
-              <p className="answer">{card.answer}</p>
-            ) : (
-              <p className="prompt">press any key to reveal</p>
-            )}
+            {/* The answer itself is drawn in place of the `?`, by `Front`. */}
+            {!session.revealed && <p className="prompt">press any key to reveal</p>}
             {/* Only ever after the reveal — an annotation may restate the answer
                 (ADR 0029). A marker when there is one, never the text itself
                 until asked for. */}
@@ -560,7 +559,8 @@ function Finished({
  * the two things a click can change.
  *
  * Shown at both stages: the parents are what make a short question
- * answerable. A spoiler parent appears once the answer does.
+ * answerable. A spoiler parent appears once the answer does, and so does the
+ * answer itself, where the `?` was.
  */
 function Front({ card, revealed }: { card: DueCard; revealed: boolean }): React.JSX.Element {
   const [expanded, setExpanded] = useState(false);
@@ -590,14 +590,33 @@ function Front({ card, revealed }: { card: DueCard; revealed: boolean }): React.
                 onClick={() => setUnclamped((s) => new Set(s).add(id))}
               >
                 {p.text}
-                {p.answer !== undefined && <span className="parent-answer"> → {p.answer}</span>}
+                {p.answer !== undefined && <span className="parent-answer">{ANSWER_ARROW}{p.answer}</span>}
               </li>
             );
           })}
         </ul>
       )}
-      <p className={depth > 0 ? "question bulleted" : "question"} style={depth > 0 ? indent(depth) : undefined}>
-        {card.question}
+      {/* The line being asked ends in a `?`, and the answer takes its place on
+          the reveal — so a revealed card reads like its parents (ADR 0037).
+          `.question` stays on the question alone: it is the same text at
+          both stages. */}
+      <p className={depth > 0 ? "card-line bulleted" : "card-line"} style={depth > 0 ? indent(depth) : undefined}>
+        <span className="question">{card.question}</span>
+        {revealed ? (
+          <>
+            <span className="arrow">{ANSWER_ARROW}</span>
+            <span className="answer">{card.answer}</span>
+          </>
+        ) : (
+          // One unbreakable run, so a long question cannot strand the `?`
+          // alone on the next line.
+          <span className="tail">
+            <span className="arrow">{ANSWER_ARROW}</span>
+            <span className="blank" aria-label="answer hidden">
+              {ANSWER_BLANK}
+            </span>
+          </span>
+        )}
       </p>
     </div>
   );

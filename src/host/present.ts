@@ -410,6 +410,19 @@ export const CRUMB_MAX = 40;
 export const CRUMB_SEPARATOR = " › ";
 
 /**
+ * Between a line's question and its answer — on the card being asked, and on
+ * a parent that is itself a card ([ADR 0037](../../docs/decisions/0037-mark-the-line-being-asked.md)).
+ */
+export const ANSWER_ARROW = " → ";
+
+/**
+ * What stands in for the answer on the line being asked, until the reveal puts
+ * the answer in its place. In an outline whose parents are cards too, it is
+ * what says which line the question is (ADR 0037).
+ */
+export const ANSWER_BLANK = "?";
+
+/**
  * How many parent bullets are shown in full above a question. Older ones are
  * folded behind "… N more" until asked for: the nearest parent is the one that
  * gives a short question its meaning, and a deep outline would otherwise push

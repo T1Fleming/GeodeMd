@@ -144,13 +144,13 @@ body {
 }
 
 .parent,
-.question.bulleted {
+.card-line.bulleted {
   position: relative;
   padding-left: 1rem;
 }
 
 .parent::before,
-.question.bulleted::before {
+.card-line.bulleted::before {
   content: "•";
   position: absolute;
   left: 0;
@@ -186,21 +186,40 @@ body {
   border: 1px dashed var(--line);
 }
 
-.question {
+/* The line being asked: question, arrow, then a `?` that the answer replaces
+   on the reveal (ADR 0037). The tint is what marks this line out from parents
+   that are cards too; `--accent` already switches with the theme. */
+.card-line {
   margin: 0;
   font-size: 1.5rem;
   line-height: 1.4;
+  overflow-wrap: anywhere;
   user-select: text;
 }
 
+.card-line .arrow { color: var(--muted); }
+
+.card-line .tail { white-space: nowrap; }
+
+.blank,
 .answer {
-  margin: 0;
-  font-size: 1.25rem;
-  line-height: 1.5;
+  padding: 0 0.35em;
+  border-radius: 0.3em;
+  /* A long answer wraps as a highlighted run on each line, not one box. */
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+
+.blank {
+  padding: 0 0.6em;
+  font-weight: 700;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 25%, transparent);
+}
+
+.answer {
   color: var(--ink);
-  padding-top: 1.75rem;
-  border-top: 1px solid var(--line);
-  user-select: text;
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
 }
 
 .prompt { margin: 0; color: var(--muted); font-size: 0.9375rem; }

@@ -20,6 +20,8 @@ import {
   ANCESTORS_SHOWN,
   cardContext,
   CRUMB_SEPARATOR,
+  ANSWER_ARROW,
+  ANSWER_BLANK,
   RATING_KEYS,
   actionsAt,
   interpretAnnotatingKey,
@@ -65,8 +67,8 @@ describe("a card is shown under its parents as the guide draws it", () => {
     const shown = cardContext(card, { revealed: false, expanded: false });
     const lines = [
       shown.path.join(CRUMB_SEPARATOR),
-      ...shown.parents.map((p, i) => `${"   ".repeat(i)}• ${p.text}${p.answer ? ` → ${p.answer}` : ""}`),
-      `${"   ".repeat(shown.parents.length)}• ${card.question}`,
+      ...shown.parents.map((p, i) => `${"   ".repeat(i)}• ${p.text}${p.answer ? `${ANSWER_ARROW}${p.answer}` : ""}`),
+      `${"   ".repeat(shown.parents.length)}• ${card.question}${ANSWER_ARROW}${ANSWER_BLANK}`,
     ];
     expect(lines.join("\n")).toBe(drawn!.trimEnd());
   });
