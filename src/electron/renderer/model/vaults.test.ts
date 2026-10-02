@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ADD, cannotRemove, choose, leftNote, switcherOptions } from "./vaults.js";
+import { ADD, afterRemoving, choose, eraseConfirmed, leftNote, switcherOptions } from "./vaults.js";
 import type { VaultList } from "../../ipc.js";
 
 const list: VaultList = {
@@ -30,9 +30,25 @@ describe("the vault switcher", () => {
 });
 
 describe("removing a vault from the list", () => {
-  it("is not offered for the open vault, and says why", () => {
-    expect(cannotRemove(list, "home0001")).toContain("Switch to another");
-    expect(cannotRemove(list, "work0001")).toBeNull();
+  it("says which vault opens next when the open one goes", () => {
+    expect(afterRemoving(list, "home0001")).toContain("opens “Work” next");
+  });
+
+  it("says nothing for a vault that is not open", () => {
+    expect(afterRemoving(list, "work0001")).toBeNull();
+  });
+
+  it("says setup comes back when the only vault goes", () => {
+    const one: VaultList = { active: "home0001", vaults: [list.vaults[0]!] };
+    expect(afterRemoving(one, "home0001")).toContain("first-run setup");
+  });
+});
+
+describe("confirming an erase", () => {
+  it("needs the vault's exact name, spaces at either end aside", () => {
+    expect(eraseConfirmed("Personal", " Personal ")).toBe(true);
+    expect(eraseConfirmed("Personal", "personal")).toBe(false);
+    expect(eraseConfirmed("Personal", "")).toBe(false);
   });
 });
 

@@ -62,9 +62,19 @@ If you want work notes kept apart from the rest, make them sibling folders — `
 
 ## Removing a vault
 
-**Remove…** in the vault list takes a vault out of the list. **Its notes and its review log are not touched** — they stay in its folder, and adding that folder again later brings the vault back with its history.
+**Remove…** in the vault list offers two ways out. Either works on any vault, including the open one: GeodeMD then opens the next vault in the list, or goes back to first-run setup if it was your only one. Setting up again keeps this machine's device name, so its review history is not split in two.
 
-You can also delete its database at the same time. It is a cache: adding the vault again rebuilds it from the notes and the log. The open vault cannot be removed; switch to another first.
+**Remove from list** takes the vault out of GeodeMD and leaves your folder alone. **Its notes and its review log are not touched** — they stay in its folder, and adding that folder again later brings the vault back with its history. You can also delete its database at the same time. It is a cache: adding the vault again rebuilds it from the notes and the log.
+
+**Erase GeodeMD from these notes** removes every trace, as if GeodeMD had never been used on the folder:
+
+- **every id comment** (`<!-- sr-… -->`) it wrote into your notes is taken out, including ones on lines that are no longer cards and in a file syncer's conflict copies;
+- **`.sr/` is deleted**, with your review history, annotations and any fresh-start archives in it;
+- the vault leaves the list, and **its database is deleted**.
+
+Your cards stay exactly as you wrote them — a `>>` line is still a `>>` line. The one thing that cannot come back is trailing whitespace on a card line, which GeodeMD trimmed when it wrote the id. It shows you what it will remove first, and asks you to **type the vault's name** to confirm, because it edits your notes and **cannot be undone**. Commit first if your notes are in git.
+
+If a note is open in an editor and changes while erasing, it is left alone and nothing else is removed; erase again once it is closed. **If another device still uses the folder, remove the vault there first** — otherwise its next sync writes the ids back.
 
 ## What vaults do not do
 

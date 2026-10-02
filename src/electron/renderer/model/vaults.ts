@@ -37,14 +37,24 @@ export function choose(list: VaultList, value: string): Choice {
 }
 
 /**
- * Why a vault cannot be removed, or null when it can.
- *
- * The open vault cannot: something has to be open afterwards, and which one is
- * the user's call. Main refuses it too; this is so the button can say so
- * rather than fail.
+ * What happens to the app when a vault is removed, said before it is: null for
+ * a vault that is not open (ADR 0035). Removing the open one opens the first
+ * that is left; removing the only one goes back to first-run setup.
  */
-export function cannotRemove(list: VaultList, id: string): string | null {
-  return id === list.active ? "This is the open vault. Switch to another before removing it." : null;
+export function afterRemoving(list: VaultList, id: string): string | null {
+  if (id !== list.active) return null;
+  const next = list.vaults.find((v) => v.id !== id);
+  return next
+    ? `This is the open vault, so GeodeMD opens “${next.name}” next.`
+    : "This is your only vault, so GeodeMD goes back to first-run setup.";
+}
+
+/**
+ * Whether what was typed confirms an erase: the vault's name, exactly, apart
+ * from spaces at either end. Main checks the same before it erases anything.
+ */
+export function eraseConfirmed(name: string, typed: string): boolean {
+  return typed.trim() === name;
 }
 
 /**

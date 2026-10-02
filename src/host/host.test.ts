@@ -501,9 +501,27 @@ describe("keeping a list of vaults", () => {
     await expect(renameVault(file(), second, "Personal", env())).rejects.toBeInstanceOf(VaultRefused);
   });
 
-  it("will not remove the open vault", async () => {
-    const { second } = await twoVaults();
-    await expect(removeVault(file(), second, env())).rejects.toBeInstanceOf(VaultRefused);
+  it("removes the open vault, and opens the first one left", async () => {
+    // ADR 0035. The app closes it first, through `Active.change`.
+    const { first, second } = await twoVaults();
+    const { settings } = await removeVault(file(), second, env());
+    expect(settings!.active).toBe(first);
+    expect((await readConfig(file(), env()))!.id).toBe(first);
+  });
+
+  it("removes the last vault, leaving first-run setup that keeps this machine's name", async () => {
+    // A new device name would split this machine's history across two log
+    // files the next time a vault is set up.
+    const { first, second } = await twoVaults();
+    const device = (await readConfig(file(), env()))!.device;
+    await removeVault(file(), second, env());
+    const { settings } = await removeVault(file(), first, env());
+    expect(settings).toBeNull();
+    expect(await readConfig(file(), env())).toBeNull();
+
+    await fs.mkdir(path.join(dir, "again"), { recursive: true });
+    const again = await initConfig(file(), path.join(dir, "again"), { env: env() });
+    expect(again.device).toBe(device);
   });
 
   it("removes a vault without touching its notes or its log", async () => {
@@ -514,7 +532,7 @@ describe("keeping a list of vaults", () => {
 
     const { removed, settings } = await removeVault(file(), first, env());
     expect(removed.id).toBe(first);
-    expect(settings.vaults.map((v) => v.id)).not.toContain(first);
+    expect(settings!.vaults.map((v) => v.id)).not.toContain(first);
     expect(await fs.readFile(path.join(dir, "home", "a.md"), "utf8")).toBe("Q >> A\n");
     await fs.access(path.join(dir, "home", ".sr", "log", "mac-2026-09.jsonl"));
   });

@@ -608,3 +608,9 @@ button.quiet:hover { color: var(--ink); border-color: transparent; }
   color: var(--muted);
 }
 .doc hr { border: none; border-top: 1px solid var(--line); margin: 2rem 0; }
+
+/* Erasing a vault (ADR 0035): the name typed to confirm, and a red button. */
+.confirm .typed { display: flex; flex-direction: column; gap: 0.35rem; font-size: 0.9375rem; color: var(--muted); max-width: 20rem; }
+.confirm .typed input { font: inherit; padding: 0.35rem 0.5rem; }
+button.primary.danger { border-color: #d0605e; color: #e07a78; }
+.erase-start { align-self: flex-start; }

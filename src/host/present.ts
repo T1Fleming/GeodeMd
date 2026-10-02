@@ -494,3 +494,27 @@ export const RUN_LABEL: Readonly<Record<"sync" | "rebuild" | "fresh", string>> =
   rebuild: "rebuild",
   fresh: "fresh start",
 };
+
+/**
+ * What erasing a vault would remove, in one sentence for the confirmation
+ * (ADR 0035). Counts, so the user can weigh them before typing the name.
+ */
+export function erasePreviewText(p: {
+  stamps: { files: number; stamps: number; unreadable: string[] };
+  sr: { exists: boolean; logShards: number; annotations: number; archives: number };
+}): string {
+  const n = (count: number, one: string, many: string) => `${count} ${count === 1 ? one : many}`;
+  const notes =
+    p.stamps.stamps === 0
+      ? "No note holds an id comment"
+      : `${n(p.stamps.stamps, "id comment", "id comments")} in ${n(p.stamps.files, "note", "notes")} will be taken out`;
+  const sr = p.sr.exists
+    ? `; .sr/ holds ${n(p.sr.logShards, "review log file", "review log files")}, ` +
+      `${n(p.sr.annotations, "annotation", "annotations")} and ${n(p.sr.archives, "archived fresh start", "archived fresh starts")}`
+    : "; there is no .sr/ folder";
+  const unreadable =
+    p.stamps.unreadable.length > 0
+      ? `. ${n(p.stamps.unreadable.length, "note", "notes")} could not be read, so the erase will stop before deleting anything`
+      : "";
+  return `${notes}${sr}${unreadable}.`;
+}

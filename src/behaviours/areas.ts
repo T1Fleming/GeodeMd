@@ -111,6 +111,8 @@ export const BY_FILE: Readonly<Record<string, string>> = {
   "core/two-devices.test.ts": "Moving between machines",
 
   "host/vaults.test.ts": "Keeping several vaults",
+  "core/erase.test.ts": "Keeping several vaults",
+  "electron/main/removal.test.ts": "Keeping several vaults",
   "electron/main/active.test.ts": "Keeping several vaults",
   "electron/renderer/model/vaults.test.ts": "Keeping several vaults",
 

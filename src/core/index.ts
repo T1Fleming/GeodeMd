@@ -10,7 +10,7 @@
 import { readFile as readFileAsync, stat as statAsync } from "node:fs/promises";
 import * as path from "node:path";
 import * as files from "../files/index.js";
-import { CONTEXT_VERSION, parse, parseNote, splitLines, stampLine, SYNTAX_VERSION } from "../parser/index.js";
+import { CONTEXT_VERSION, parse, parseNote, splitLines, stampLine, SYNTAX_VERSION, unstamp } from "../parser/index.js";
 import type { ContextEntry, ParsedCard } from "../parser/index.js";
 import { Store } from "../store/index.js";
 import type { CardState, DueRow } from "../store/index.js";
@@ -969,4 +969,56 @@ async function assertNotesDir(notesPath: string): Promise<void> {
     throw new ConfigError(`notes directory does not exist: ${notesPath}`);
   }
   if (!st.isDirectory()) throw new ConfigError(`notes path is not a directory: ${notesPath}`);
+}
+
+/** What taking GeodeMD's stamps out of a notes folder did, or would do. */
+export interface Unstamped {
+  /** Notes that held a stamp. */
+  files: number;
+  stamps: number;
+  /** Notes edited while this ran, so they were left alone; try again. */
+  changedUnderneath: string[];
+  /** Notes that could not be read. */
+  unreadable: string[];
+}
+
+/**
+ * Take every stamp out of every note in a vault (ADR 0035). A function rather
+ * than a `Core` method, because it needs no database: an erase can be run on a
+ * vault that is not open, and the database is deleted afterwards anyway.
+ *
+ * Every Markdown file the walk finds, **sync-conflict copies included** — a
+ * sync skips those, but they are the user's notes and carry stamps like any
+ * other. Each is written only if it has not changed since it was read
+ * (`writeIfUnchanged`), so a note being edited is reported, never clobbered.
+ * With `dryRun` nothing is written and the counts say what would be.
+ */
+export async function unstampNotes(
+  notesPath: string,
+  opts: { dryRun?: boolean } = {},
+): Promise<Unstamped> {
+  await assertNotesDir(notesPath);
+  const out: Unstamped = { files: 0, stamps: 0, changedUnderneath: [], unreadable: [] };
+  const { candidates } = await files.enumerate(notesPath);
+  for (const cand of candidates) {
+    let text: string;
+    try {
+      text = await files.readFile(notesPath, cand.relPath);
+    } catch {
+      out.unreadable.push(cand.relPath);
+      continue;
+    }
+    const result = unstamp(text);
+    if (result.stamps === 0) continue;
+    if (!opts.dryRun) {
+      const written = await files.writeIfUnchanged(notesPath, cand.relPath, result.text, cand);
+      if (!written) {
+        out.changedUnderneath.push(cand.relPath);
+        continue;
+      }
+    }
+    out.files++;
+    out.stamps += result.stamps;
+  }
+  return out;
 }

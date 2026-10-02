@@ -2,6 +2,7 @@
 
 - **Status:** Accepted
 - **Date:** 2026-09-24
+- **Amended by:** [ADR 0035](0035-removing-a-vault.md) — any vault can be removed, the open and the only one included, and erase takes GeodeMD out of a vault's notes
 - **Supersedes:** the single-`notesPath` config described in [`configuration.md`](../reference/configuration.md) before this change, and the assumption in the setup flow that there is one folder to point at
 
 ## Context

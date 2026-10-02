@@ -138,6 +138,34 @@ export function stampLine(line: string, id: string): string {
   return `${base} <!-- ${id} -->`;
 }
 
+/**
+ * Every stamp, wherever it sits, with the one space `stampLine` put before it.
+ * Not anchored to the end of the line: a user may have typed after a stamp,
+ * and two stamps can share a line, and erasing must find them all.
+ */
+const ANY_STAMP = / ?<!-- sr-[A-Za-z0-9]{12} -->/g;
+
+/**
+ * A note with every stamp taken out, and how many there were (ADR 0035).
+ *
+ * By text, not by `parse()`: a stamp outlives the rules that put it there —
+ * a ` :: ` line from before ADR 0031, a line now read as code or a table, a
+ * sync-conflict copy — and erasing GeodeMD from a note means all of them.
+ * Everything else is left exactly as it was: other comments, text that merely
+ * looks like an id, and every line terminator, since none is ever matched.
+ *
+ * The one thing it cannot give back is trailing whitespace `stampLine`
+ * trimmed when it wrote the stamp.
+ */
+export function unstamp(text: string): { text: string; stamps: number } {
+  let stamps = 0;
+  const out = text.replace(ANY_STAMP, () => {
+    stamps++;
+    return "";
+  });
+  return { text: out, stamps };
+}
+
 /** Split text into lines that each keep their own terminator (section 8 step 4). */
 export function splitLines(text: string): string[] {
   if (text === "") return [];

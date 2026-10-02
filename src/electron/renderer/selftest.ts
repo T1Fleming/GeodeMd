@@ -266,6 +266,8 @@ export async function runSelfTest(): Promise<void> {
     await runRestingChecks();
     // After the resting checks, so the vault has real history to set aside.
     await runFreshChecks();
+    // Last of all: it removes the second vault for good.
+    await runEraseChecks();
 
     const failed = results.some((r) => r.includes("FAIL"));
     console.log(["SELFTEST", ...results].join("\n"));
@@ -742,9 +744,10 @@ async function runVaultChecks(): Promise<void> {
   const firstName = (document.querySelector(".vault-menu select") as HTMLSelectElement | null)
     ?.selectedOptions[0]?.textContent ?? "";
   check("and the vault screen is headed with the same name", text(".screen h2") === firstName, `${text(".screen h2")} / ${firstName}`);
+  // ADR 0035: any vault can be removed, the open one included.
   check(
-    "the open vault cannot be removed",
-    (Array.from(document.querySelectorAll(".vault.on button")).find((b) => b.textContent?.includes("Remove")) as HTMLButtonElement | undefined)?.disabled === true,
+    "the open vault can be removed too",
+    (Array.from(document.querySelectorAll(".vault.on button")).find((b) => b.textContent?.includes("Remove")) as HTMLButtonElement | undefined)?.disabled === false,
   );
   await shot("vaults-01-one");
   if (!ownsConfig) return;
@@ -1055,6 +1058,52 @@ async function runFreshChecks(): Promise<void> {
     `new ${tile("new")} of ${tile("cards in total")}, due now ${tile("due now")}`,
   );
   await shot("stats-02-fresh");
+}
+
+/**
+ * Erase GeodeMD from the second vault, for real (ADR 0035): the preview counts
+ * its stamps, the button waits for the vault's name, and afterwards the vault
+ * is gone from the list. That its notes hold no stamp any more is asserted by
+ * `core/erase.test.ts` and `main/removal.test.ts`, which can read files.
+ */
+async function runEraseChecks(): Promise<void> {
+  await click(".tabs .tab", "Vault");
+  await until(".vaults");
+  const row = document.querySelector(".vaults .vault:not(.on)");
+  const name = row?.querySelector(".name")?.textContent?.trim() ?? "";
+  check("there is a second vault to erase", row !== null && name !== "", name);
+  if (!row) return;
+
+  const button = (label: string): HTMLButtonElement | undefined =>
+    Array.from(row.querySelectorAll("button")).find((b) => (b.textContent ?? "").includes(label)) as
+      | HTMLButtonElement
+      | undefined;
+  button("Remove")?.click();
+  await settle();
+  button("Erase GeodeMD from these notes")?.click();
+  let previewed = false;
+  for (let i = 0; i < 100 && !previewed; i++) {
+    previewed = (row.querySelector(".erase")?.textContent ?? "").includes("will be taken out");
+    if (!previewed) await settle(50);
+  }
+  check("erasing previews the id comments it will take out", previewed, row.querySelector(".erase p:nth-of-type(2)")?.textContent ?? "");
+  check("and will not erase until the name is typed", button("Erase")?.disabled === true, "");
+
+  const input = row.querySelector<HTMLInputElement>(".erase input")!;
+  const set = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
+  set.call(input, name);
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+  await settle();
+  check("typing the name enables it", button("Erase")?.disabled === false, "");
+  await shot("vaults-05-erase");
+
+  button("Erase")?.click();
+  let gone = false;
+  for (let i = 0; i < 100 && !gone; i++) {
+    gone = !all(".vaults .vault .name").includes(name);
+    if (!gone) await settle(50);
+  }
+  check("and erasing takes the vault out of the list", gone, all(".vaults .vault .name").join(" / "));
 }
 
 async function runHelpChecks(): Promise<void> {

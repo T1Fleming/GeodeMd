@@ -224,6 +224,7 @@ export function App(): React.JSX.Element {
           onAddVault={() => setBoot({ at: "add", config: boot.config })}
           onSwitch={(id) => void switchTo(id)}
           onVaults={setVaults}
+          onOpenGone={() => void check()}
         />
       )}
       {tab === "help" && <Help />}

@@ -11,26 +11,26 @@ app do*, and *where is that proven*. What it deliberately cannot tell you is wha
 app does **untested** — an area that looks thin here is thinly covered, and that is
 worth reading as a finding rather than a gap in the document.
 
-763 behaviours in 12 areas, which follow [the guides](../guides/) rather than the source tree.
+791 behaviours in 12 areas, which follow [the guides](../guides/) rather than the source tree.
 
-- [Reviewing](#reviewing) — 210
-- [Recognising a card](#recognising-a-card) — 121
+- [Reviewing](#reviewing) — 213
+- [Recognising a card](#recognising-a-card) — 129
 - [Syncing notes](#syncing-notes) — 89
 - [Recovery and the log](#recovery-and-the-log) — 54
 - [Moving between machines](#moving-between-machines) — 16
-- [Keeping several vaults](#keeping-several-vaults) — 45
+- [Keeping several vaults](#keeping-several-vaults) — 60
 - [Setting up this machine](#setting-up-this-machine) — 82
 - [The app's long runs](#the-apps-long-runs) — 32
 - [The database as a cache](#the-database-as-a-cache) — 7
 - [At scale](#at-scale) — 9
 - [Rules the project enforces on itself](#rules-the-project-enforces-on-itself) — 34
-- [The documentation tells the truth](#the-documentation-tells-the-truth) — 64
+- [The documentation tells the truth](#the-documentation-tells-the-truth) — 66
 
 ## Reviewing
 
 _A session: which card is next, what the keys mean, what a rating records, and what comes back before the sitting ends._
 
-**210 behaviours.**
+**213 behaviours.**
 
 ### the order cards are served in
 
@@ -189,6 +189,14 @@ _2 · `host/present.test.ts`_
 
 - names how many cards come back, and at what time
 - counts cards due now, as a floor when the count stopped at the cap
+
+### what an erase says it will remove
+
+_3 · `host/present.test.ts`_
+
+- counts id comments, notes and what .sr/ holds
+- says so when there is nothing to take out, and no .sr/
+- warns that unreadable notes will stop it
 
 ### which program opens a note
 
@@ -456,7 +464,7 @@ _7 · `files/files.test.ts`_
 
 _Text in, cards out. Also — and mostly — the shapes that are deliberately NOT cards, because a false positive writes a stamp into someone's note._
 
-**121 behaviours.**
+**129 behaviours.**
 
 ### the basic form
 
@@ -673,6 +681,19 @@ _2 · `parser/parser.test.ts`_
 
 - returns the id and the remainder
 - returns null when there is no stamp
+
+### taking every stamp out of a note
+
+_8 · `parser/parser.test.ts`_
+
+- gives back the line exactly as it was before it was stamped
+- keeps every line terminator, CRLF and a missing final newline included
+- finds a stamp a user typed after, and two on one line
+- finds stamps on lines that are no longer cards
+- leaves another comment alone
+- leaves an id one character short alone
+- leaves an id with a character it cannot hold alone
+- leaves an id without its prefix alone
 
 ## Syncing notes
 
@@ -1050,7 +1071,7 @@ _2 · `electron/main/reads.test.ts`_
 
 _Several notes folders, each with its own database, one open at a time — adding, switching, and the overlap that would split a card's history._
 
-**45 behaviours.**
+**60 behaviours.**
 
 ### refusing two vaults that share notes
 
@@ -1064,6 +1085,32 @@ _8 · `host/vaults.test.ts`_
 - still counts a vault whose folder is missing, as an unplugged drive would be
 - does not count the vault being re-pointed against itself
 - says which vault, and why that matters, in one sentence
+
+### erasing GeodeMD's stamps from a vault
+
+_4 · `core/erase.test.ts`_
+
+- leaves the demo notes byte for byte as they were before a sync
+- finds stamps sync no longer reads: old `::` lines, code and conflict copies
+- writes nothing on a dry run, and says what it would take out
+- leaves a note with no stamp untouched, mtime included
+
+### removing a vault from the app
+
+_2 · `electron/main/removal.test.ts`_
+
+- leaves its notes and .sr/ alone, and deletes its database when asked
+- closes the open vault first, and opens the one left
+
+### erasing GeodeMD from a vault
+
+_5 · `electron/main/removal.test.ts`_
+
+- previews what it would take out, writing nothing
+- refuses without the vault's name typed, and changes nothing
+- takes out every stamp, deletes .sr/ and the database, and drops it from the list
+- does nothing at all when the open vault cannot be closed
+- leaves first-run setup behind when it was the last vault, keeping this machine's name
 
 ### switching between vaults
 
@@ -1106,9 +1153,17 @@ _4 · `electron/renderer/model/vaults.test.ts`_
 
 ### removing a vault from the list
 
+_3 · `electron/renderer/model/vaults.test.ts`_
+
+- says which vault opens next when the open one goes
+- says nothing for a vault that is not open
+- says setup comes back when the only vault goes
+
+### confirming an erase
+
 _1 · `electron/renderer/model/vaults.test.ts`_
 
-- is not offered for the open vault, and says why
+- needs the vault's exact name, spaces at either end aside
 
 ### notes edited in the vault just left
 
@@ -1119,7 +1174,7 @@ _2 · `electron/renderer/model/vaults.test.ts`_
 
 ### keeping a list of vaults
 
-_13 · `host/host.test.ts`_
+_14 · `host/host.test.ts`_
 
 - gives an added vault its own database, and makes it the open one
 - shares device and editor across vaults, since both are about the machine
@@ -1128,7 +1183,8 @@ _13 · `host/host.test.ts`_
 - refuses to add a vault that overlaps one already in the list
 - switches by changing only which vault is active
 - renames a vault without moving anything, and refuses a blank or taken name
-- will not remove the open vault
+- removes the open vault, and opens the first one left
+- removes the last vault, leaving first-run setup that keeps this machine's name
 - removes a vault without touching its notes or its log
 - deletes a removed vault's database only when asked, and its directory with it
 - re-points the open vault, keeping its id and its database
@@ -1570,7 +1626,7 @@ _5 · `behaviours/areas.test.ts`_
 
 _Documents that make checkable claims, checked._
 
-**64 behaviours.**
+**66 behaviours.**
 
 ### the demo collection
 
@@ -1755,4 +1811,11 @@ _1 · `journeys/vaults.test.ts`_
 _1 · `journeys/vaults.test.ts`_
 
 - leaves its notes and log, so adding the folder again brings its history back
+
+### erasing GeodeMD from a vault's notes
+
+_2 · `journeys/vaults.test.ts`_
+
+- leaves the notes exactly as they were before GeodeMD, and no .sr/
+- can remove the only vault, and setup after it keeps this machine's name
 
