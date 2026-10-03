@@ -446,3 +446,72 @@ describe("annotations are where the guide says, and behave as it says", () => {
     expect(await open.core.getAnnotation(card!.id)).toBe("source: chapter 3\n");
   });
 });
+
+describe("a problem taken apart into cards works as the guide says", () => {
+  const HEADING = "## Practising problems, not facts";
+
+  async function section(): Promise<string> {
+    const text = await reviewing();
+    return text.slice(text.indexOf(HEADING));
+  }
+
+  it("reads every line of the signals example as a card, and shows nothing above one that gives it away", async () => {
+    const [signals] = fences(await section(), "markdown").filter((b) => b.includes("# Which technique?"));
+    expect(signals, "the guide no longer shows the signals example").toBeDefined();
+
+    open = await newCollection();
+    await open.write("signals.md", signals!);
+    await open.core.sync(T0);
+    const cards = open.core.getDueCards(T0, 10);
+    expect(cards).toHaveLength(signals!.split("\n").filter((l) => l.includes(" >> ")).length);
+
+    // What the review shows before the reveal: the path line and the parents.
+    for (const card of cards) {
+      const shown = cardContext(card, { revealed: false, expanded: false });
+      const above = [...shown.path, ...shown.parents.map((p) => p.text)].join(" ").toLowerCase();
+      for (const word of card.answer.toLowerCase().split(/[^a-z]+/).filter((w) => w.length > 3)) {
+        expect(above, `"${card.question}" is shown under a hint to "${card.answer}"`).not.toContain(word);
+      }
+    }
+  });
+
+  it("is right that a note's name is shown above its cards even when it is the answer", async () => {
+    expect(plain(await section())).toContain(
+      "Parents that appear in the answer are hidden until you reveal it; the note's name and headings are not.",
+    );
+
+    open = await newCollection();
+    await open.write("monotonic-stack.md", "- For every element, the first larger one to its right >> monotonic stack\n");
+    await open.core.sync(T0);
+    const [card] = open.core.getDueCards(T0, 10);
+    expect(cardContext(card!, { revealed: false, expanded: false }).path).toEqual(["monotonic-stack"]);
+  });
+
+  it("reads the method example as cards, in a note named after the technique", async () => {
+    const [method] = fences(await section(), "markdown").filter((b) => b.includes("# Monotonic stack"));
+    expect(method, "the guide no longer shows the method example").toBeDefined();
+
+    open = await newCollection();
+    await open.write("monotonic-stack.md", method!);
+    await open.core.sync(T0);
+    expect(open.core.getDueCards(T0, 10).map((c) => c.question)).toEqual([
+      "What the stack holds",
+      "When an index is popped",
+      "Why it is linear",
+      "Next smaller instead of next larger",
+    ]);
+  });
+
+  it("is right that a solution in a code block beside the cards is not read as cards", async () => {
+    expect(plain(await section())).toContain("Code blocks are never read as cards");
+
+    open = await newCollection();
+    await open.write(
+      "monotonic-stack.md",
+      "- Why it is linear >> each index is pushed once and popped at most once\n\n" +
+        "## Daily Temperatures\n\n```python\nhalf = n >> 1\nwhile stack and t[stack[-1]] < temp:\n    j = stack.pop()\n```\n",
+    );
+    await open.core.sync(T0);
+    expect(open.core.getDueCards(T0, 10).map((c) => c.question)).toEqual(["Why it is linear"]);
+  });
+});

@@ -156,3 +156,48 @@ If a session says `database busy` and keeps going, that is the same mechanism sh
 **A deleted card can still turn up.** `review` deliberately does not walk your notes — that is what keeps a session instant on a large collection — so a note you deleted since the last sync leaves its cards in the queue until you sync.
 
 The counter on each card (`3/24`) and the count of what the session was drawn from (`12 of 400 due`) are the whole of the progress reporting. At the end you get a tally of the ratings you gave, and the names of any notes you edited.
+
+## Practising problems, not facts
+
+Some things worth practising are not facts: a LeetCode problem, a system design question, a proof. **Don't put the whole problem on one card**, like `Daily Temperatures >> use a monotonic stack`. It fails in three ways:
+
+- **It trains the wrong thing.** After two reviews you remember that *this* problem uses a stack. The point was to recognise a stack problem you have never seen, and the card stopped measuring that.
+- **Rating it measures familiarity.** You read the answer, it looks familiar, and you press `3`. Familiar is not the same as able to do it.
+- **The answer doesn't fit on a line.** A solution is a page, and a card is one line.
+
+What works today is to take a problem apart into cards about the **method**, and keep solving new problems yourself. The cards keep the method fresh between problems. They don't replace practising on problems.
+
+### Cards for what gives the method away
+
+The most useful card is the one you need in an interview: **what in a problem tells you which technique to use.** Write the signal in general terms, with no problem's name in it:
+
+```markdown
+# Which technique?
+
+- For every element, the first larger one to its right >> monotonic stack
+- Sorted array, find a pair with a given sum >> two pointers, one from each end
+- Longest substring with at most k distinct characters >> sliding window
+- Can you reach the end, jumping at most nums[i] from i >> greedy, tracking the furthest reach
+```
+
+**Keep these in one note that mixes techniques, under a heading that names none of them.** Two reasons:
+
+- **The note's name and its headings are always shown above the question.** A signal card in `monotonic-stack.md` is shown under `monotonic-stack`, which answers it before you start. Parents that appear in the answer are hidden until you reveal it; the note's name and headings are not.
+- **Mixing them is the practice.** When every card in a note has the same answer, you know it before you read the question. Mixed, you have to choose, and choosing is the skill.
+
+### Cards for the method itself
+
+How a technique works can live in a note named after it, because there the name is not the answer:
+
+```markdown
+# Monotonic stack
+
+- What the stack holds >> indices still waiting for their answer, values decreasing from bottom to top
+- When an index is popped >> when the current element is the first larger one to its right
+- Why it is linear >> each index is pushed once and popped at most once
+- Next smaller instead of next larger >> keep the values increasing rather than decreasing
+```
+
+Cards like these work for system design too: what a choice costs, and when you would make the other one.
+
+**Keep each problem and your solution in your notes as ordinary text.** Code blocks are never read as cards, so a solution can sit under its own heading, beside the cards it taught you, without turning into cards.
