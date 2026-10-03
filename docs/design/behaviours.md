@@ -11,7 +11,7 @@ app do*, and *where is that proven*. What it deliberately cannot tell you is wha
 app does **untested** — an area that looks thin here is thinly covered, and that is
 worth reading as a finding rather than a gap in the document.
 
-791 behaviours in 12 areas, which follow [the guides](../guides/) rather than the source tree.
+795 behaviours in 12 areas, which follow [the guides](../guides/) rather than the source tree.
 
 - [Reviewing](#reviewing) — 213
 - [Recognising a card](#recognising-a-card) — 129
@@ -24,7 +24,7 @@ worth reading as a finding rather than a gap in the document.
 - [The database as a cache](#the-database-as-a-cache) — 7
 - [At scale](#at-scale) — 9
 - [Rules the project enforces on itself](#rules-the-project-enforces-on-itself) — 34
-- [The documentation tells the truth](#the-documentation-tells-the-truth) — 66
+- [The documentation tells the truth](#the-documentation-tells-the-truth) — 70
 
 ## Reviewing
 
@@ -1626,7 +1626,7 @@ _5 · `behaviours/areas.test.ts`_
 
 _Documents that make checkable claims, checked._
 
-**66 behaviours.**
+**70 behaviours.**
 
 ### the demo collection
 
@@ -1736,6 +1736,15 @@ _4 · `journeys/reviewing.test.ts`_
 - treats `3` and `q` as text while the box is open, and closes it on the two keys named
 - keeps each one as a plain file in the notes folder, named by the card's id
 - keeps a deleted card's annotation, which comes back with the card
+
+### a problem taken apart into cards works as the guide says
+
+_4 · `journeys/reviewing.test.ts`_
+
+- reads every line of the signals example as a card, and shows nothing above one that gives it away
+- is right that a note's name is shown above its cards even when it is the answer
+- reads the method example as cards, in a note named after the technique
+- is right that a solution in a code block beside the cards is not read as cards
 
 ### what the guide says is durable, and where it says it lives
 
