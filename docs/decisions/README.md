@@ -47,6 +47,7 @@ New decisions from here get an ADR when they are made, not in a later sweep — 
 | [0037](0037-mark-the-line-being-asked.md) | Mark the line being asked, and reveal the answer in its place | Accepted |
 | [0038](0038-exercises.md) | Exercises: schedule the skill, serve a different problem each time | Accepted |
 | [0039](0039-exercises-after-first-use.md) | Exercises after first use: what testing changed | Accepted |
+| [0040](0040-rate-every-skill-and-let-new-skills-wait-in-line.md) | Rate every skill an exercise names, and let new skills wait in line | Accepted |
 
 ## Writing one
 
