@@ -310,12 +310,16 @@ body {
   font-size: 0.875rem;
 }
 
-.legend .spacer { flex: 1; }
-
 /* A label is never broken across lines; a row too long for the window wraps
-   whole buttons instead. The spot and solve ratings are long enough to need it. */
+   whole buttons instead. The spot and solve ratings are long enough to need it.
+
+   Two groups, so a wrap never strands one key: the ratings may wrap among
+   themselves, and the other keys move as one, kept to the right. Wrapping
+   button by button left `q quit` alone on a second row (#81). */
 .legend { flex-wrap: wrap; }
 .legend button { white-space: nowrap; }
+.legend .ratings { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.legend .actions { display: flex; gap: 0.5rem; margin-left: auto; }
 
 button {
   font: inherit;

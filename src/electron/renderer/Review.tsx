@@ -343,7 +343,7 @@ export function Review({
               there. Which keys belong to which stage is `host`'s to say. */}
           <footer className="legend">
             {session.revealed && (
-              <>
+              <div className="ratings">
                 {ratingKeysFor(card).map(([key, label]) => (
                   <button
                     key={key}
@@ -354,20 +354,20 @@ export function Review({
                     <kbd>{key}</kbd> {label}
                   </button>
                 ))}
-                <span className="spacer" />
-              </>
+              </div>
             )}
-            {!session.revealed && <span className="spacer" />}
-            {actionsAt(session.revealed ? "answer" : "question", isSpot(card)).map((a) => (
-              <button
-                key={a.key}
-                className="action"
-                disabled={annotating(session)}
-                onClick={() => handle(a.key)}
-              >
-                <kbd>{a.key}</kbd> {a.label}
-              </button>
-            ))}
+            <div className="actions">
+              {actionsAt(session.revealed ? "answer" : "question", isSpot(card)).map((a) => (
+                <button
+                  key={a.key}
+                  className="action"
+                  disabled={annotating(session)}
+                  onClick={() => handle(a.key)}
+                >
+                  <kbd>{a.key}</kbd> {a.label}
+                </button>
+              ))}
+            </div>
           </footer>
         </>
       )}
@@ -435,12 +435,13 @@ function NoteViewer({
         )}
       </section>
       <footer className="legend">
-        <span className="spacer" />
-        {actionsAt("note").map((a) => (
-          <button key={a.key} className="action" onClick={() => onKey(a.key)}>
-            <kbd>{a.key}</kbd> {a.label}
-          </button>
-        ))}
+        <div className="actions">
+          {actionsAt("note").map((a) => (
+            <button key={a.key} className="action" onClick={() => onKey(a.key)}>
+              <kbd>{a.key}</kbd> {a.label}
+            </button>
+          ))}
+        </div>
       </footer>
     </>
   );

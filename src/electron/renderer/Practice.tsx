@@ -247,17 +247,20 @@ function Solved({
         )}
       </section>
       <footer className="legend">
-        {SOLVE_RATING_KEYS.map(([key, label]) => (
-          <button key={key} className="rating" disabled={saving} onClick={() => onKey(key)}>
-            <kbd>{key}</kbd> {label}
-          </button>
-        ))}
-        <span className="spacer" />
-        {practiceKeysAt("solved").map((k) => (
-          <button key={k.key} className="action" disabled={saving} onClick={() => onKey(k.key)}>
-            <kbd>{k.shown}</kbd> {k.label}
-          </button>
-        ))}
+        <div className="ratings">
+          {SOLVE_RATING_KEYS.map(([key, label]) => (
+            <button key={key} className="rating" disabled={saving} onClick={() => onKey(key)}>
+              <kbd>{key}</kbd> {label}
+            </button>
+          ))}
+        </div>
+        <div className="actions">
+          {practiceKeysAt("solved").map((k) => (
+            <button key={k.key} className="action" disabled={saving} onClick={() => onKey(k.key)}>
+              <kbd>{k.shown}</kbd> {k.label}
+            </button>
+          ))}
+        </div>
       </footer>
     </main>
   );
@@ -266,12 +269,13 @@ function Solved({
 function Legend({ stage, onKey }: { stage: "solving" | "solved"; onKey: (k: string) => void }): React.JSX.Element {
   return (
     <footer className="legend">
-      <span className="spacer" />
-      {practiceKeysAt(stage).map((k) => (
-        <button key={k.key} className="action" onClick={() => onKey(k.key)}>
-          <kbd>{k.shown}</kbd> {k.label}
-        </button>
-      ))}
+      <div className="actions">
+        {practiceKeysAt(stage).map((k) => (
+          <button key={k.key} className="action" onClick={() => onKey(k.key)}>
+            <kbd>{k.shown}</kbd> {k.label}
+          </button>
+        ))}
+      </div>
     </footer>
   );
 }
