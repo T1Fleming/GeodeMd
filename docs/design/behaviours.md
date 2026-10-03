@@ -11,27 +11,27 @@ app do*, and *where is that proven*. What it deliberately cannot tell you is wha
 app does **untested** — an area that looks thin here is thinly covered, and that is
 worth reading as a finding rather than a gap in the document.
 
-903 behaviours in 13 areas, which follow [the guides](../guides/) rather than the source tree.
+896 behaviours in 13 areas, which follow [the guides](../guides/) rather than the source tree.
 
-- [Reviewing](#reviewing) — 235
+- [Reviewing](#reviewing) — 234
 - [Recognising a card](#recognising-a-card) — 129
-- [Exercises](#exercises) — 62
+- [Exercises](#exercises) — 58
 - [Syncing notes](#syncing-notes) — 89
 - [Recovery and the log](#recovery-and-the-log) — 59
 - [Moving between machines](#moving-between-machines) — 17
 - [Keeping several vaults](#keeping-several-vaults) — 60
-- [Setting up this machine](#setting-up-this-machine) — 85
+- [Setting up this machine](#setting-up-this-machine) — 82
 - [The app's long runs](#the-apps-long-runs) — 32
 - [The database as a cache](#the-database-as-a-cache) — 7
 - [At scale](#at-scale) — 9
 - [Rules the project enforces on itself](#rules-the-project-enforces-on-itself) — 36
-- [The documentation tells the truth](#the-documentation-tells-the-truth) — 83
+- [The documentation tells the truth](#the-documentation-tells-the-truth) — 84
 
 ## Reviewing
 
 _A session: which card is next, what the keys mean, what a rating records, and what comes back before the sitting ends._
 
-**235 behaviours.**
+**234 behaviours.**
 
 ### the order cards are served in
 
@@ -220,11 +220,10 @@ _3 · `host/present.test.ts`_
 
 ### how the Practice screen is worded and keyed
 
-_7 · `host/present.test.ts`_
+_6 · `host/present.test.ts`_
 
 - names the solve ratings by what happened, with the same four keys
-- starts and pauses on Space, shows the solution only on d, and offers leave at both stages
-- says whether the clock has started, and whether it is running
+- stops the clock on Space or Enter only, and offers leave at both stages
 - shows the clock as m:ss, and h:mm:ss past the hour
 - says when a skill comes back as a date
 - lists the rest of the pool, then who shares each other skill
@@ -747,7 +746,7 @@ _8 · `parser/parser.test.ts`_
 
 _Notes opted in by `geode-skills`: a skill scheduled in place of a card, and a different problem from its pool served each time it comes due (ADR 0038)._
 
-**62 behaviours.**
+**58 behaviours.**
 
 ### a note becomes an exercise only by naming its skills
 
@@ -822,13 +821,15 @@ _5 · `core/exercises.test.ts`_
 
 ### the Practice screen offers one solve at a time
 
-_6 · `core/exercises.test.ts`_
+_8 · `core/exercises.test.ts`_
 
 - offers the skill whose solve is most overdue, with an exercise picked by the same rules
 - is null when no skill is due for a solve
 - does not count a spot review against a solve: a spot shows no solution
 - counts a solve against every skill: a solved problem is not new to any of them
 - calls a solved problem a repeat when it is all a pool has left
+- lets a skill never solved wait in line from its first spot review, not behind every due one
+- puts a skill never spotted nor solved last, by name
 - counts skills due for a solve in the stats
 
 ### spot reviews are mixed in, in an order that gives nothing away
@@ -848,13 +849,10 @@ _2 · `core/exercises.test.ts`_
 
 ### a solve on the Practice screen
 
-_12 · `electron/renderer/model/practice.test.ts`_
+_9 · `electron/renderer/model/practice.test.ts`_
 
-- waits for Space to start the clock, so reading the problem is not solving it
-- pauses and resumes on Space, counting only the time it ran
-- shows the solution only on d, never on Space, so the reflexive key cannot give it away
-- finishes from a clock that never started, and records no time rather than none spent
-- hides and shows the clock on h, which changes nothing about the solve
+- times the attempt from the moment the problem is shown to the moment you say you are done
+- stops only on Space or Enter, so a stray key half an hour in shows nothing
 - records the rating with the time taken, and offers no second solve
 - keeps the solve when a rating fails, so it can be given again
 - records nothing when you leave, before or after the reveal
@@ -862,14 +860,6 @@ _12 · `electron/renderer/model/practice.test.ts`_
 - picks a solve under way back up on return to the tab, and nothing finished
 - opens the note in an editor once the solution is showing, and not before
 - drops a note that arrives after the rating
-
-### one exercise is not offered by both tabs in one day
-
-_3 · `electron/main/reads.test.ts`_
-
-- keeps Practice off the exercise the review sitting is asking with
-- keeps the review sitting off the exercise Practice offered, and its own where it was
-- forgets what was offered when the day changes
 
 ## Syncing notes
 
@@ -1399,7 +1389,7 @@ _7 · `electron/renderer/model/setup.test.ts`_
 
 _Config, XDG paths, the device name, and the first run._
 
-**85 behaviours.**
+**82 behaviours.**
 
 ### where the config lives
 
@@ -1454,14 +1444,6 @@ _5 · `host/host.test.ts`_
 - removes the key for the system default
 - treats a blank value as the system default
 - persists a device rather than minting a new one on every write
-- is null when there is no config to set it in
-
-### hiding the Practice clock
-
-_3 · `host/host.test.ts`_
-
-- is remembered as its own key, beside the others
-- removes the key when shown again, and is on only for a literal true
 - is null when there is no config to set it in
 
 ### choosing to read notes inside the app
@@ -1833,7 +1815,7 @@ _5 · `behaviours/areas.test.ts`_
 
 _Documents that make checkable claims, checked._
 
-**83 behaviours.**
+**84 behaviours.**
 
 ### the demo collection
 
@@ -1970,11 +1952,12 @@ _10 · `journeys/reviewing.test.ts`_
 
 ### a solve on the Practice tab goes as the guide says
 
-_3 · `journeys/reviewing.test.ts`_
+_4 · `journeys/reviewing.test.ts`_
 
+- is right that a new skill waits in line from when you first spotted it
 - names the same four solve ratings, in the same order, with the same words
 - offers one solve, times it, and records the time beside the rating
-- is right that Space starts and pauses, only d stops the clock, and q leaves having recorded nothing
+- is right that only Space or Enter stops the clock, and q leaves having recorded nothing
 
 ### what the guide says is durable, and where it says it lives
 

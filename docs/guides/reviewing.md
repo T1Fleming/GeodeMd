@@ -221,7 +221,7 @@ What makes it work:
 
 ### Solving: the Practice tab
 
-Recognising the skill is half of it. The other half is carrying it out, and that is the **Practice** tab. It offers **one solve per visit**: the skill whose solve is most overdue, with an exercise picked the same way a spot review's is. Spotting a skill and solving it have separate schedules, and a skill you have spotted with one exercise can still be solved with it, since spotting it showed you no solution.
+Recognising the skill is half of it. The other half is carrying it out, and that is the **Practice** tab. It offers **one solve per visit**: the skill that has waited longest, with an exercise picked the same way a spot review's is. A skill you have never solved has been waiting since you first spotted it, so a new skill gets its turn rather than queueing behind one you keep rating low. Spotting a skill and solving it have separate schedules, and a skill you have spotted with one exercise can still be solved with it, since spotting it showed you no solution.
 
 Read the problem, then **press Space to start the clock** when you start solving. Space pauses it and starts it again, so a phone call doesn't count: only the time it runs is recorded, and none at all if you never start it. Solve it wherever you solve things, in an editor or on LeetCode, and come back. **Press `d` when you are done.** No other key stops the clock, so a stray keypress half an hour in shows you nothing. The clock stops, and your note opens in full, solution and all, with the related exercises under it. Then:
 

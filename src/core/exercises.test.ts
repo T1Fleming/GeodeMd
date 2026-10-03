@@ -386,6 +386,8 @@ describe("the Practice screen offers one solve at a time", () => {
     await write("b.md", exercise(["monotonic-stack", "sliding-window"], "B"));
     await core.sync(T0);
     await core.reviewSkill({ skill: "two-pointers", kind: "solve", exercise: "a.md", repeat: false }, 4, new Date("2026-10-01T08:00:00.000Z"), 900);
+    // monotonic-stack met first, so it has waited longest for a solve (ADR 0040).
+    await core.reviewSkill({ skill: "monotonic-stack", kind: "spot", exercise: "a.md", repeat: false }, 1, new Date("2026-10-01T12:00:00.000Z"));
     await core.reviewSkill({ skill: "sliding-window", kind: "spot", exercise: "b.md", repeat: false }, 4, new Date("2026-10-02T08:00:00.000Z"));
     const day = dayOf(T0.toISOString());
     expect(core.getSolveReview(T0, day)).toMatchObject({ skill: "monotonic-stack", filePath: "b.md", repeat: false });
@@ -402,6 +404,28 @@ describe("the Practice screen offers one solve at a time", () => {
     const day = dayOf(T0.toISOString());
     expect(core.getSolveReview(T0, day)).toMatchObject({ skill: "monotonic-stack", repeat: true });
     expect(core.getSpotReviews(T0, day, 10).find((r) => r.skill === "monotonic-stack")!.repeat).toBe(true);
+  });
+
+  it("lets a skill never solved wait in line from its first spot review, not behind every due one", async () => {
+    // Seen in testing (#81): caching, rated low, was solved four times in a
+    // week while two skills met on day 0 waited for their first (ADR 0040).
+    await write("a.md", exercise(["caching"], "A"));
+    await write("b.md", exercise(["caching"], "B"));
+    await write("c.md", exercise(["static-site"], "C"));
+    await core.sync(T0);
+    await core.reviewSkill({ skill: "static-site", kind: "spot", exercise: "c.md", repeat: false }, 3, T0);
+    await core.reviewSkill({ skill: "caching", kind: "solve", exercise: "a.md", repeat: false }, 1, new Date(T0.getTime() + 60_000), 600);
+    // A day later caching is due again, but static-site has waited since T0.
+    const later = new Date(T0.getTime() + 2 * 86_400_000);
+    expect(core.getSolveReview(later, dayOf(later.toISOString()))!.skill).toBe("static-site");
+  });
+
+  it("puts a skill never spotted nor solved last, by name", async () => {
+    await write("a.md", exercise(["zebra"], "A"));
+    await write("b.md", exercise(["alpha"], "B"));
+    await core.sync(T0);
+    await core.reviewSkill({ skill: "zebra", kind: "spot", exercise: "a.md", repeat: false }, 3, T0);
+    expect(core.getSolveReview(T0, dayOf(T0.toISOString()))!.skill).toBe("zebra");
   });
 
   it("counts skills due for a solve in the stats", async () => {
