@@ -14,8 +14,9 @@ import {
   CRUMB_SEPARATOR,
   isSpot,
   locatorFor,
-  RATING_KEYS,
   ratingKeysFor,
+  relatedLines,
+  sessionBreakdown,
   repeatText,
   restingText,
   SPOT_PROMPT,
@@ -518,7 +519,7 @@ function Finished({
 }): React.JSX.Element {
   const done = reviewed(session);
   const waiting = resting(session);
-  const breakdown = RATING_KEYS.filter(([k]) => session.counts[Number(k) as 1 | 2 | 3 | 4] > 0);
+  const breakdown = sessionBreakdown(session.counts, session.spotCounts);
 
   return (
     <main className="review done">
@@ -530,9 +531,9 @@ function Finished({
       </h2>
       {breakdown.length > 0 && (
         <ul className="breakdown">
-          {breakdown.map(([k, label]) => (
-            <li key={k}>
-              {session.counts[Number(k) as 1 | 2 | 3 | 4]} {label}
+          {breakdown.map(({ label, count }) => (
+            <li key={label}>
+              {count} {label}
             </li>
           ))}
         </ul>
@@ -668,6 +669,16 @@ function SpotFront({ spot, revealed }: { spot: SpotReview; revealed: boolean }):
       </p>
       {revealed && spot.repeat && (
         <p className="spot-repeat">{repeatText(spot.skill)}</p>
+      )}
+      {/* After the reveal only: the rest of the pool would hint at the skill. */}
+      {revealed && relatedLines(spot).length > 0 && (
+        <ul className="related">
+          {relatedLines(spot).map((line) => (
+            <li key={line.label}>
+              <span className="muted">{line.label}:</span> {line.titles.join(" · ")}
+            </li>
+          ))}
+        </ul>
       )}
     </div>
   );

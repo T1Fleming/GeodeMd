@@ -98,6 +98,7 @@ export const BY_FILE: Readonly<Record<string, string>> = {
 
   "parser/exercise.test.ts": "Exercises",
   "core/exercises.test.ts": "Exercises",
+  "electron/renderer/model/practice.test.ts": "Exercises",
 
   "core/review.test.ts": "Reviewing",
   "core/busy.test.ts": "Reviewing",

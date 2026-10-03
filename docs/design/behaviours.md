@@ -11,11 +11,11 @@ app do*, and *where is that proven*. What it deliberately cannot tell you is wha
 app does **untested** — an area that looks thin here is thinly covered, and that is
 worth reading as a finding rather than a gap in the document.
 
-850 behaviours in 13 areas, which follow [the guides](../guides/) rather than the source tree.
+873 behaviours in 13 areas, which follow [the guides](../guides/) rather than the source tree.
 
-- [Reviewing](#reviewing) — 227
+- [Reviewing](#reviewing) — 234
 - [Recognising a card](#recognising-a-card) — 129
-- [Exercises](#exercises) — 33
+- [Exercises](#exercises) — 46
 - [Syncing notes](#syncing-notes) — 89
 - [Recovery and the log](#recovery-and-the-log) — 54
 - [Moving between machines](#moving-between-machines) — 17
@@ -25,13 +25,13 @@ worth reading as a finding rather than a gap in the document.
 - [The database as a cache](#the-database-as-a-cache) — 7
 - [At scale](#at-scale) — 9
 - [Rules the project enforces on itself](#rules-the-project-enforces-on-itself) — 34
-- [The documentation tells the truth](#the-documentation-tells-the-truth) — 77
+- [The documentation tells the truth](#the-documentation-tells-the-truth) — 80
 
 ## Reviewing
 
 _A session: which card is next, what the keys mean, what a rating records, and what comes back before the sitting ends._
 
-**227 behaviours.**
+**234 behaviours.**
 
 ### the order cards are served in
 
@@ -218,6 +218,17 @@ _3 · `host/present.test.ts`_
 - counts the exercises found and the ones it could not serve
 - names the notes it left out, and the fix
 
+### how the Practice screen is worded and keyed
+
+_6 · `host/present.test.ts`_
+
+- names the solve ratings by what happened, with the same four keys
+- stops the clock on Space or Enter only, and offers leave at both stages
+- shows the clock as m:ss, and h:mm:ss past the hour
+- says when a skill comes back as a date
+- lists the rest of the pool, then who shares each other skill
+- tallies spot reviews in their own words, after the cards
+
 ### which program opens a note
 
 _2 · `host/editor.test.ts`_
@@ -402,6 +413,12 @@ _5 · `electron/renderer/model/session.test.ts`_
 - ignores `a`, because a spot review has no annotation
 - does not come back in the sitting: a skill has no short-term steps
 - opens the exercise's note whole, with no line to find
+
+### a session's tally keeps spot reviews apart
+
+_1 · `electron/renderer/model/session.test.ts`_
+
+- counts a spot review's rating apart from a card's, and both as reviewed
 
 ### when a screen with no card checks for cards coming due
 
@@ -729,7 +746,7 @@ _8 · `parser/parser.test.ts`_
 
 _Notes opted in by `geode-skills`: a skill scheduled in place of a card, and a different problem from its pool served each time it comes due (ADR 0038)._
 
-**33 behaviours.**
+**46 behaviours.**
 
 ### a note becomes an exercise only by naming its skills
 
@@ -798,6 +815,34 @@ _5 · `core/exercises.test.ts`_
 - skips a malformed skill line as it skips a malformed card line
 - reads again, once, the lines an older build skipped and moved past
 - re-derives skill schedules when the skill scheduler changes
+
+### the Practice screen offers one solve at a time
+
+_4 · `core/exercises.test.ts`_
+
+- offers the skill whose solve is most overdue, with an exercise picked by the same rules
+- is null when no skill is due for a solve
+- does not count a spot review against a solve: a spot shows no solution
+- counts skills due for a solve in the stats
+
+### the exercises shown beside one once it is answered
+
+_2 · `core/exercises.test.ts`_
+
+- lists the rest of the pool, and who shares each of its other skills
+- leaves out another skill that no other exercise shares
+
+### a solve on the Practice screen
+
+_7 · `electron/renderer/model/practice.test.ts`_
+
+- times the attempt from the moment the problem is shown to the moment you say you are done
+- stops only on Space or Enter, so a stray key half an hour in shows nothing
+- records the rating with the time taken, and offers no second solve
+- keeps the solve when a rating fails, so it can be given again
+- records nothing when you leave, before or after the reveal
+- opens the note in an editor once the solution is showing, and not before
+- drops a note that arrives after the rating
 
 ## Syncing notes
 
@@ -1736,7 +1781,7 @@ _5 · `behaviours/areas.test.ts`_
 
 _Documents that make checkable claims, checked._
 
-**77 behaviours.**
+**80 behaviours.**
 
 ### the demo collection
 
@@ -1867,6 +1912,14 @@ _7 · `journeys/reviewing.test.ts`_
 - leaves out a note with no ## Solution, and the summary names it
 - is right that a skill comes back in days, never minutes, whatever you press
 - says what it says when a skill has run out of exercises, and offers no annotation
+
+### a solve on the Practice tab goes as the guide says
+
+_3 · `journeys/reviewing.test.ts`_
+
+- names the same four solve ratings, in the same order, with the same words
+- offers one solve, times it, and records the time beside the rating
+- is right that only Space or Enter stops the clock, and q leaves having recorded nothing
 
 ### what the guide says is durable, and where it says it lives
 

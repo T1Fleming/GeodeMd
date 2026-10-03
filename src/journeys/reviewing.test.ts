@@ -32,8 +32,11 @@ import {
   repeatText,
   SPOT_PROMPT,
   SPOT_RATING_KEYS,
+  SOLVE_RATING_KEYS,
+  practiceKeysAt,
   startOfDay,
 } from "../host/present.js";
+import { press as practicePress, start as startPractice } from "../electron/renderer/model/practice.js";
 import { detectEditors, editorCommand, launchCommand, resolveEditor } from "../host/editor.js";
 import { cardLineNote, noteMarkdown } from "../host/note.js";
 import { initConfig, readConfig, setEditor, setViewNotesInside } from "../host/config.js";
@@ -616,5 +619,70 @@ describe("an exercise is asked as the guide says", () => {
     expect(await section()).toContain(`\`${repeatText("greedy")}\``);
     expect(plain(await section())).toContain("a is not offered: annotations are for cards.");
     expect(actionsAt("answer", true).map((a) => a.key)).not.toContain("a");
+  });
+});
+
+describe("a solve on the Practice tab goes as the guide says", () => {
+  const HEADING = "### Solving: the Practice tab";
+
+  async function section(): Promise<string> {
+    const text = await reviewing();
+    const start = text.indexOf(HEADING);
+    return text.slice(start, text.indexOf("### Cards for what gives the method away", start));
+  }
+
+  const NOTE = "---\ngeode-skills: [greedy]\n---\n# Jump Game\n\nReach the end.\n\n## Solution\n\nTrack the furthest reach.\n";
+
+  it("names the same four solve ratings, in the same order, with the same words", async () => {
+    const rows = tableAfter(await section(), HEADING).map((cells) => [plain(cells[0]!), plain(cells[1]!)]);
+    expect(rows).toEqual(SOLVE_RATING_KEYS.map(([key, label]) => [key, label]));
+  });
+
+  it("offers one solve, times it, and records the time beside the rating", async () => {
+    const text = plain(await section());
+    expect(text).toContain("It offers one solve per visit");
+    expect(text).toContain("the time each solve took is recorded beside its rating");
+
+    open = await newCollection("laptop");
+    await open.write("jump-game.md", NOTE);
+    await open.core.sync(T0);
+    const offered = open.core.getSolveReview(T0, startOfDay(T0))!;
+    expect(offered.title).toBe("Jump Game");
+
+    // The screen's own clock: started on the offer, stopped by Space.
+    let p = startPractice(offered, T0);
+    const done = new Date(T0.getTime() + 22 * 60_000);
+    const solved = practicePress(p, " ", done);
+    p = solved.next;
+    expect(solved.effect?.kind).toBe("read-note");
+    const rated = practicePress(p, "3", done);
+    expect(rated.effect).toMatchObject({ kind: "rate", rating: 3, took: 22 * 60 });
+    if (rated.effect?.kind !== "rate") throw new Error("not rated");
+    await open.core.reviewSkill(
+      { skill: offered.skill, kind: "solve", exercise: offered.filePath, repeat: offered.repeat },
+      3,
+      done,
+      rated.effect.took,
+    );
+
+    const line = (await fs.readFile(path.join(open.notes, ".sr", "log", "laptop-2026-09.jsonl"), "utf8")).trim();
+    expect(JSON.parse(line)).toMatchObject({ skill: "greedy", kind: "solve", rating: 3, took: 1320 });
+    // Nothing more to offer today.
+    expect(open.core.getSolveReview(done, startOfDay(done))).toBeNull();
+  });
+
+  it("is right that only Space or Enter stops the clock, and q leaves having recorded nothing", async () => {
+    const text = plain(await section());
+    expect(text).toContain("Press Space when you are done, or Enter. No other key stops the clock");
+    expect(text).toContain("q leaves without rating, before or after the solution is showing, and records nothing");
+    const review = {
+      kind: "solve" as const, id: "solve:g", skill: "g", title: "T", statement: "S", skills: ["g"],
+      filePath: "t.md", lineNo: null, locator: "t.md", repeat: false, related: { pool: [], others: [] },
+    };
+    const solving = startPractice(review, T0);
+    for (const key of ["1", "o", "a", "x"]) expect(practicePress(solving, key, T0).next, key).toBe(solving);
+    expect(practicePress(solving, "Enter", T0).next.at).toBe("solved");
+    expect(practicePress(solving, "q", T0)).toEqual({ next: { at: "left" } });
+    expect(practiceKeysAt("solving").map((k) => k.key)).toEqual([" ", "q"]);
   });
 });

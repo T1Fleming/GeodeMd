@@ -215,7 +215,24 @@ What makes it work:
 - **One problem is not asked twice in a day** for two different skills, as long as either skill has another exercise.
 - **When every exercise for a skill has been asked**, the least recent is asked again, and the reveal says `You have seen every exercise for greedy. Add one to its pool.` Add a note, and the next review asks it.
 
-`o` opens the exercise's note once the answer is showing. `a` is not offered: annotations are for cards.
+`o` opens the exercise's note once the answer is showing. `a` is not offered: annotations are for cards. Once the answer is showing, the review also lists the other exercises for the skill, and the ones that share the exercise's other skills. Seeing problems with the same structure side by side, especially ones that look nothing alike, is how you learn to recognise it.
+
+### Solving: the Practice tab
+
+Recognising the skill is half of it. The other half is carrying it out, and that is the **Practice** tab. It offers **one solve per visit**: the skill whose solve is most overdue, with an exercise picked the same way a spot review's is. Spotting a skill and solving it have separate schedules, and a skill you have spotted with one exercise can still be solved with it, since spotting it showed you no solution.
+
+A clock starts when the problem appears. Solve it wherever you solve things, in an editor or on LeetCode, and come back. **Press Space when you are done**, or Enter. No other key stops the clock, so a stray keypress half an hour in shows you nothing. The clock stops, and your note opens in full, solution and all, with the related exercises under it. Then:
+
+| | | |
+|---|---|---|
+| `1` | **couldn't solve it** | You gave up, or your answer was wrong |
+| `2` | **solved with help** | You looked something up, or peeked at your note |
+| `3` | **solved on my own** | No help |
+| `4` | **solved on my own, easily** | No help, and it came without a struggle |
+
+`1` and `2` are facts: you finished or you didn't, and you peeked or you didn't. The difference between `3` and `4` is your judgement. There is no time limit deciding it, but the time each solve took is recorded beside its rating.
+
+`q` leaves without rating, before or after the solution is showing, and records nothing: the solve is still due next time. `o` opens the note in your editor once the solution is showing. After a rating, the tab says when the skill comes back and offers nothing more until your next visit. A solve takes half an hour, and a queue of them would make a sitting impossible to plan.
 
 ### Cards for what gives the method away
 

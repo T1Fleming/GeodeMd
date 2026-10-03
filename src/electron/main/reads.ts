@@ -22,7 +22,7 @@
  * plain vitest against a real `Core` and a real temp collection.
  */
 
-import type { Core, Counts, ReviewItem } from "../../core/index.js";
+import type { Core, Counts, ReviewItem, SolveReview } from "../../core/index.js";
 import { isBusy } from "../../host/errors.js";
 import { startOfDay } from "../../host/present.js";
 
@@ -80,6 +80,12 @@ async function catchUp(core: Core, now: Date): Promise<void> {
 export async function dueCards(core: Core, now: Date, limit: number): Promise<ReviewItem[]> {
   await catchUp(core, now);
   return core.getReviewItems(now, startOfDay(now), limit);
+}
+
+/** The one solve the Practice screen offers, after the same catch-up (ADR 0038). */
+export async function solveReview(core: Core, now: Date): Promise<SolveReview | null> {
+  await catchUp(core, now);
+  return core.getSolveReview(now, startOfDay(now));
 }
 
 /** The collection's counts, after the same catch-up. */

@@ -661,6 +661,7 @@ describe("a spot review in the session", () => {
     lineNo: null,
     locator: "greedy/jump-game.md",
     repeat: false,
+    related: { pool: [], others: [] },
   };
   const T = new Date("2026-10-05T08:00:00.000Z");
   const tap = (s: Session, key: string) => press(s, key, T);
@@ -700,5 +701,21 @@ describe("a spot review in the session", () => {
     expect(loading.effect).toEqual({ kind: "read-note", card: spot });
     const open = noteRead(loading.next, spot.id, { text: "---\ngeode-skills: [greedy]\n---\n# Jump Game\n", line: null });
     expect(open.viewer).toMatchObject({ at: "open", line: null, stored: null, whole: true });
+  });
+});
+
+describe("a session's tally keeps spot reviews apart", () => {
+  it("counts a spot review's rating apart from a card's, and both as reviewed", () => {
+    const spot: SpotReview = {
+      kind: "spot", id: "spot:g", skill: "g", title: "T", statement: "S", skills: ["g"],
+      filePath: "t.md", lineNo: null, locator: "t.md", repeat: false, related: { pool: [], others: [] },
+    };
+    const T = new Date("2026-10-05T08:00:00.000Z");
+    let s = begin([spot, cards[0]!]);
+    s = press(press(s, " ", T).next, "1", T).next;
+    s = press(press(s, " ", T).next, "3", T).next;
+    expect(s.spotCounts[1]).toBe(1);
+    expect(s.counts).toEqual({ 1: 0, 2: 0, 3: 1, 4: 0 });
+    expect(reviewed(s)).toBe(2);
   });
 });

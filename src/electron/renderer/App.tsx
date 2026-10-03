@@ -14,6 +14,7 @@ import { Help } from "./Help.js";
 import { Review } from "./Review.js";
 import { Setup } from "./Setup.js";
 import { Stats } from "./Stats.js";
+import { Practice } from "./Practice.js";
 import { Sync } from "./Sync.js";
 import type { OpenIn, Session } from "./model/session.js";
 import { choose, leftNote, switcherOptions } from "./model/vaults.js";
@@ -27,10 +28,11 @@ declare global {
   }
 }
 
-type Tab = "review" | "sync" | "stats" | "help";
+type Tab = "review" | "practice" | "sync" | "stats" | "help";
 
 const TABS: ReadonlyArray<readonly [Tab, string]> = [
   ["review", "Review"],
+  ["practice", "Practice"],
   ["sync", "Sync"],
   ["stats", "Vault"],
   ["help", "Help"],
@@ -215,6 +217,7 @@ export function App(): React.JSX.Element {
           none needs to be, because every rating was recorded when it was
           given. */}
       {tab === "review" && <ReviewScreen vault={boot.config.id} onNote={setNote} onRegisterFlush={registerFlush} />}
+      {tab === "practice" && <Practice vault={boot.config.id} onNote={setNote} />}
       {tab === "sync" && <Sync />}
       {tab === "stats" && vaults && (
         <Stats

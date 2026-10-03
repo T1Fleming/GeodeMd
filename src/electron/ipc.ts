@@ -24,9 +24,9 @@
  */
 
 import type { ErrorKind } from "../host/errors.js";
-import type { SyncPhase, SyncSummary, DueCard, ReviewItem, SpotReview } from "../core/index.js";
+import type { SyncPhase, SyncSummary, DueCard, ReviewItem, SolveReview, SpotReview } from "../core/index.js";
 
-export type { ErrorKind, SyncPhase, SyncSummary, DueCard, ReviewItem, SpotReview };
+export type { ErrorKind, SyncPhase, SyncSummary, DueCard, ReviewItem, SolveReview, SpotReview };
 
 export type Result<T> =
   | { ok: true; value: T }
@@ -113,6 +113,8 @@ export interface Stats {
   newCards: number;
   /** Skills due for a spot review (ADR 0038). */
   spotsDue: number;
+  /** Skills due for a solve on the Practice screen. */
+  solvesDue: number;
   /** A due count stopped at `COUNT_CAP`, so the due figures are floors (ADR 0024). */
   capped: boolean;
 }
@@ -124,9 +126,11 @@ export interface Stats {
  */
 export interface SkillReviewRequest {
   skill: string;
-  kind: "spot";
+  kind: "spot" | "solve";
   exercise: string;
   repeat: boolean;
+  /** A solve's length in seconds, from the Practice screen's clock. Absent for a spot review. */
+  took?: number;
 }
 
 /**
@@ -299,6 +303,7 @@ export const CH = {
   cardsDue: "geode:cards/due",
   cardsReview: "geode:cards/review",
   skillsReview: "geode:skills/review",
+  practiceNext: "geode:practice/next",
   runStart: "geode:run/start",
   runStatus: "geode:run/status",
   noteOpen: "geode:note/open",
@@ -340,6 +345,8 @@ export interface GeodeApi {
    * never inside this sitting: a skill has no short-term steps (ADR 0038).
    */
   skillsReview(review: SkillReviewRequest, rating: 1 | 2 | 3 | 4): Promise<Result<Rated>>;
+  /** The one solve the Practice screen offers, or null when no skill is due for one (ADR 0038). */
+  practiceNext(): Promise<Result<SolveReview | null>>;
   runStart(kind: RunKind, req: SyncRequest): Promise<Result<RunStarted>>;
   runStatus(): Promise<Result<RunStatus>>;
   /** Open a card's note. `filePath` is relative to notesPath, as stored. */

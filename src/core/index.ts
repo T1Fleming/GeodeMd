@@ -115,6 +115,8 @@ export interface Counts {
   newCards: number;
   /** Skills due for a spot review, new ones included (ADR 0038). */
   spotsDue: number;
+  /** Skills due for a solve on the Practice screen, new ones included. */
+  solvesDue: number;
   /**
    * True when *any* capped count stopped at `COUNT_CAP`.
    *
@@ -148,19 +150,48 @@ export interface DueCard {
  * skill is never in a sitting twice. `filePath` is the exercise's note, which
  * is what `o` opens once the answer is showing.
  */
-export interface SpotReview {
+export interface SpotReview extends SkillReview {
   kind: "spot";
+}
+
+/**
+ * A solve review: the skill whose solve is most overdue, and the exercise
+ * chosen to practise it with — offered one at a time by the Practice screen,
+ * never in the review session (ADR 0038).
+ */
+export interface SolveReview extends SkillReview {
+  kind: "solve";
+}
+
+/** What a spot review and a solve review both carry. */
+export interface SkillReview {
+  kind: SkillKind;
+  /** `<kind>:<skill>` — a session's key, never a stamp. */
   id: string;
   skill: string;
   title: string;
   statement: string;
-  /** Every skill the exercise names. Any of them is a right answer. */
+  /** Every skill the exercise names. Any of them is a right answer to a spot review. */
   skills: string[];
   filePath: string;
   lineNo: null;
   locator: string;
-  /** This skill has served this exercise for a spot review before: the pool has run out. */
+  /** This skill has served this exercise for this kind before: the pool has run out. */
   repeat: boolean;
+  /** Shown once the answer is: see `Related`. */
+  related: Related;
+}
+
+/**
+ * The exercises worth seeing beside this one once it is answered (ADR 0038):
+ * the rest of this skill's pool, and, for each of the exercise's other skills,
+ * the exercises that share it. Seeing problems with one structure side by
+ * side — most of all ones that look nothing alike — is the comparison step
+ * transfer comes from.
+ */
+export interface Related {
+  pool: Array<{ path: string; title: string }>;
+  others: Array<{ skill: string; exercises: Array<{ path: string; title: string }> }>;
 }
 
 /** What a review session is made of: cards, and skills due for a spot review. */
@@ -911,28 +942,59 @@ export class Core {
    * two skills sharing an exercise never put it in one sitting twice.
    */
   getSpotReviews(now: Date, dayStart: Date, limit: number): SpotReview[] {
-    const start = dayStart.toISOString();
     const chosen = new Set<string>();
     const out: SpotReview[] = [];
     for (const skill of this.store.dueSkills("spot", now.toISOString(), limit)) {
-      const pick = chooseExercise(this.store.poolOf(skill, "spot"), start, chosen);
-      const exercise = pick && this.store.getExercise(pick.path);
-      if (!pick || !exercise) continue;
-      chosen.add(pick.path);
-      out.push({
-        kind: "spot",
-        id: `spot:${skill}`,
-        skill,
-        title: exercise.title,
-        statement: exercise.statement,
-        skills: this.store.skillsOfExercise(pick.path),
-        filePath: pick.path,
-        lineNo: null,
-        locator: pick.path,
-        repeat: pick.seen === 1,
-      });
+      const review = this.skillReview(skill, "spot", dayStart, chosen);
+      if (!review) continue;
+      chosen.add(review.filePath);
+      out.push(review as SpotReview);
     }
     return out;
+  }
+
+  /**
+   * The one solve the Practice screen offers: the skill whose solve is most
+   * overdue — never-solved skills after those, by name — with the exercise
+   * the serving rule picks. Null when no skill is due for a solve (ADR 0038).
+   *
+   * One, not a list: a solve takes half an hour, and a screen offering a
+   * queue of them would make a sitting as unpredictable as the cards are not.
+   */
+  getSolveReview(now: Date, dayStart: Date): SolveReview | null {
+    for (const skill of this.store.dueSkills("solve", now.toISOString(), 10)) {
+      const review = this.skillReview(skill, "solve", dayStart, new Set());
+      if (review) return review as SolveReview;
+    }
+    return null;
+  }
+
+  /** A skill due for `kind`, asked with the exercise the serving rule picks; null for an empty pool. */
+  private skillReview(skill: string, kind: SkillKind, dayStart: Date, chosen: ReadonlySet<string>): SkillReview | null {
+    const pick = chooseExercise(this.store.poolOf(skill, kind), dayStart.toISOString(), chosen);
+    const exercise = pick && this.store.getExercise(pick.path);
+    if (!pick || !exercise) return null;
+    const skills = this.store.skillsOfExercise(pick.path);
+    const besides = (s: string) => this.store.poolTitles(s).filter((e) => e.path !== pick.path);
+    return {
+      kind,
+      id: `${kind}:${skill}`,
+      skill,
+      title: exercise.title,
+      statement: exercise.statement,
+      skills,
+      filePath: pick.path,
+      lineNo: null,
+      locator: pick.path,
+      repeat: pick.seen === 1,
+      related: {
+        pool: besides(skill),
+        others: skills
+          .filter((s) => s !== skill)
+          .map((s) => ({ skill: s, exercises: besides(s) }))
+          .filter((o) => o.exercises.length > 0),
+      },
+    };
   }
 
   /**
@@ -1042,13 +1104,16 @@ export class Core {
     const dueBeforeMidnight = this.store.countDueBefore(midnight.toISOString(), limit);
     const newCards = this.store.countNew(limit);
     const spotsDue = this.store.countDueSkills("spot", now.toISOString(), limit);
+    const solvesDue = this.store.countDueSkills("solve", now.toISOString(), limit);
     return {
       total: this.store.countCards(),
       dueNow,
       dueBeforeMidnight,
       newCards,
       spotsDue,
-      capped: dueNow >= limit || dueBeforeMidnight >= limit || newCards >= limit || spotsDue >= limit,
+      solvesDue,
+      capped:
+        dueNow >= limit || dueBeforeMidnight >= limit || newCards >= limit || spotsDue >= limit || solvesDue >= limit,
     };
   }
 

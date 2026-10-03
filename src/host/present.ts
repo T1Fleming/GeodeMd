@@ -11,7 +11,16 @@
  * the module stays shareable.
  */
 
-import type { DueCard, ReviewItem, Rescheduled, SpotReview, SyncPhase, SyncSummary } from "../core/index.js";
+import type {
+  DueCard,
+  ReviewItem,
+  Related,
+  Rescheduled,
+  SkillReview,
+  SpotReview,
+  SyncPhase,
+  SyncSummary,
+} from "../core/index.js";
 
 /**
  * The four FSRS ratings, and what they are called. Spec section 9: the numbers
@@ -40,6 +49,93 @@ export const SPOT_RATING_KEYS: ReadonlyArray<readonly [key: string, label: strin
   ["3", "right"],
   ["4", "right, at once"],
 ];
+
+/**
+ * The four ratings for a **solve**, on the Practice screen (ADR 0038). `1` and
+ * `2` are things that observably happened — you finished or you did not, you
+ * peeked or you did not. Between `3` and `4` is the user's judgement: there is
+ * no time limit deciding it, and the time taken is logged as `took` so that
+ * can be revisited with data.
+ */
+export const SOLVE_RATING_KEYS: ReadonlyArray<readonly [key: string, label: string]> = [
+  ["1", "couldn't solve it"],
+  ["2", "solved with help"],
+  ["3", "solved on my own"],
+  ["4", "solved on my own, easily"],
+];
+
+/**
+ * A key on the Practice screen. Its own table, because the screen has its own
+ * stages: `solving` while the timer runs, `solved` once the note is showing.
+ * `shown` is what the key is drawn as, for the one that is not a character.
+ */
+export interface PracticeKey {
+  key: string;
+  shown: string;
+  label: string;
+  stage: "solving" | "solved" | "both";
+}
+
+export const PRACTICE_KEYS: readonly PracticeKey[] = [
+  // Space or Enter, never any key: half an hour in, a stray keypress must not
+  // stop the clock and show the solution.
+  { key: " ", shown: "space", label: "done — show the solution", stage: "solving" },
+  { key: "o", shown: "o", label: "open in editor", stage: "solved" },
+  // Leaving records nothing: the solve stays due, like `0 later` on a card.
+  { key: "q", shown: "q", label: "leave", stage: "both" },
+];
+
+/** The Practice keys to advertise at one stage, in table order. */
+export function practiceKeysAt(stage: "solving" | "solved"): PracticeKey[] {
+  return PRACTICE_KEYS.filter((k) => k.stage === stage || k.stage === "both");
+}
+
+export type PracticeAction =
+  | { kind: "done" }
+  | { kind: "rate"; rating: 1 | 2 | 3 | 4 }
+  | { kind: "open" }
+  | { kind: "leave" }
+  | { kind: "ignore" };
+
+/** What a keypress means on the Practice screen. Which stage honours it is the model's. */
+export function interpretPracticeKey(key: string): PracticeAction {
+  if (key === " " || key === "Enter") return { kind: "done" };
+  if (key >= "1" && key <= "4") return { kind: "rate", rating: Number(key) as 1 | 2 | 3 | 4 };
+  if (key === "o" || key === "O") return { kind: "open" };
+  if (key === "q" || key === "Q" || key === "Escape") return { kind: "leave" };
+  return { kind: "ignore" };
+}
+
+/** A solve's time on the clock, `m:ss`, or `h:mm:ss` past the hour. */
+export function clockText(ms: number): string {
+  const total = Math.max(0, Math.floor(ms / 1000));
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const sec = String(total % 60).padStart(2, "0");
+  return h > 0 ? `${h}:${String(m).padStart(2, "0")}:${sec}` : `${m}:${sec}`;
+}
+
+/** When a skill comes back for a solve, said as a date: it is days out, never minutes. */
+export function nextSolveText(skill: string, due: Date): string {
+  const day = due.toLocaleDateString([], { weekday: "long", month: "long", day: "numeric" });
+  return `${skill} comes back for a solve on ${day}.`;
+}
+
+/**
+ * The related exercises as lines to draw, in order: the rest of the pool of
+ * the skill that came due, then each other skill and who shares it. Empty
+ * when the exercise is alone everywhere.
+ */
+export function relatedLines(review: Pick<SkillReview, "skill"> & { related: Related }): Array<{ label: string; titles: string[] }> {
+  const lines: Array<{ label: string; titles: string[] }> = [];
+  if (review.related.pool.length > 0) {
+    lines.push({ label: `Also in ${review.skill}`, titles: review.related.pool.map((e) => e.title) });
+  }
+  for (const other of review.related.others) {
+    lines.push({ label: `Also tagged ${other.skill}, with`, titles: other.exercises.map((e) => e.title) });
+  }
+  return lines;
+}
 
 /** What a spot review asks, under the exercise's statement. */
 export const SPOT_PROMPT = "Which skill does this call for?";
@@ -285,6 +381,7 @@ export function countText(n: number, capped: boolean = n >= COUNT_CAP): string {
  * exact `dueNow + newCards` into a floor it never was.
  */
 export function backlogCapped(counts: { dueNow: number; newCards: number; spotsDue?: number }): boolean {
+  // Solves are not in the backlog: they are offered one at a time, by Practice.
   return counts.dueNow >= COUNT_CAP || counts.newCards >= COUNT_CAP || (counts.spotsDue ?? 0) >= COUNT_CAP;
 }
 
@@ -311,6 +408,17 @@ export function ratingBreakdown(counts: RatingCounts): Array<{ label: string; co
   return RATING_KEYS.filter(([key]) => counts[Number(key) as 1 | 2 | 3 | 4] > 0).map(
     ([key, label]) => ({ label, count: counts[Number(key) as 1 | 2 | 3 | 4] }),
   );
+}
+
+/**
+ * A session's tally, cards then spot reviews, each in its own words: a spot
+ * review rated `1` named the wrong skill, which is not "forgot" (ADR 0038).
+ */
+export function sessionBreakdown(cards: RatingCounts, spots: RatingCounts): Array<{ label: string; count: number }> {
+  const spotLines = SPOT_RATING_KEYS.filter(([key]) => spots[Number(key) as 1 | 2 | 3 | 4] > 0).map(
+    ([key, label]) => ({ label: `${label} (spot)`, count: spots[Number(key) as 1 | 2 | 3 | 4] }),
+  );
+  return [...ratingBreakdown(cards), ...spotLines];
 }
 
 /**

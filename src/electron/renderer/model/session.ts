@@ -108,7 +108,10 @@ export interface Session {
   card: ReviewItem | null;
   /** The answer is hidden until asked for. */
   revealed: boolean;
+  /** Cards rated, by rating. */
   counts: RatingCounts;
+  /** Spot reviews rated, by rating — counted apart, because their words differ (ADR 0038). */
+  spotCounts: RatingCounts;
   /** Set when the user quits early, to say so rather than imply completion. */
   quit: boolean;
   /**
@@ -157,6 +160,7 @@ export function begin(cards: readonly ReviewItem[], openIn: OpenIn = "editor"): 
     card: cards[0] ?? null,
     revealed: false,
     counts: emptyCounts(),
+    spotCounts: emptyCounts(),
     quit: false,
     opened: [],
     annotation: UNKNOWN,
@@ -237,7 +241,8 @@ export function resting(s: Session): { cards: number; at: number } | null {
 
 /** Cards answered so far. Not a position in the queue — a card can return. */
 export function reviewed(s: Session): number {
-  return s.counts[1] + s.counts[2] + s.counts[3] + s.counts[4];
+  const sum = (c: RatingCounts): number => c[1] + c[2] + c[3] + c[4];
+  return sum(s.counts) + sum(s.spotCounts);
 }
 
 /**
@@ -360,7 +365,9 @@ export function press(
   }
 
   if (action.kind === "rate") {
-    const counts = { ...s.counts, [action.rating]: s.counts[action.rating] + 1 };
+    const bump = (c: RatingCounts): RatingCounts => ({ ...c, [action.rating]: c[action.rating] + 1 });
+    const counts = isSpot(card) ? s.counts : bump(s.counts);
+    const spotCounts = isSpot(card) ? bump(s.spotCounts) : s.spotCounts;
     const q = queue.rated(s.queue, card);
     return {
       next: {
@@ -369,6 +376,7 @@ export function press(
         card: queue.serve(q, now),
         revealed: false,
         counts,
+        spotCounts,
         annotation: UNKNOWN,
       },
       effect: { kind: "rate", cardId: card.id, rating: action.rating, item: card },

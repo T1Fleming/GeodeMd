@@ -81,7 +81,8 @@ body {
   padding: 0.3rem 0.5rem;
 }
 
-.review {
+.review,
+.practice {
   flex: 1;
   display: grid;
   grid-template-rows: auto 1fr auto;
@@ -310,6 +311,11 @@ body {
 }
 
 .legend .spacer { flex: 1; }
+
+/* A label is never broken across lines; a row too long for the window wraps
+   whole buttons instead. The spot and solve ratings are long enough to need it. */
+.legend { flex-wrap: wrap; }
+.legend button { white-space: nowrap; }
 
 button {
   font: inherit;
@@ -641,3 +647,13 @@ button.quiet:hover { color: var(--ink); border-color: transparent; }
 .confirm .typed input { font: inherit; padding: 0.35rem 0.5rem; }
 button.primary.danger { border-color: #d0605e; color: #e07a78; }
 .erase-start { align-self: flex-start; }
+
+/* --- practice (ADR 0038) ------------------------------------------------ */
+
+.practice .clock { font-variant-numeric: tabular-nums; color: var(--muted); }
+/* Shorter than the viewer's, to leave room for the related list and a legend
+   of eight buttons that may take two rows: the ratings must stay on screen. */
+.practice .viewer .note { max-height: calc(100vh - 24rem); }
+.practice.done { display: block; text-align: center; padding-top: 4rem; }
+.related { margin: 1rem 0 0; padding: 0.75rem 0 0; border-top: 1px dashed var(--line); list-style: none; font-size: 0.875rem; }
+.related li + li { margin-top: 0.25rem; }

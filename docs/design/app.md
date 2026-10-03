@@ -223,6 +223,8 @@ Three substitutions keep the harness runnable rather than invasive:
 - the rebuild confirmation is asserted without the rebuild being run, because on a real collection that is minutes
 - `GEODE_SELFTEST_FOLDER` answers the folder picker, because a native modal has no DOM to click — everything downstream of the pick is driven for real. `GEODE_SELFTEST_SECOND_FOLDER` answers it when the harness adds a second vault
 
+**If the folder holds an exercise** (a note with `geode-skills` and a `## Solution` heading), the sitting opens on a spot review, and the harness checks it before the card checks start ([exercises.md](exercises.md#the-review-screen)). It reveals each spot review and rates it with a real click, then drives one solve on the Practice tab: the clock, a stray key that must not stop it, Space, the note, and a clicked rating. `demo/` has no exercise, so a plain run reports these checks as skipped. Add one to the copy to run them.
+
 With no config present and that variable set, the harness drives the whole first-run sequence and then continues into the review checks against the vault it just set up. **It performs a real first sync**, so point it at a copy. With the second variable set as well, it adds that folder as a second vault, switches to it and back through the tab bar, and checks that the Vault screen's counts follow — another real first sync, so another copy, and one that does not hold the same notes as the first, or the counts cannot tell the vaults apart.
 
 **The last three steps change the copies for real, and one of them waits out the clock**, so a full run takes about a minute and a half and the main process allows it three:

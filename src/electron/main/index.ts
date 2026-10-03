@@ -45,6 +45,7 @@ import type {
   RunKind,
   Stats,
   SkillReviewRequest,
+  SolveReview,
   SyncRequest,
   VaultList,
   VaultOpened,
@@ -54,7 +55,7 @@ import { Active } from "./active.js";
 import { erase, erasePreview, unlink } from "./removal.js";
 import { outside, readNote, withinNotes } from "./note.js";
 import { openDetached } from "./open.js";
-import { counts, dueCards } from "./reads.js";
+import { counts, dueCards, solveReview } from "./reads.js";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 
@@ -197,13 +198,20 @@ function register(): void {
     guard<Rated>(async () => {
       const { core } = await active.ensure();
       try {
-        const next = await core.reviewSkill(review, rating, new Date());
+        const next = await core.reviewSkill(review, rating, new Date(), review.took);
         return { applied: "db", next: { due: next.due, state: next.state } };
       } catch (err) {
         // As for a card: the review is in the log, and the next ingest catches up.
         if (isBusy(err)) return { applied: "log-only", next: null };
         throw err;
       }
+    }),
+  );
+
+  ipcMain.handle(CH.practiceNext, () =>
+    guard<SolveReview | null>(async () => {
+      const { core } = await active.ensure();
+      return solveReview(core, new Date());
     }),
   );
 
