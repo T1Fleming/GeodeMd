@@ -18,7 +18,8 @@ import { interpretPracticeKey } from "../../../host/present.js";
  *   finishes, from any of the three. A rating before the solution is showing
  *   would grade an attempt nobody checked, so ratings mean nothing here.
  * - `solved` — the note is showing (`note` is null until it has been read)
- *   and the clock has stopped at `took` seconds. A rating records it.
+ *   and the clock has stopped at `took` seconds — null when it never started,
+ *   which is "not timed", not "instant" (#81). A rating records it.
  * - `saving` — the rating is on its way.
  * - `done` — recorded. `next` is when the skill comes back, null when that
  *   could not be learned. No second solve is offered: the next one waits for
@@ -28,8 +29,8 @@ import { interpretPracticeKey } from "../../../host/present.js";
  */
 export type Practice =
   | { at: "solving"; review: SolveReview; ranMs: number; since: number | null }
-  | { at: "solved"; review: SolveReview; took: number; note: string | null }
-  | { at: "saving"; review: SolveReview; took: number; note: string | null; rating: 1 | 2 | 3 | 4 }
+  | { at: "solved"; review: SolveReview; took: number | null; note: string | null }
+  | { at: "saving"; review: SolveReview; took: number | null; note: string | null; rating: 1 | 2 | 3 | 4 }
   | { at: "done"; review: SolveReview; rating: 1 | 2 | 3 | 4; next: string | null }
   | { at: "left" };
 
@@ -37,7 +38,7 @@ export type PracticeEffect =
   /** Read the exercise's note, to show once the clock stops; report through `noteArrived`. */
   | { kind: "read-note"; review: SolveReview }
   /** Record the solve; report through `recorded`. */
-  | { kind: "rate"; review: SolveReview; rating: 1 | 2 | 3 | 4; took: number }
+  | { kind: "rate"; review: SolveReview; rating: 1 | 2 | 3 | 4; took: number | null }
   | { kind: "open"; review: SolveReview }
   /** Hide or show the clock: a view setting, kept by the screen. */
   | { kind: "clock" };
@@ -71,7 +72,7 @@ export function clockState(p: Practice): "not-started" | "running" | "paused" | 
 /** Seconds on the clock at `now`, while solving; the stopped time after. */
 export function elapsed(p: Practice, now: Date): number {
   if (p.at === "solving") return Math.max(0, (p.ranMs + (p.since === null ? 0 : now.getTime() - p.since)) / 1000);
-  if (p.at === "solved" || p.at === "saving") return p.took;
+  if (p.at === "solved" || p.at === "saving") return p.took ?? 0;
   return 0;
 }
 
@@ -90,7 +91,7 @@ export function press(p: Practice, key: string, now: Date): { next: Practice; ef
     }
     if (action.kind !== "done") return { next: p };
     return {
-      next: { at: "solved", review: p.review, took: elapsed(p, now), note: null },
+      next: { at: "solved", review: p.review, took: clockState(p) === "not-started" ? null : elapsed(p, now), note: null },
       effect: { kind: "read-note", review: p.review },
     };
   }

@@ -853,7 +853,7 @@ _12 · `electron/renderer/model/practice.test.ts`_
 - waits for Space to start the clock, so reading the problem is not solving it
 - pauses and resumes on Space, counting only the time it ran
 - shows the solution only on d, never on Space, so the reflexive key cannot give it away
-- finishes from a clock that never started, counting nothing
+- finishes from a clock that never started, and records no time rather than none spent
 - hides and shows the clock on h, which changes nothing about the solve
 - records the rating with the time taken, and offers no second solve
 - keeps the solve when a rating fails, so it can be given again

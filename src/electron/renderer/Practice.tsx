@@ -115,7 +115,7 @@ export function Practice({
         });
         return;
       }
-      const request = { skill: review.skill, kind: "solve" as const, exercise: review.filePath, repeat: review.repeat, took: effect.took };
+      const request = { skill: review.skill, kind: "solve" as const, exercise: review.filePath, repeat: review.repeat, ...(effect.took === null ? {} : { took: effect.took }) };
       void window.geode.skillsReview(request, effect.rating).then((r) => {
         if (!r.ok) {
           onNote(r.message);
@@ -256,7 +256,7 @@ function Solved({
   onKey,
 }: {
   review: SolveReview;
-  took: number;
+  took: number | null;
   note: string | null;
   saving: boolean;
   clockHidden: boolean;
@@ -273,7 +273,7 @@ function Solved({
           {ANSWER_ARROW}
           {review.title}
         </span>
-        {!clockHidden && <span className="clock">{clockText(took * 1000)}</span>}
+        {!clockHidden && took !== null && <span className="clock">{clockText(took * 1000)}</span>}
       </header>
       <section className="viewer">
         {review.repeat && <p className="spot-repeat">{repeatText(review.skill)}</p>}

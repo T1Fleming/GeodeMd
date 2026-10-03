@@ -57,8 +57,11 @@ describe("a solve on the Practice screen", () => {
     expect(press(solving, "d", at(30)).next.at).toBe("solved");
   });
 
-  it("finishes from a clock that never started, counting nothing", () => {
-    expect(press(start(review), "d", at(5)).next).toEqual({ at: "solved", review, took: 0, note: null });
+  it("finishes from a clock that never started, and records no time rather than none spent", () => {
+    // Seen in testing (#81): an unstarted clock logged took = 0, which reads as instant.
+    const solved = press(start(review), "d", at(5)).next;
+    expect(solved).toEqual({ at: "solved", review, took: null, note: null });
+    expect(press(solved, "3", at(6)).effect).toEqual({ kind: "rate", review, rating: 3, took: null });
   });
 
   it("hides and shows the clock on h, which changes nothing about the solve", () => {
