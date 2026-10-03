@@ -16,7 +16,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { ConfigProposal, FolderReport, SyncSummary } from "../ipc.js";
-import { unnestedReason } from "../../host/present.js";
+import { exerciseReason, unnestedReason } from "../../host/present.js";
 import {
   abandonAdd,
   abandoned,
@@ -567,6 +567,9 @@ function PreviewSync({
               rules, so the lines that did not become cards are named here. */}
           {state.preview && unnestedReason(state.preview) && (
             <p className="deferred">{unnestedReason(state.preview)}</p>
+          )}
+          {state.preview && exerciseReason(state.preview) && (
+            <p className="deferred">{exerciseReason(state.preview)}</p>
           )}
           {report.notesEdited === 0 && (
             <p className="muted">

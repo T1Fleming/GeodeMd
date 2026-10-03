@@ -7,7 +7,7 @@
  */
 
 import { useCallback, useEffect, useState } from "react";
-import { deferralReason, RUN_LABEL, summaryFields, unnestedReason } from "../../host/present.js";
+import { deferralReason, exerciseReason, RUN_LABEL, summaryFields, unnestedReason } from "../../host/present.js";
 import type { SummaryField } from "../../host/present.js";
 import type { RunKind, SyncSummary } from "../ipc.js";
 import { fromStatus, idle, isRunning, onFinished, onProgress, percent } from "./model/run.js";
@@ -148,6 +148,7 @@ function Summary({
   const fields = summaryFields(summary);
   const deferred = deferralReason(summary);
   const unnested = unnestedReason(summary);
+  const exercises = exerciseReason(summary);
 
   return (
     <section className="summary">
@@ -169,6 +170,7 @@ function Summary({
         </p>
       )}
       {unnested && <p className="deferred">{unnested}</p>}
+      {exercises && <p className="deferred">{exercises}</p>}
     </section>
   );
 }

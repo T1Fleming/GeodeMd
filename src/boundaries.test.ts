@@ -408,6 +408,16 @@ describe("the journeys stay journeys", () => {
  * boundary (ADR 0017) for the same reason.
  */
 describe("electron, the interface", () => {
+  it("shows every sentence host writes about a sync", async () => {
+    // `host` owns what a summary says; the screen only lays it out. A sentence
+    // nobody renders passes its own tests and still says nothing, which is how
+    // `exerciseReason` shipped unseen (#81).
+    const reasons = [...(await readFile("host/present.ts")).matchAll(/export function (\w+Reason)\(/g)].map((m) => m[1]!);
+    expect(reasons.length).toBeGreaterThan(0);
+    const screen = await readFile("electron/renderer/Sync.tsx");
+    for (const r of reasons) expect(screen, `Sync.tsx never shows ${r}`).toContain(`${r}(`);
+  });
+
   it("nothing below the interfaces imports electron", async () => {
     for (const dir of ["core", "store", "files", "parser", "scheduler", "host"]) {
       expect(await readAll(dir), `${dir} imports electron`).not.toMatch(
