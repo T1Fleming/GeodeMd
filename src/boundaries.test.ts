@@ -143,7 +143,10 @@ describe("one module per external resource", () => {
 
   it("scheduler pins its parameters rather than inheriting them", async () => {
     const scheduler = await readAll("scheduler");
-    expect(scheduler).toMatch(/enable_fuzz:\s*false/);
+    // Fuzz is on, and drawn from a seed written here rather than the
+    // library's default recipe, which is the library's to change (ADR 0039).
+    expect(scheduler).toMatch(/enable_fuzz:\s*true/);
+    expect(scheduler).toMatch(/useStrategy\(StrategyMode\.SEED, seedFrom\)/);
     expect(scheduler).toMatch(/request_retention:/);
     expect(scheduler).toMatch(/maximum_interval:/);
     // The weight vector is written out literally, so a ts-fsrs bump cannot

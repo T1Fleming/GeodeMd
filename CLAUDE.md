@@ -110,7 +110,7 @@ Hard rules enforced by `boundaries.test.ts` (know these before moving code betwe
 - `parser` opens no file, touches no database, and calls no clock (`new Date()`/`Date.now()`) — it is pure text-in, cards-out.
 - Only `store/` imports `better-sqlite3` or contains raw SQL.
 - The append-only review log lives under `files/` (with `fsyncSync`), not `store/` — `store/` never calls fsync or uses `O_APPEND`, keeping SQLite-specific code separate from durability-critical log I/O.
-- `scheduler` pins its FSRS parameters (`enable_fuzz: false`, `request_retention`, `maximum_interval`, the `w` weight vector, `learning_steps`, `relearning_steps`, `enable_short_term`) literally in source, rather than trusting `ts-fsrs` defaults — so a dependency bump can't silently change what a `rebuild` produces from an unchanged log.
+- `scheduler` pins its FSRS parameters (`enable_fuzz: true` with its seed recipe `seedFrom`, `request_retention`, `maximum_interval`, the `w` weight vector, `learning_steps`, `relearning_steps`, `enable_short_term`) literally in source, rather than trusting `ts-fsrs` defaults — so a dependency bump can't silently change what a `rebuild` produces from an unchanged log.
 
 Other properties the test suite asserts rather than assumes (regressions here are silent otherwise):
 

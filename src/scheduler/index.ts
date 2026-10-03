@@ -3,8 +3,8 @@
  * lines and it is the one abstraction worth having up front.
  */
 
-import { createEmptyCard, fsrs, generatorParameters, Rating, State } from "ts-fsrs";
-import type { Card as FsrsCard, FSRSParameters } from "ts-fsrs";
+import { createEmptyCard, fsrs, generatorParameters, Rating, State, StrategyMode } from "ts-fsrs";
+import type { AbstractScheduler, Card as FsrsCard, FSRSParameters } from "ts-fsrs";
 import type { CardState } from "../store/index.js";
 
 export type { CardState };
@@ -12,8 +12,12 @@ export type { CardState };
 export interface Scheduler {
   /** State for a card that has never been reviewed. */
   initial(now: Date): CardState;
-  /** Next state given current state and a rating. */
-  next(state: CardState, rating: 1 | 2 | 3 | 4, now: Date): CardState;
+  /**
+   * Next state given current state and a rating. `key` names what is being
+   * scheduled — a card's id, or a skill and kind — and seeds the fuzz, so two
+   * things rated alike at the same moment still part ways (ADR 0039).
+   */
+  next(state: CardState, rating: 1 | 2 | 3 | 4, now: Date, key: string): CardState;
   /**
    * What derived a state. Two schedulers with the same version must produce
    * the same state from the same history; `core` re-derives a database's
@@ -29,11 +33,13 @@ export interface Scheduler {
  *
  * Two hazards are closed here and only one is obvious.
  *
- * `enable_fuzz` randomizes each interval by a few percent; with it on, a
- * rebuild produces a different `due` than the run it rebuilt and the rebuild
- * test fails intermittently — the worst way for a test to fail. The library's
- * current default was confirmed to be false rather than assumed; the point of
- * writing it down is that the default is not ours to rely on.
+ * `enable_fuzz` moves each interval of three days or more by a few percent,
+ * so that things rated alike on the same day stop coming due on the same day
+ * forever ([ADR 0039](../../docs/decisions/0039-exercises-after-first-use.md)).
+ * It was off until then, because fuzz drawn from real randomness makes a
+ * rebuild disagree with the run it rebuilt. It is drawn from `SEED_RECIPE`
+ * instead: a pure function of the review, written here, so a rebuild — on
+ * this machine or another — draws the same fuzz.
  *
  * The quieter hazard: FSRS's default weights are a fitted model the library
  * revises, so a minor bump would change what a rebuild produces from an
@@ -56,7 +62,7 @@ export const FSRS_PARAMS: FSRSParameters = generatorParameters({
   ],
   request_retention: 0.9,
   maximum_interval: 36500,
-  enable_fuzz: false,
+  enable_fuzz: true,
   enable_short_term: true,
   learning_steps: ["1m", "10m"],
   relearning_steps: ["10m"],
@@ -78,7 +84,7 @@ export const SKILL_FSRS_PARAMS: FSRSParameters = generatorParameters({
   ],
   request_retention: 0.9,
   maximum_interval: 36500,
-  enable_fuzz: false,
+  enable_fuzz: true,
   enable_short_term: false,
   learning_steps: [],
   relearning_steps: [],
@@ -90,6 +96,14 @@ export const SKILL_FSRS_PARAMS: FSRSParameters = generatorParameters({
  * without changing it.
  */
 export const TS_FSRS_VERSION = "5.4.2";
+
+/**
+ * Names the seed recipe (`seedFrom`, below), inside `versionOf`: changing the recipe changes
+ * every fuzzed interval, so it must re-derive every schedule as a parameter
+ * change does.
+ */
+export const SEED_RECIPE = "key|review-ms|reps";
+
 
 /**
  * Which scheduler derived a database's `card_state`: the library and every
@@ -106,7 +120,27 @@ export const SCHEDULER_VERSION = versionOf(FSRS_PARAMS);
 export const SKILL_SCHEDULER_VERSION = versionOf(SKILL_FSRS_PARAMS);
 
 function versionOf(params: FSRSParameters): string {
-  return `ts-fsrs@${TS_FSRS_VERSION} ${JSON.stringify(params)}`;
+  return `ts-fsrs@${TS_FSRS_VERSION} seed:${SEED_RECIPE} ${JSON.stringify(params)}`;
+}
+
+/** The key `next` was given, carried on the card into the library's scheduler. */
+interface KeyedCard extends EngineCard {
+  geode_key: string;
+}
+
+/**
+ * The fuzz seed: what is scheduled, when it was rated to the millisecond, and
+ * how many reviews it has had — integers and a string, nothing else.
+ *
+ * Not the library's default, for two reasons. The default is the library's
+ * to revise, and a revision would quietly move every due date, the hazard
+ * the weights are written out to close. And it mixes in difficulty times
+ * stability: a float, so a last-digit difference between two machines' maths
+ * would become a different seed, and a difference of days.
+ */
+function seedFrom(this: AbstractScheduler): string {
+  const card = this.current as unknown as KeyedCard;
+  return `${card.geode_key}|${this.review_time.getTime()}|${card.reps}`;
 }
 
 // `Rating.Again` is the library's name; the app calls it *forgot* (ADR 0036).
@@ -161,7 +195,7 @@ export class FsrsScheduler implements Scheduler {
 
   /** The cards' parameters unless told otherwise; `SKILL_FSRS_PARAMS` for skills. */
   constructor(params: FSRSParameters = FSRS_PARAMS) {
-    this.engine = fsrs(params);
+    this.engine = fsrs(params).useStrategy(StrategyMode.SEED, seedFrom);
     this.version = versionOf(params);
   }
 
@@ -169,10 +203,11 @@ export class FsrsScheduler implements Scheduler {
     return toCardState(createEmptyCard(now));
   }
 
-  next(state: CardState, rating: 1 | 2 | 3 | 4, now: Date): CardState {
+  next(state: CardState, rating: 1 | 2 | 3 | 4, now: Date, key: string): CardState {
     // The one cast left, and it is narrower than the one it replaced: it
     // admits only the missing `elapsed_days` (see `EngineCard`).
-    const result = this.engine.next(fromCardState(state) as FsrsCard, now, RATINGS[rating]);
+    const card: KeyedCard = { ...fromCardState(state), geode_key: key };
+    const result = this.engine.next(card as unknown as FsrsCard, now, RATINGS[rating]);
     return toCardState(result.card);
   }
 }
@@ -188,13 +223,14 @@ export class FsrsScheduler implements Scheduler {
  */
 export function fold(
   scheduler: Scheduler,
+  key: string,
   start: CardState | null,
   reviews: Array<{ rated_at: string; rating: number }>,
   fallbackNow: Date,
 ): CardState {
   let state = start ?? scheduler.initial(reviews[0] ? new Date(reviews[0].rated_at) : fallbackNow);
   for (const r of reviews) {
-    state = scheduler.next(state, r.rating as 1 | 2 | 3 | 4, new Date(r.rated_at));
+    state = scheduler.next(state, r.rating as 1 | 2 | 3 | 4, new Date(r.rated_at), key);
   }
   return state;
 }
