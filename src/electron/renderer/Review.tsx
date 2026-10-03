@@ -12,12 +12,17 @@ import {
   cardContext,
   countText,
   CRUMB_SEPARATOR,
+  isSpot,
+  locatorFor,
   RATING_KEYS,
+  ratingKeysFor,
+  repeatText,
   restingText,
+  SPOT_PROMPT,
 } from "../../host/present.js";
 import { IdleCheck } from "./IdleCheck.js";
 import { cardLineNote } from "../../host/note.js";
-import type { DueCard } from "../../core/index.js";
+import type { DueCard, ReviewItem, SpotReview } from "../../core/index.js";
 import {
   annotating,
   annotationFetched,
@@ -44,7 +49,7 @@ import type { NoteText, Result } from "../ipc.js";
 import { linkTarget, renderNote } from "./note.js";
 
 interface Props {
-  queue: DueCard[];
+  queue: ReviewItem[];
   /** Total due, which is not the queue length — the queue is capped. */
   backlog: number;
   /** True when `backlog` is a floor because a due count stopped at the cap. */
@@ -60,12 +65,12 @@ interface Props {
    * null if that could not be learned. The session needs it to know whether
    * FSRS wants the card again in the same sitting (ADR 0023).
    */
-  onRate: (cardId: string, rating: 1 | 2 | 3 | 4) => Promise<Scheduled | null>;
-  onOpen: (card: DueCard) => void;
+  onRate: (item: ReviewItem, rating: 1 | 2 | 3 | 4) => Promise<Scheduled | null>;
+  onOpen: (card: ReviewItem) => void;
   /** What `o` does this sitting: an editor, or the viewer here (#51). */
   openIn: OpenIn;
   /** A card's note as it is on disk, for the viewer. */
-  onNoteRead: (card: DueCard) => Promise<Result<NoteText>>;
+  onNoteRead: (card: ReviewItem) => Promise<Result<NoteText>>;
   /** A card's annotation, asked for when it is revealed (ADR 0029). */
   onAnnotationRead: (cardId: string) => Promise<Result<string | null>>;
   /** Write one. A failure keeps the text in the box, with the reason beside it. */
@@ -180,7 +185,7 @@ export function Review({
       // flight until this resolves, and what comes back decides whether it
       // returns in ten minutes or not at all. Rating the *last* card is why
       // the session cannot simply end here.
-      void onRate(effect.cardId, effect.rating).then((next) => {
+      void onRate(effect.item, effect.rating).then((next) => {
         commit(scheduled(live.current, effect.cardId, next, new Date()));
       });
     },
@@ -302,7 +307,8 @@ export function Review({
         <span>
           {done + 1} / {done + owed(session)}
         </span>
-        <span className="locator">{card.locator}</span>
+        {/* A spot review's path can name its skill, so it waits for the reveal. */}
+        <span className="locator">{locatorFor(card, session.revealed) ?? ""}</span>
         {backlog > queue.length && (
           <span className="backlog">{countText(backlog, backlogCapped)} due</span>
         )}
@@ -315,7 +321,11 @@ export function Review({
           <section className="card">
             {/* Keyed by card, so what was expanded for one card is not
                 expanded for the next. */}
-            <Front key={card.id} card={card} revealed={session.revealed} />
+            {isSpot(card) ? (
+              <SpotFront key={card.id} spot={card} revealed={session.revealed} />
+            ) : (
+              <Front key={card.id} card={card} revealed={session.revealed} />
+            )}
             {/* The answer itself is drawn in place of the `?`, by `Front`. */}
             {!session.revealed && <p className="prompt">press any key to reveal</p>}
             {/* Only ever after the reveal — an annotation may restate the answer
@@ -333,7 +343,7 @@ export function Review({
           <footer className="legend">
             {session.revealed && (
               <>
-                {RATING_KEYS.map(([key, label]) => (
+                {ratingKeysFor(card).map(([key, label]) => (
                   <button
                     key={key}
                     className="rating"
@@ -347,7 +357,7 @@ export function Review({
               </>
             )}
             {!session.revealed && <span className="spacer" />}
-            {actionsAt(session.revealed ? "answer" : "question").map((a) => (
+            {actionsAt(session.revealed ? "answer" : "question", isSpot(card)).map((a) => (
               <button
                 key={a.key}
                 className="action"
@@ -380,7 +390,8 @@ function NoteViewer({
   const body = useRef<HTMLElement>(null);
   const open = viewer.at === "open" ? viewer : null;
   const rendered = useMemo(() => (open ? renderNote(open.text, open.line) : null), [open]);
-  const where = open ? cardLineNote(open.stored, open.line) : null;
+  // A spot review's note is shown whole: there is no line to have moved.
+  const where = open && !open.whole ? cardLineNote(open.stored, open.line) : null;
 
   // Focused so the arrows and Page Down scroll the note rather than the
   // window, and scrolled so the card's line is in the middle of it.
@@ -618,6 +629,46 @@ function Front({ card, revealed }: { card: DueCard; revealed: boolean }): React.
           </span>
         )}
       </p>
+    </div>
+  );
+}
+
+/**
+ * A spot review: the exercise's title and statement, and the question, with
+ * nothing above them — no path, no skills — because the skill is the answer
+ * (ADR 0038). The reveal names every skill the exercise has; any of them is
+ * right. The statement is a note's Markdown, rendered and sanitised as the
+ * viewer renders a note.
+ */
+function SpotFront({ spot, revealed }: { spot: SpotReview; revealed: boolean }): React.JSX.Element {
+  const statement = useMemo(() => renderNote(spot.statement, null).html, [spot.statement]);
+  return (
+    <div className="front spot">
+      <h3 className="spot-title">{spot.title}</h3>
+      <article
+        className="note doc spot-statement"
+        // Sanitised in `renderNote`, like the viewer's note.
+        dangerouslySetInnerHTML={{ __html: statement }}
+      />
+      <p className="card-line">
+        <span className="question">{SPOT_PROMPT}</span>
+        {revealed ? (
+          <>
+            <span className="arrow">{ANSWER_ARROW}</span>
+            <span className="answer">{spot.skills.join(" · ")}</span>
+          </>
+        ) : (
+          <span className="tail">
+            <span className="arrow">{ANSWER_ARROW}</span>
+            <span className="blank" aria-label="answer hidden">
+              {ANSWER_BLANK}
+            </span>
+          </span>
+        )}
+      </p>
+      {revealed && spot.repeat && (
+        <p className="spot-repeat">{repeatText(spot.skill)}</p>
+      )}
     </div>
   );
 }

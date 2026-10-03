@@ -8,7 +8,7 @@
  */
 
 import { describe, expect, it } from "vitest";
-import type { DueCard } from "../../../core/index.js";
+import type { DueCard, SpotReview } from "../../../core/index.js";
 import {
   resting,
   annotating,
@@ -104,7 +104,7 @@ describe("rating", () => {
   it("records the rating and moves on once revealed", () => {
     const revealed = after(begin(cards), " ");
     const { next, effect } = tap(revealed, "3");
-    expect(effect).toEqual({ kind: "rate", cardId: "sr-000000000001", rating: 3 });
+    expect(effect).toMatchObject({ kind: "rate", cardId: "sr-000000000001", rating: 3 });
     expect(current(next)?.question).toBe("Q2");
     expect(next.revealed).toBe(false);
     expect(reviewed(next)).toBe(1);
@@ -371,7 +371,7 @@ describe("deferring", () => {
     const s = after(begin(three), "0"); // defer Q1
     const revealed = after(s, " "); // reveal Q2
     const rated = tap(revealed, "3");
-    expect(rated.effect).toEqual({ kind: "rate", cardId: "sr-000000000002", rating: 3 });
+    expect(rated.effect).toMatchObject({ kind: "rate", cardId: "sr-000000000002", rating: 3 });
     expect(current(rated.next)?.question).toBe("Q3");
   });
 
@@ -509,7 +509,7 @@ describe("annotating a card", () => {
   it("still rates normally once the box is closed", () => {
     const closed = annotationSaved(tap(editAnnotation(writing(), "note"), "Escape").next, ID, null);
     const { next, effect } = tap(closed, "3");
-    expect(effect).toEqual({ kind: "rate", cardId: ID, rating: 3 });
+    expect(effect).toMatchObject({ kind: "rate", cardId: ID, rating: 3 });
     expect(current(next)?.question).toBe("Q2");
     // The next card starts knowing nothing about its own annotation.
     expect(next.annotation).toEqual({ at: "unknown" });
@@ -565,7 +565,7 @@ describe("reading the card's note inside the app", () => {
     expect(pressed.next.opened).toEqual([]);
 
     const s = noteRead(pressed.next, ID, NOTE);
-    expect(s.viewer).toEqual({ at: "open", cardId: ID, text: NOTE.text, line: 3, stored: 1 });
+    expect(s.viewer).toEqual({ at: "open", cardId: ID, text: NOTE.text, line: 3, stored: 1, whole: false });
     expect(viewing(s)).toBe(true);
   });
 
@@ -601,7 +601,7 @@ describe("reading the card's note inside the app", () => {
       expect(back.revealed, key).toBe(true);
       expect(back.annotation, key).toEqual({ at: "closed", text: "a mnemonic" });
       // And the review keys work again: the card can be rated.
-      expect(tap(back, "3").effect, key).toEqual({ kind: "rate", cardId: ID, rating: 3 });
+      expect(tap(back, "3").effect, key).toMatchObject({ kind: "rate", cardId: ID, rating: 3 });
     }
   });
 
@@ -646,5 +646,59 @@ describe("reading the card's note inside the app", () => {
     for (const key of ["o", "Escape", "e"]) expect(passesThrough(s, key, false), key).toBe(false);
     // At the card itself nothing passes: the whole screen is a keyboard surface.
     expect(passesThrough(revealed(), "ArrowDown", false)).toBe(false);
+  });
+});
+
+describe("a spot review in the session", () => {
+  const spot: SpotReview = {
+    kind: "spot",
+    id: "spot:greedy",
+    skill: "greedy",
+    title: "Jump Game",
+    statement: "Reach the end.",
+    skills: ["greedy", "two-pointers"],
+    filePath: "greedy/jump-game.md",
+    lineNo: null,
+    locator: "greedy/jump-game.md",
+    repeat: false,
+  };
+  const T = new Date("2026-10-05T08:00:00.000Z");
+  const tap = (s: Session, key: string) => press(s, key, T);
+
+  it("is revealed and rated like a card, and the rating carries the spot review", () => {
+    const revealed = tap(begin([spot, cards[0]!]), " ").next;
+    expect(revealed.revealed).toBe(true);
+    const { next, effect } = tap(revealed, "2");
+    expect(effect).toEqual({ kind: "rate", cardId: "spot:greedy", rating: 2, item: spot });
+    expect(current(next)?.id).toBe(cards[0]!.id);
+  });
+
+  it("asks for no annotation on the reveal, having no stamp to name one by", () => {
+    const { next, effect } = tap(begin([spot]), " ");
+    expect(next.revealed).toBe(true);
+    expect(effect).toBeUndefined();
+    expect(next.annotation).toEqual({ at: "closed", text: null });
+  });
+
+  it("ignores `a`, because a spot review has no annotation", () => {
+    const revealed = tap(begin([spot]), " ").next;
+    const after = tap(revealed, "a");
+    expect(after.next.annotation).toEqual(revealed.annotation);
+    expect(after.effect).toBeUndefined();
+  });
+
+  it("does not come back in the sitting: a skill has no short-term steps", () => {
+    const rated = tap(tap(begin([spot]), " ").next, "1").next;
+    // FSRS's Review state, days out — what the skill scheduler gives even a `1`.
+    const next: Scheduled = { due: "2026-10-06T08:00:00.000Z", state: 2 };
+    expect(isOver(scheduled(rated, spot.id, next, T))).toBe(true);
+  });
+
+  it("opens the exercise's note whole, with no line to find", () => {
+    const revealed = tap({ ...begin([spot], "inside") }, " ").next;
+    const loading = tap(revealed, "o");
+    expect(loading.effect).toEqual({ kind: "read-note", card: spot });
+    const open = noteRead(loading.next, spot.id, { text: "---\ngeode-skills: [greedy]\n---\n# Jump Game\n", line: null });
+    expect(open.viewer).toMatchObject({ at: "open", line: null, stored: null, whole: true });
   });
 });

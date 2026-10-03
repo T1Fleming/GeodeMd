@@ -11,27 +11,27 @@ app do*, and *where is that proven*. What it deliberately cannot tell you is wha
 app does **untested** — an area that looks thin here is thinly covered, and that is
 worth reading as a finding rather than a gap in the document.
 
-828 behaviours in 13 areas, which follow [the guides](../guides/) rather than the source tree.
+850 behaviours in 13 areas, which follow [the guides](../guides/) rather than the source tree.
 
-- [Reviewing](#reviewing) — 213
+- [Reviewing](#reviewing) — 227
 - [Recognising a card](#recognising-a-card) — 129
 - [Exercises](#exercises) — 33
 - [Syncing notes](#syncing-notes) — 89
 - [Recovery and the log](#recovery-and-the-log) — 54
-- [Moving between machines](#moving-between-machines) — 16
+- [Moving between machines](#moving-between-machines) — 17
 - [Keeping several vaults](#keeping-several-vaults) — 60
 - [Setting up this machine](#setting-up-this-machine) — 82
 - [The app's long runs](#the-apps-long-runs) — 32
 - [The database as a cache](#the-database-as-a-cache) — 7
 - [At scale](#at-scale) — 9
 - [Rules the project enforces on itself](#rules-the-project-enforces-on-itself) — 34
-- [The documentation tells the truth](#the-documentation-tells-the-truth) — 70
+- [The documentation tells the truth](#the-documentation-tells-the-truth) — 77
 
 ## Reviewing
 
 _A session: which card is next, what the keys mean, what a rating records, and what comes back before the sitting ends._
 
-**213 behaviours.**
+**227 behaviours.**
 
 ### the order cards are served in
 
@@ -198,6 +198,25 @@ _3 · `host/present.test.ts`_
 - counts id comments, notes and what .sr/ holds
 - says so when there is nothing to take out, and no .sr/
 - warns that unreadable notes will stop it
+
+### how a spot review is worded and offered
+
+_6 · `host/present.test.ts`_
+
+- names its ratings by what happened, with the same four keys
+- offers no annotation, having no stamp to name one by
+- keeps the note's path hidden until the answer, since a folder can name the skill
+- says a repeat's pool has run out, and what to do about it
+- measures 'served today' from the start of the local day
+- counts spot reviews into the backlog's cap
+
+### what a sync summary says about exercises
+
+_3 · `host/present.test.ts`_
+
+- says nothing about exercises in a vault that has none
+- counts the exercises found and the ones it could not serve
+- names the notes it left out, and the fix
 
 ### which program opens a note
 
@@ -373,6 +392,16 @@ _11 · `electron/renderer/model/session.test.ts`_
 - does not open the note while annotating — `o` is text there
 - does not open the annotation while the note is showing
 - lets the keys it does not use through to the page, so the note can scroll
+
+### a spot review in the session
+
+_5 · `electron/renderer/model/session.test.ts`_
+
+- is revealed and rated like a card, and the rating carries the spot review
+- asks for no annotation on the reveal, having no stamp to name one by
+- ignores `a`, because a spot review has no annotation
+- does not come back in the sitting: a skill has no short-term steps
+- opens the exercise's note whole, with no line to find
 
 ### when a screen with no card checks for cards coming due
 
@@ -1094,7 +1123,7 @@ _3 · `electron/main/active.test.ts`_
 
 _One notes directory, two devices, no built-in sync transport._
 
-**16 behaviours.**
+**17 behaviours.**
 
 ### two machines, one notes directory
 
@@ -1141,6 +1170,12 @@ _2 · `electron/main/reads.test.ts`_
 
 - is not allowed to cost the user their session
 - still reports a failure that is not a busy database
+
+### the queue holds spot reviews
+
+_1 · `electron/main/reads.test.ts`_
+
+- serves a skill due for a spot review beside the cards, and drops it once answered elsewhere
 
 ## Keeping several vaults
 
@@ -1701,7 +1736,7 @@ _5 · `behaviours/areas.test.ts`_
 
 _Documents that make checkable claims, checked._
 
-**70 behaviours.**
+**77 behaviours.**
 
 ### the demo collection
 
@@ -1820,6 +1855,18 @@ _4 · `journeys/reviewing.test.ts`_
 - is right that a note's name is shown above its cards even when it is the answer
 - reads the method example as cards, in a note named after the technique
 - is right that a solution in a code block beside the cards is not read as cards
+
+### an exercise is asked as the guide says
+
+_7 · `journeys/reviewing.test.ts`_
+
+- asks the guide's example as the guide draws it, and writes nothing into the note
+- names the same four ratings, in the same order, with the same words
+- asks a skill with a different exercise each time it comes due
+- is right that only geode-skills makes an exercise, and form: exercise does not
+- leaves out a note with no ## Solution, and the summary names it
+- is right that a skill comes back in days, never minutes, whatever you press
+- says what it says when a skill has run out of exercises, and offers no annotation
 
 ### what the guide says is durable, and where it says it lives
 

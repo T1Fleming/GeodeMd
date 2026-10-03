@@ -1,6 +1,6 @@
 # 0038 — Exercises: schedule the skill, serve a different problem each time
 
-- **Status:** Accepted. Not built yet: phase 1 (skills, pools, spot reviews) and phase 2 (solve reviews) are tracked in [#77](https://github.com/T1Fleming/GeodeMd/issues/77)
+- **Status:** Accepted. Phase 1 (skills, pools, spot reviews) is built; phase 2 (solve reviews) is tracked in [#77](https://github.com/T1Fleming/GeodeMd/issues/77). How it works now is in [`design/exercises.md`](../design/exercises.md)
 - **Date:** 2026-10-02
 
 ## Context
@@ -89,7 +89,7 @@ Step 1 exists because an exercise with two skills can be served by two schedules
 The new tables live in the vault's one database ([ADR 0027](0027-vaults.md)), separate from `cards`:
 
 - **`exercises`** (`path`, `title`, `statement`) and **`exercise_skills`** (`skill`, `path`): derived from the notes and pruned with their file.
-- **`skill_state`** (`skill`, `kind`, plus `card_state`'s FSRS columns without `learning_steps`) and **`skill_reviews`** (`skill`, `kind`, `rated_at`, `rating`, `exercise`, `repeat`): replayed from the log.
+- **`skill_state`** (`skill`, `kind`, plus `card_state`'s FSRS columns) and **`skill_reviews`** (`skill`, `kind`, `rated_at`, `rating`, `exercise`, `repeat`): replayed from the log. `learning_steps` is kept, and is always `0` under the skill parameters, so a skill's state is the same `CardState` and replays through the same `fold`.
 
 Which exercise comes next is computed, never stored, so a rebuild reproduces the database exactly.
 

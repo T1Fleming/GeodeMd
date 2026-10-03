@@ -100,6 +100,8 @@ Nothing already synced is deleted; this stops new duplicates. See [ADR 0019](../
 
 Collect `ParsedCard[]` for each changed or new file. An ID seen twice within one file is resolved here: the first in line order keeps it, later ones are treated as unstamped.
 
+The same text is read as an exercise, and its `exercises` and `exercise_skills` rows are replaced. A note that is not an exercise and never was costs no write ([exercises.md](exercises.md#sync)).
+
 ### 4. Defer, mint, write
 
 If the file's mtime is within 2 seconds **of the stat taken in step 2** — not of the sync's start, which at scale may be minutes earlier — the file is **deferred**: cards already carrying IDs are reconciled, and nothing is minted. It is likely open in an editor.
@@ -155,6 +157,8 @@ Collect the card IDs where a row **actually inserted**, and replay exactly that 
 Read history `ORDER BY rated_at` — a range scan, since it is the primary key. Skip IDs with no card row, and set `cards.reviewed = 1` in the same transaction.
 
 That ordering is where the one accepted failure lives: `rated_at` comes from the clock of whichever device recorded the review, so a device whose clock is badly wrong mis-orders its own history permanently, and no rebuild repairs it — a rebuild faithfully replays what the log says. This is accepted rather than solved; see [ADR 0015](../decisions/0015-accept-clock-skew.md).
+
+Skill reviews are ingested and replayed beside card reviews ([exercises.md](exercises.md#the-log)). A database whose `log-reader` key is older than the code's reads every shard once more first, because ingest moves past the lines it skips.
 
 Step 7 **never writes to the notes directory**, which is what lets `review` and `stats` run it implicitly.
 

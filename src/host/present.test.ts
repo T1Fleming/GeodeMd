@@ -20,8 +20,17 @@ import {
   ratingBreakdown,
   rescheduledText,
   summaryFields,
+  backlogCapped,
+  COUNT_CAP,
+  exerciseReason,
+  isSpot,
+  locatorFor,
+  ratingKeysFor,
+  repeatText,
+  SPOT_PROMPT,
+  startOfDay,
 } from "./present.js";
-import type { SyncSummary } from "../core/index.js";
+import type { SpotReview, SyncSummary } from "../core/index.js";
 
 describe("what a keypress means", () => {
   it("maps 1-4 to ratings", () => {
@@ -102,6 +111,7 @@ describe("the shared vocabulary", () => {
       key: "a",
       label: "annotate",
       stage: "answer",
+      cardsOnly: true,
     });
     expect(actionsAt("question").map((a) => a.key)).not.toContain("a");
     expect(interpretKey("a")).toEqual({ kind: "annotate" });
@@ -168,6 +178,10 @@ const summary = (over: Partial<SyncSummary> = {}): SyncSummary => ({
   logLinesSkipped: 0,
   cardLinesUnnested: 0,
   unnestedAt: [],
+  exercisesFound: 0,
+  exercisesUnreadable: 0,
+  exercisesWithoutSolution: 0,
+  exerciseProblemsAt: [],
   elapsedMs: 4,
   ...over,
 });
@@ -401,5 +415,94 @@ describe("what an erase says it will remove", () => {
     expect(erasePreviewText({ stamps: { files: 1, stamps: 1, unreadable: ["x.md"] }, sr })).toContain(
       "1 note could not be read, so the erase will stop before deleting anything",
     );
+  });
+});
+
+describe("how a spot review is worded and offered", () => {
+  const spot: SpotReview = {
+    kind: "spot",
+    id: "spot:greedy",
+    skill: "greedy",
+    title: "Jump Game",
+    statement: "Reach the end.",
+    skills: ["greedy"],
+    filePath: "greedy/jump-game.md",
+    lineNo: null,
+    locator: "greedy/jump-game.md",
+    repeat: false,
+  };
+  const card = { id: "sr-000000000001", question: "Q", answer: "A", filePath: "a.md", lineNo: 1, locator: "a.md:1", context: [] };
+
+  it("names its ratings by what happened, with the same four keys", () => {
+    expect(ratingKeysFor(spot)).toEqual([
+      ["1", "wrong skill"],
+      ["2", "right, after hesitating"],
+      ["3", "right"],
+      ["4", "right, at once"],
+    ]);
+    expect(ratingKeysFor(spot).map(([k]) => k)).toEqual(RATING_KEYS.map(([k]) => k));
+    expect(ratingKeysFor(card)).toBe(RATING_KEYS);
+    expect(SPOT_PROMPT).toBe("Which skill does this call for?");
+  });
+
+  it("offers no annotation, having no stamp to name one by", () => {
+    expect(actionsAt("answer", true).map((a) => a.key)).toEqual(["o", "q"]);
+    expect(actionsAt("question", true).map((a) => a.key)).toEqual(["0", "q"]);
+    expect(actionsAt("answer").map((a) => a.key)).toContain("a");
+  });
+
+  it("keeps the note's path hidden until the answer, since a folder can name the skill", () => {
+    expect(locatorFor(spot, false)).toBeNull();
+    expect(locatorFor(spot, true)).toBe("greedy/jump-game.md");
+    expect(locatorFor(card, false)).toBe("a.md:1");
+    expect(isSpot(spot)).toBe(true);
+    expect(isSpot(card)).toBe(false);
+  });
+
+  it("says a repeat's pool has run out, and what to do about it", () => {
+    expect(repeatText("greedy")).toBe("You have seen every exercise for greedy. Add one to its pool.");
+  });
+
+  it("measures 'served today' from the start of the local day", () => {
+    const now = new Date(2026, 9, 5, 20, 18, 11);
+    expect(startOfDay(now)).toEqual(new Date(2026, 9, 5, 0, 0, 0, 0));
+  });
+
+  it("counts spot reviews into the backlog's cap", () => {
+    expect(backlogCapped({ dueNow: 0, newCards: 0, spotsDue: COUNT_CAP })).toBe(true);
+    expect(backlogCapped({ dueNow: 0, newCards: 0, spotsDue: 3 })).toBe(false);
+  });
+});
+
+describe("what a sync summary says about exercises", () => {
+  const base = {
+    exercisesFound: 0,
+    exercisesUnreadable: 0,
+    exercisesWithoutSolution: 0,
+    exerciseProblemsAt: [] as string[],
+  };
+
+  it("says nothing about exercises in a vault that has none", () => {
+    const fields = summaryFields(summary(base)).map((f) => f.key);
+    expect(fields.filter((k) => k.startsWith("exercise"))).toEqual([]);
+    expect(exerciseReason(base)).toBeNull();
+  });
+
+  it("counts the exercises found and the ones it could not serve", () => {
+    const s = summary({ ...base, exercisesFound: 4, exercisesUnreadable: 1, exercisesWithoutSolution: 1 });
+    expect(summaryFields(s).filter((f) => f.key.startsWith("exercise")).map((f) => [f.label, f.value])).toEqual([
+      ["exercises found", 4],
+      ["exercises with unreadable properties", 1],
+      ["exercises with no ## Solution", 1],
+    ]);
+  });
+
+  it("names the notes it left out, and the fix", () => {
+    expect(exerciseReason({ ...base, exercisesWithoutSolution: 1, exerciseProblemsAt: ["a.md"] })).toBe(
+      '1 note names its skills but is not served: a.md. An exercise needs geode-skills to be a list, like [two-pointers, greedy], and a "## Solution" heading where its statement ends.',
+    );
+    expect(
+      exerciseReason({ ...base, exercisesUnreadable: 12, exerciseProblemsAt: ["a.md", "b.md"] }),
+    ).toContain("12 notes name their skills but are not served: a.md, b.md, and 10 more.");
   });
 });
