@@ -112,8 +112,10 @@ CREATE TABLE meta (               -- facts about the cache, derived from the cod
 CREATE TABLE exercises (
   path       TEXT PRIMARY KEY,
   title      TEXT NOT NULL,
-  statement  TEXT NOT NULL
+  statement  TEXT NOT NULL,
+  id         TEXT               -- the note's geode-id (ADR 0041); null until written
 );
+CREATE INDEX idx_exercises_id ON exercises(id);
 CREATE TABLE exercise_skills (    -- the pools
   skill  TEXT NOT NULL,
   path   TEXT NOT NULL,

@@ -658,6 +658,7 @@ describe("a spot review in the session", () => {
     statement: "Reach the end.",
     skills: ["greedy", "two-pointers"],
     filePath: "greedy/jump-game.md",
+    exerciseId: "greedy/jump-game.md",
     lineNo: null,
     locator: "greedy/jump-game.md",
     repeat: false,
@@ -737,7 +738,7 @@ describe("a session's tally keeps spot reviews apart", () => {
   it("counts a spot review's rating apart from a card's, and both as reviewed", () => {
     const spot: SpotReview = {
       kind: "spot", id: "spot:g", skill: "g", title: "T", statement: "S", skills: ["g"],
-      filePath: "t.md", lineNo: null, locator: "t.md", repeat: false, related: { pool: [], others: [] },
+      filePath: "t.md", exerciseId: "t.md", lineNo: null, locator: "t.md", repeat: false, related: { pool: [], others: [] },
     };
     const T = new Date("2026-10-05T08:00:00.000Z");
     let s = begin([spot, cards[0]!]);

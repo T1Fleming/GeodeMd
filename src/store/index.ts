@@ -61,6 +61,8 @@ export interface ExerciseRow {
   path: string;
   title: string;
   statement: string;
+  /** Its `geode-id` (ADR 0041); null until sync has written one. */
+  id: string | null;
 }
 
 /** A spot or solve review of a skill, as the log holds it (ADR 0038). */
@@ -77,6 +79,8 @@ export interface SkillReviewRow {
  */
 export interface PoolEntry {
   path: string;
+  /** The exercise's `geode-id`, null until written (ADR 0041). */
+  id: string | null;
   /** The latest `rated_at` of any skill review that served it; null if never served. */
   last_any: string | null;
   /**
@@ -151,7 +155,9 @@ CREATE INDEX IF NOT EXISTS idx_state_due ON card_state(due);
 CREATE TABLE IF NOT EXISTS exercises (
   path       TEXT PRIMARY KEY,
   title      TEXT NOT NULL,
-  statement  TEXT NOT NULL
+  statement  TEXT NOT NULL,
+  -- The note's geode-id (ADR 0041); null until sync has written one.
+  id         TEXT
 );
 CREATE TABLE IF NOT EXISTS exercise_skills (
   skill  TEXT NOT NULL,
@@ -252,6 +258,13 @@ export class Store {
     if (!cardCols.some((c) => c.name === "context")) {
       this.db.exec("ALTER TABLE cards ADD COLUMN context TEXT NOT NULL DEFAULT '[]'");
     }
+    // Null until the next sync, which a new EXERCISE_VERSION makes read every
+    // note and write each exercise its id (ADR 0041).
+    const exerciseCols = this.db.pragma("table_info(exercises)") as Array<{ name: string }>;
+    if (!exerciseCols.some((c) => c.name === "id")) {
+      this.db.exec("ALTER TABLE exercises ADD COLUMN id TEXT");
+    }
+    this.db.exec("CREATE INDEX IF NOT EXISTS idx_exercises_id ON exercises(id)");
   }
 
   close(): void {
@@ -459,15 +472,19 @@ export class Store {
    * nothing when `exercise` is null. Whole, every time — a note's skills are a
    * list, and diffing it would buy nothing a re-read does not already pay for.
    */
-  putExercise(path: string, exercise: { title: string; statement: string; skills: string[] } | null): void {
+  putExercise(
+    path: string,
+    exercise: { id: string | null; title: string; statement: string; skills: string[] } | null,
+  ): void {
     this.run("DELETE FROM exercise_skills WHERE path = ?", path);
     this.run("DELETE FROM exercises WHERE path = ?", path);
     if (!exercise) return;
     this.run(
-      "INSERT INTO exercises (path, title, statement) VALUES (?, ?, ?)",
+      "INSERT INTO exercises (path, title, statement, id) VALUES (?, ?, ?, ?)",
       path,
       exercise.title,
       exercise.statement,
+      exercise.id,
     );
     for (const skill of exercise.skills) {
       this.run("INSERT INTO exercise_skills (skill, path) VALUES (?, ?)", skill, path);
@@ -475,7 +492,12 @@ export class Store {
   }
 
   getExercise(path: string): ExerciseRow | undefined {
-    return this.one<ExerciseRow>("SELECT path, title, statement FROM exercises WHERE path = ?", path);
+    return this.one<ExerciseRow>("SELECT path, title, statement, id FROM exercises WHERE path = ?", path);
+  }
+
+  /** Where the exercise with this id was last read, to tell a moved note from a copy (ADR 0041). */
+  exercisePathOf(id: string): string | undefined {
+    return this.one<{ path: string }>("SELECT path FROM exercises WHERE id = ?", id)?.path;
   }
 
   /** The skills an exercise names, in name order. */
@@ -510,12 +532,18 @@ export class Store {
    */
   poolOf(skill: string, kind: string): PoolEntry[] {
     return this.many<PoolEntry>(
-      `SELECT es.path,
-              (SELECT MAX(r.rated_at) FROM skill_reviews r WHERE r.exercise = es.path) AS last_any,
+      // A review names its exercise by id, or by path in a line written before
+      // ids (ADR 0041). Both are matched here, when ranking, rather than one
+      // resolved to the other at ingest: a path resolved after the note moved
+      // would make a rebuild differ from the database it rebuilt.
+      `SELECT es.path, e.id,
+              (SELECT MAX(r.rated_at) FROM skill_reviews r
+                WHERE r.exercise = es.path OR r.exercise = e.id) AS last_any,
               EXISTS(SELECT 1 FROM skill_reviews r
-                      WHERE r.exercise = es.path
+                      WHERE (r.exercise = es.path OR r.exercise = e.id)
                         AND ((r.skill = es.skill AND r.kind = ?) OR r.kind = 'solve')) AS seen
          FROM exercise_skills es
+         JOIN exercises e ON e.path = es.path
         WHERE es.skill = ?
         ORDER BY es.path`,
       kind,

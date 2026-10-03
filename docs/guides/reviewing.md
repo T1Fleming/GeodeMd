@@ -208,7 +208,8 @@ What makes it work:
 
 - **Only `geode-skills` makes a note an exercise**, and it has to be a list, like `[two-pointers, greedy]`. Every other property is yours: `tags`, or a `form: exercise` you filter by, mean nothing to GeodeMD. In Obsidian, `geode-skills` is a list property you edit in the Properties panel.
 - **The statement ends at `## Solution`, or sooner at a heading that would give the answer away:** `## Intuition`, `## Approach`, `## Hint` or `## Hints`, and `## Explanation`. A review shows the title and everything after it up to that heading, and nothing else: no path line, no tags. Sections that belong to the problem, like `## Examples`, stay in. A note with `geode-skills` but no `## Solution` heading is left out, and the sync summary names it. Otherwise a review would show your solution.
-- **Nothing is written into the note.** An exercise gets no id comment.
+- **Sync adds one line to the note's properties, `geode-id`**, the first time it reads it, and touches nothing else in the note. The id is how an exercise keeps its history when you move or rename the note, so leave it alone. A copied note gets a fresh id of its own.
+- **Renaming a skill starts it over.** To GeodeMD, `queue-decoupling` renamed to `queues` is a new skill with no history. Adding a skill to a note, or removing one, is fine: a skill with no exercises left keeps its schedule, and picks up where it left off once a note names it again.
 - **Don't put the skill in the title.** "Daily Temperatures (monotonic stack)" answers the question before it is asked. The note's path is fine: it stays hidden until you reveal.
 - **Tag every skill the problem genuinely needs, and no others.** Each tag is rated, so a skill you missed shows up in its own schedule. A tag the problem doesn't need is a rating that means nothing.
 - **A skill comes back in days, never minutes**, whatever you press. Re-asking a problem a minute later would test nothing but the minute.

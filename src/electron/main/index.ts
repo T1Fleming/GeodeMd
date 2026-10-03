@@ -458,7 +458,11 @@ function register(): void {
     guard<VaultOpened>(async () => {
       const { core } = await active.ensure();
       const r = active.takeRescheduled();
-      return { rescheduled: r ? { cards: r.cards } : null, syntaxChanged: core.syntaxChanged() };
+      return {
+        rescheduled: r ? { cards: r.cards } : null,
+        syntaxChanged: core.syntaxChanged(),
+        exerciseIds: core.exercisesNeedIds(),
+      };
     }),
   );
 

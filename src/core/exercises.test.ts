@@ -5,6 +5,7 @@ import * as path from "node:path";
 import { chooseExercise, Core, isSpot, mixIn } from "./index.js";
 import type { SkillKind, SpotReview } from "./index.js";
 import { Store } from "../store/index.js";
+import { stampExerciseId } from "../parser/exercise.js";
 import type { PoolEntry } from "../store/index.js";
 
 /**
@@ -79,16 +80,104 @@ async function rate(skill: string, kind: SkillKind, at: string, rating: 1 | 2 | 
 }
 
 describe("sync reads a note's skills into pools", () => {
-  it("puts an exercise in every pool it names, and writes nothing into the note", async () => {
+  it("puts an exercise in every pool it names, and writes only its id into the note", async () => {
     const text = exercise(["two-pointers", "greedy"], "Container");
     await write("c.md", text);
     const summary = await core.sync(T0);
 
     expect(summary.exercisesFound).toBe(1);
-    expect(store.getExercise("c.md")).toEqual({ path: "c.md", title: "Container", statement: "The problem." });
+    expect(summary.filesStamped).toBe(1);
+    const id = "sr-000000000001";
+    expect(store.getExercise("c.md")).toEqual({ path: "c.md", title: "Container", statement: "The problem.", id });
     expect(store.skillsOfExercise("c.md")).toEqual(["greedy", "two-pointers"]);
     expect(store.countSkills()).toBe(2);
-    expect(await fs.readFile(path.join(notes, "c.md"), "utf8")).toBe(text);
+    expect(await fs.readFile(path.join(notes, "c.md"), "utf8")).toBe(stampExerciseId(text, id));
+  });
+
+  it("keeps an exercise's history when its note is moved", async () => {
+    // ADR 0041: a path is not stable; the id travels with the note.
+    await write("a.md", exercise(["greedy"], "A"));
+    await write("b.md", exercise(["greedy"], "B"));
+    await core.sync(T0);
+    const id = store.getExercise("a.md")!.id!;
+    await core.reviewSkill({ skill: "greedy", kind: "solve", exercise: id, repeat: false }, 3, T0, 600);
+
+    await fs.mkdir(path.join(notes, "moved"));
+    await fs.rename(path.join(notes, "a.md"), path.join(notes, "moved", "a.md"));
+    const later = new Date(T0.getTime() + 60_000);
+    await core.sync(later);
+    expect(store.getExercise("moved/a.md")!.id).toBe(id);
+    // Still solved, so still used up: the next pick is b.md, not the moved note.
+    expect(store.poolOf("greedy", "spot").find((e) => e.path === "moved/a.md")!.seen).toBe(1);
+  });
+
+  it("gives a copied note an id of its own", async () => {
+    await write("a.md", exercise(["greedy"], "A"));
+    await core.sync(T0);
+    const original = await fs.readFile(path.join(notes, "a.md"), "utf8");
+    await write("copy.md", original);
+    const summary = await core.sync(new Date(T0.getTime() + 60_000));
+    expect(summary.duplicatesReminted).toBe(1);
+    const a = store.getExercise("a.md")!.id;
+    const b = store.getExercise("copy.md")!.id;
+    expect(b).not.toBe(a);
+    expect(await fs.readFile(path.join(notes, "a.md"), "utf8")).toBe(original);
+  });
+
+  it("writes no id within the deferral window, and reads the note again next time", async () => {
+    const abs = path.join(notes, "a.md");
+    await fs.writeFile(abs, exercise(["greedy"], "A"), "utf8");
+    const now = new Date();
+    await fs.utimes(abs, now, now);
+    await core.sync(now);
+    expect(await fs.readFile(abs, "utf8")).not.toContain("geode-id");
+    await core.sync(new Date(now.getTime() + 10_000));
+    expect(await fs.readFile(abs, "utf8")).toContain("geode-id");
+  });
+
+  it("writes nothing on a preview, but counts the note as one it would edit", async () => {
+    await write("a.md", exercise(["greedy"], "A"));
+    const summary = await core.sync(T0, { dryRun: true });
+    expect(summary.filesStamped).toBe(1);
+    expect(await fs.readFile(path.join(notes, "a.md"), "utf8")).not.toContain("geode-id");
+  });
+
+  it("still matches a review logged by path, before ids, while the note stays put", async () => {
+    await write("a.md", exercise(["greedy"], "A"));
+    await core.sync(T0);
+    await core.reviewSkill({ skill: "greedy", kind: "solve", exercise: "a.md", repeat: false }, 3, T0, 600);
+    expect(store.poolOf("greedy", "spot")[0]!.seen).toBe(1);
+  });
+
+  it("rebuilds exactly after a note has moved", async () => {
+    await write("a.md", exercise(["greedy"], "A"));
+    await write("b.md", exercise(["greedy"], "B"));
+    await core.sync(T0);
+    const id = store.getExercise("a.md")!.id!;
+    await core.reviewSkill({ skill: "greedy", kind: "spot", exercise: id, repeat: false }, 3, T0);
+    await fs.rename(path.join(notes, "a.md"), path.join(notes, "z.md"));
+    await core.sync(new Date(T0.getTime() + 60_000));
+    const before = { pool: store.poolOf("greedy", "spot"), state: store.getSkillState("greedy", "spot") };
+    await core.rebuild(new Date(T0.getTime() + 120_000));
+    expect({ pool: store.poolOf("greedy", "spot"), state: store.getSkillState("greedy", "spot") }).toEqual(before);
+  });
+
+  it("says a vault's exercises need ids when they were read before ids, and not after the sync", async () => {
+    await write("a.md", exercise(["greedy"], "A"));
+    await core.sync(T0);
+    expect(core.exercisesNeedIds()).toBe(false);
+    // A database from before ADR 0041.
+    store.setMeta("exercise", "2");
+    expect(core.exercisesNeedIds()).toBe(true);
+    await core.sync(new Date(T0.getTime() + 60_000));
+    expect(core.exercisesNeedIds()).toBe(false);
+  });
+
+  it("never says so for a vault with no exercises", async () => {
+    await write("cards.md", "Q >> A\n");
+    await core.sync(T0);
+    store.setMeta("exercise", "2");
+    expect(core.exercisesNeedIds()).toBe(false);
   });
 
   it("titles an exercise with no heading by its file name", async () => {
@@ -224,6 +313,7 @@ describe("a spot review is in the sitting, asked with an exercise from the pool"
       statement: "The problem.",
       skills: ["greedy", "two-pointers"],
       filePath: "monotonic-stack/ex.md",
+      exerciseId: "sr-000000000001",
       lineNo: null,
       locator: "monotonic-stack/ex.md",
       repeat: false,

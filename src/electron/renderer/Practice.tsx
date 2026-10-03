@@ -117,7 +117,7 @@ export function Practice({
         });
         return;
       }
-      const request = { skill: review.skill, kind: "solve" as const, exercise: review.filePath, repeat: review.repeat, ...(effect.took === null ? {} : { took: effect.took }), ...(effect.others ? { others: effect.others } : {}) };
+      const request = { skill: review.skill, kind: "solve" as const, exercise: review.exerciseId, repeat: review.repeat, ...(effect.took === null ? {} : { took: effect.took }), ...(effect.others ? { others: effect.others } : {}) };
       void window.geode.skillsReview(request, effect.rating).then((r) => {
         if (!r.ok) {
           onNote(r.message);

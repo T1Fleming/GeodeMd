@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseExercise } from "./exercise.js";
+import { parseExercise, stampExerciseId } from "./exercise.js";
 import { parse } from "./index.js";
 
 /** The ADR's example note, solution and all. */
@@ -26,6 +26,7 @@ describe("a note becomes an exercise only by naming its skills", () => {
     expect(parseExercise(NOTE)).toEqual({
       kind: "exercise",
       skills: ["monotonic-stack"],
+      id: null,
       title: "Daily Temperatures",
       statement:
         "Given daily temperatures, return for each day how many days until a warmer one.\n\n" +
@@ -121,6 +122,7 @@ describe("where an exercise's statement ends", () => {
     expect(parseExercise("---\ngeode-skills: [g]\n---\nJust the problem.\n## Solution\n")).toEqual({
       kind: "exercise",
       skills: ["g"],
+      id: null,
       title: null,
       statement: "Just the problem.",
     });
@@ -130,5 +132,32 @@ describe("where an exercise's statement ends", () => {
     const note = `${NOTE}\n- Why it is linear >> each index is pushed once and popped once\n`;
     expect(parse(note).map((c) => c.question)).toEqual(["Why it is linear"]);
     expect(parseExercise(note)).toMatchObject({ kind: "exercise" });
+  });
+});
+
+describe("an exercise's id in its properties", () => {
+  const ID = "sr-AbCdEf123456";
+
+  it("is read when valid, and ignored when not", () => {
+    const note = (v: string) => `---\ngeode-skills: [g]\ngeode-id: ${v}\n---\n# T\nS\n## Solution\nA\n`;
+    expect(parseExercise(note(ID))).toMatchObject({ kind: "exercise", id: ID });
+    expect(parseExercise(note("foo"))).toMatchObject({ kind: "exercise", id: null });
+  });
+
+  it("is added as one line before the closing ---, leaving every other byte alone", () => {
+    const note = "---\ngeode-skills: [g]   # mine\nsource: x\n---\n# T\nS\n## Solution\nA\n";
+    expect(stampExerciseId(note, ID)).toBe("---\ngeode-skills: [g]   # mine\nsource: x\ngeode-id: " + ID + "\n---\n# T\nS\n## Solution\nA\n");
+  });
+
+  it("replaces an existing geode-id line rather than adding a second key", () => {
+    const note = "---\ngeode-id: foo\ngeode-skills: [g]\n---\n# T\n## Solution\n";
+    const out = stampExerciseId(note, ID);
+    expect(out).toBe("---\ngeode-id: " + ID + "\ngeode-skills: [g]\n---\n# T\n## Solution\n");
+    expect(parseExercise(out)).toMatchObject({ id: ID });
+  });
+
+  it("keeps a CRLF note CRLF", () => {
+    const note = "---\r\ngeode-skills: [g]\r\n---\r\n# T\r\n## Solution\r\n";
+    expect(stampExerciseId(note, ID)).toBe("---\r\ngeode-skills: [g]\r\ngeode-id: " + ID + "\r\n---\r\n# T\r\n## Solution\r\n");
   });
 });

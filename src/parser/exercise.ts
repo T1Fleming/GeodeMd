@@ -9,17 +9,26 @@
  */
 
 import { parse as parseYaml } from "yaml";
-import { frontmatterEndOf, splitLines } from "./index.js";
+import { frontmatterEndOf, ID_PATTERN, splitLines } from "./index.js";
 
 /**
  * Which rules a note is read as an exercise by. Bump it whenever the same note
  * would yield a different exercise, so every vault re-reads every note once —
  * as `CONTEXT_VERSION` does, and with no warning, because nothing is stamped.
  */
-export const EXERCISE_VERSION = "2";
+export const EXERCISE_VERSION = "3";
 
-/** The property that makes a note an exercise, and the only one read. */
+/** The property that makes a note an exercise. */
 export const SKILLS_KEY = "geode-skills";
+
+/**
+ * The property holding an exercise's id, written by sync (ADR 0041), in the
+ * cards' format. With `geode-skills`, the only properties GeodeMD reads.
+ */
+export const ID_KEY = "geode-id";
+
+/** A `geode-id` line at the top level of the properties block. */
+const ID_LINE = /^geode-id[ \t]*:/;
 
 /**
  * What a note is, read as an exercise.
@@ -27,7 +36,8 @@ export const SKILLS_KEY = "geode-skills";
  * - `none`: an ordinary note. No properties, or none named `geode-skills`, or
  *   an empty list — an exercise not yet tagged.
  * - `exercise`: in every pool it names. `title` is null when the note has no
- *   `# ` heading, and the caller falls back to the file's name.
+ *   `# ` heading, and the caller falls back to the file's name. `id` is null
+ *   until sync has written one, or when the value is not a valid id.
  * - `unreadable`: the properties do not parse, or `geode-skills` is not a list
  *   of strings. Reported, never an error.
  * - `no-solution`: tagged, but nothing marks where the statement ends, so a
@@ -35,7 +45,7 @@ export const SKILLS_KEY = "geode-skills";
  */
 export type ParsedExercise =
   | { kind: "none" }
-  | { kind: "exercise"; skills: string[]; title: string | null; statement: string }
+  | { kind: "exercise"; skills: string[]; id: string | null; title: string | null; statement: string }
   | { kind: "unreadable" }
   | { kind: "no-solution"; skills: string[] };
 
@@ -83,7 +93,32 @@ export function parseExercise(text: string): ParsedExercise {
 
   const body = statementOf(lines.slice(end + 1).map((l) => l.replace(/\r?\n$/, "")));
   if (body === null) return { kind: "no-solution", skills };
-  return { kind: "exercise", skills, ...body };
+  const raw = (props as Record<string, unknown>)[ID_KEY];
+  const id = typeof raw === "string" && ID_PATTERN.test(raw.trim()) ? raw.trim() : null;
+  return { kind: "exercise", skills, id, ...body };
+}
+
+/**
+ * The note with `geode-id: <id>` in its properties (ADR 0041), changed by one
+ * line and nothing else: an existing top-level `geode-id` line gets the new
+ * value, and otherwise a line is added just before the closing `---`, with the
+ * block's own line ending. The YAML is never re-serialised, which would
+ * reformat the user's properties. A note with no properties block comes back
+ * unchanged; it is not an exercise.
+ */
+export function stampExerciseId(text: string, id: string): string {
+  const lines = splitLines(text);
+  const end = frontmatterEndOf(lines);
+  if (end === -1) return text;
+  for (let i = 1; i < end; i++) {
+    if (ID_LINE.test(lines[i]!)) {
+      lines[i] = `${ID_KEY}: ${id}${/\r?\n$/.exec(lines[i]!)?.[0] ?? ""}`;
+      return lines.join("");
+    }
+  }
+  const eol = /\r?\n$/.exec(lines[0]!)?.[0] ?? "\n";
+  lines.splice(end, 0, `${ID_KEY}: ${id}${eol}`);
+  return lines.join("");
 }
 
 /** A list of non-blank strings, trimmed and de-duplicated in order; null for anything else. */

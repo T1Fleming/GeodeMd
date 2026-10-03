@@ -647,6 +647,14 @@ export function rescheduledText(r: Pick<Rescheduled, "cards">): string {
  * lines that were never cards before. The app also takes the user to the Sync
  * screen, where the preview is.
  */
+/** Said when a vault's exercises are about to get their ids (ADR 0041). */
+export function exerciseIdsText(): string {
+  return (
+    "Exercise notes now get an id: the next sync adds one geode-id line to each exercise's properties, " +
+    "so its history survives a move or a rename. Preview it first. Nothing else in the notes changes."
+  );
+}
+
 export function syntaxChangedText(): string {
   return (
     "Card syntax changed: lines with >> or == are cards now, and lines with :: are not. " +

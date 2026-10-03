@@ -97,6 +97,8 @@ export interface VaultOpened {
    * like `rescheduled`: it stays true until a sync has re-read everything.
    */
   syntaxChanged: boolean;
+  /** The vault's exercises have no ids yet, and the next sync will write them (ADR 0041). */
+  exerciseIds: boolean;
 }
 
 /** Why a folder is being picked, which decides the dialog's words. */
