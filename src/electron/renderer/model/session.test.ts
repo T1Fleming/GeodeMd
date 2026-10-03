@@ -666,12 +666,41 @@ describe("a spot review in the session", () => {
   const T = new Date("2026-10-05T08:00:00.000Z");
   const tap = (s: Session, key: string) => press(s, key, T);
 
+  const single: SpotReview = { ...spot, skills: ["greedy"] };
+
   it("is revealed and rated like a card, and the rating carries the spot review", () => {
-    const revealed = tap(begin([spot, cards[0]!]), " ").next;
+    const revealed = tap(begin([single, cards[0]!]), " ").next;
     expect(revealed.revealed).toBe(true);
     const { next, effect } = tap(revealed, "2");
-    expect(effect).toEqual({ kind: "rate", cardId: "spot:greedy", rating: 2, item: spot });
+    expect(effect).toEqual({ kind: "rate", cardId: "spot:greedy", rating: 2, item: single });
     expect(current(next)?.id).toBe(cards[0]!.id);
+  });
+
+  it("rates each skill an exercise names, the one that came due first, and sends them together", () => {
+    // ADR 0040: "name any one and you're right" was too generous (#81).
+    const revealed = tap(begin([spot, cards[0]!]), " ").next;
+    const first = tap(revealed, "3");
+    expect(first.effect).toBeUndefined();
+    expect(first.next.skillRatings).toEqual([{ skill: "greedy", rating: 3 }]);
+    expect(current(first.next)?.id).toBe("spot:greedy");
+    const { next, effect } = tap(first.next, "1");
+    expect(effect).toEqual({
+      kind: "rate",
+      cardId: "spot:greedy",
+      rating: 3,
+      item: spot,
+      others: [{ skill: "two-pointers", rating: 1 }],
+    });
+    expect(next.skillRatings).toEqual([]);
+    expect(next.spotCounts[3]).toBe(1);
+    expect(current(next)?.id).toBe(cards[0]!.id);
+  });
+
+  it("drops a skill's spot review still to come once another exercise has rated it", () => {
+    const later: SpotReview = { ...single, id: "spot:two-pointers", skill: "two-pointers", skills: ["two-pointers"], filePath: "b.md" };
+    const s = tap(tap(tap(begin([spot, later, cards[0]!]), " ").next, "3").next, "4").next;
+    expect(current(s)?.id).toBe(cards[0]!.id);
+    expect(s.queue.fresh.map((i) => i.id)).not.toContain("spot:two-pointers");
   });
 
   it("asks for no annotation on the reveal, having no stamp to name one by", () => {
@@ -689,7 +718,7 @@ describe("a spot review in the session", () => {
   });
 
   it("does not come back in the sitting: a skill has no short-term steps", () => {
-    const rated = tap(tap(begin([spot]), " ").next, "1").next;
+    const rated = tap(tap(begin([single]), " ").next, "1").next;
     // FSRS's Review state, days out — what the skill scheduler gives even a `1`.
     const next: Scheduled = { due: "2026-10-06T08:00:00.000Z", state: 2 };
     expect(isOver(scheduled(rated, spot.id, next, T))).toBe(true);

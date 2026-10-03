@@ -1059,8 +1059,10 @@ export class Core {
   }
 
   /**
-   * Record a review of a skill: the log first, then the database, as
-   * `reviewCard` does, and for the same reason. Returns the skill's new state.
+   * Record a review of a skill, and of every other skill the exercise names
+   * that the user rated (ADR 0040): the log first, then the database, as
+   * `reviewCard` does, and for the same reason. One line per skill, all at
+   * the same `at`. Returns the new state of the skill that came due.
    *
    * `took` is a solve's length in seconds, and is only written when given.
    */
@@ -1069,21 +1071,39 @@ export class Core {
     rating: 1 | 2 | 3 | 4,
     now: Date,
     took?: number,
+    others: ReadonlyArray<{ skill: string; rating: 1 | 2 | 3 | 4 }> = [],
   ): Promise<CardState> {
-    const { skill, kind, exercise, repeat } = review;
-    const previous = this.store.getSkillState(skill, kind) ?? null;
+    const { skill, kind, exercise } = review;
+    // Every skill the exercise names is rated on its own (ADR 0040): the one
+    // that came due, and `others`. Whether each is a repeat is its own: worked
+    // out before anything is written, since this review would make it one.
+    const rated = [
+      { skill, rating, repeat: review.repeat },
+      ...others
+        .filter((o) => o.skill !== skill)
+        .map((o) => ({
+          ...o,
+          repeat: this.store.poolOf(o.skill, kind).find((e) => e.path === exercise)?.seen === 1,
+        })),
+    ];
     const at = files.formatAt(now);
-    const line: files.SkillLogLine = { skill, kind, exercise, at, rating };
-    if (took !== undefined) line.took = round1(took);
-    if (repeat) line.repeat = true;
-    await files.appendLog(this.config.notesPath, this.config.device, line);
+    for (const r of rated) {
+      const line: files.SkillLogLine = { skill: r.skill, kind, exercise, at, rating: r.rating };
+      if (took !== undefined) line.took = round1(took);
+      if (r.repeat) line.repeat = true;
+      await files.appendLog(this.config.notesPath, this.config.device, line);
+    }
 
-    const next = fold(this.skillScheduler, skillKey(skill, kind), previous, [{ rated_at: at, rating }], now);
+    const next = rated.map((r) =>
+      fold(this.skillScheduler, skillKey(r.skill, kind), this.store.getSkillState(r.skill, kind) ?? null, [{ rated_at: at, rating: r.rating }], now),
+    );
     this.store.transaction(() => {
-      this.store.insertSkillReview(skill, kind, at, rating, exercise, repeat);
-      this.store.putSkillState(skill, kind, next);
+      rated.forEach((r, i) => {
+        this.store.insertSkillReview(r.skill, kind, at, r.rating, exercise, r.repeat);
+        this.store.putSkillState(r.skill, kind, next[i]!);
+      });
     });
-    return next;
+    return next[0]!;
   }
 
   /**

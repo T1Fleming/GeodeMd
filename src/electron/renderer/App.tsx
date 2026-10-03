@@ -360,12 +360,17 @@ function ReviewScreen({
    * return today. The rating itself is safe in the log either way.
    */
   const onRate = useCallback(
-    async (item: ReviewItem, rating: 1 | 2 | 3 | 4): Promise<Scheduled | null> => {
+    async (
+      item: ReviewItem,
+      rating: 1 | 2 | 3 | 4,
+      others?: Array<{ skill: string; rating: 1 | 2 | 3 | 4 }>,
+    ): Promise<Scheduled | null> => {
       // A spot review is a skill's, recorded with the exercise it was asked
-      // with (ADR 0038); a card is recorded by its stamp.
+      // with (ADR 0038), and with its other skills' own ratings (ADR 0040); a
+      // card is recorded by its stamp.
       const r = isSpot(item)
         ? await window.geode.skillsReview(
-            { skill: item.skill, kind: "spot", exercise: item.filePath, repeat: item.repeat },
+            { skill: item.skill, kind: "spot", exercise: item.filePath, repeat: item.repeat, ...(others ? { others } : {}) },
             rating,
           )
         : await window.geode.cardsReview(item.id, rating);

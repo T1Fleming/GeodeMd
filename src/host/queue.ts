@@ -148,6 +148,22 @@ export function setAside(q: ReviewQueue, card: ReviewItem): ReviewQueue {
  * again, and the session must not be able to declare itself over in the gap
  * before the scheduler's answer arrives.
  */
+/**
+ * Drop the spot reviews still to come for `skills`: rated just now on another
+ * exercise that names them, so their schedules have moved, and asking them
+ * again in this sitting would test nothing but the last minute (ADR 0040).
+ *
+ * The kind is read structurally rather than with `core`'s `isSpot`: a value
+ * import from `core` here would pull `better-sqlite3` into the renderer.
+ */
+export function withoutSkills(q: ReviewQueue, skills: readonly string[]): ReviewQueue {
+  const drop = (i: ReviewItem): boolean => {
+    const spot = i as { kind?: string; skill?: string };
+    return spot.kind === "spot" && spot.skill !== undefined && skills.includes(spot.skill);
+  };
+  return { ...q, fresh: q.fresh.filter((i) => !drop(i)) };
+}
+
 export function rated(q: ReviewQueue, card: ReviewItem): ReviewQueue {
   return {
     fresh: without(q.fresh, card.id),
