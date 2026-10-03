@@ -11,11 +11,11 @@ app do*, and *where is that proven*. What it deliberately cannot tell you is wha
 app does **untested** — an area that looks thin here is thinly covered, and that is
 worth reading as a finding rather than a gap in the document.
 
-903 behaviours in 13 areas, which follow [the guides](../guides/) rather than the source tree.
+906 behaviours in 13 areas, which follow [the guides](../guides/) rather than the source tree.
 
 - [Reviewing](#reviewing) — 235
 - [Recognising a card](#recognising-a-card) — 129
-- [Exercises](#exercises) — 62
+- [Exercises](#exercises) — 64
 - [Syncing notes](#syncing-notes) — 89
 - [Recovery and the log](#recovery-and-the-log) — 59
 - [Moving between machines](#moving-between-machines) — 17
@@ -25,7 +25,7 @@ worth reading as a finding rather than a gap in the document.
 - [The database as a cache](#the-database-as-a-cache) — 7
 - [At scale](#at-scale) — 9
 - [Rules the project enforces on itself](#rules-the-project-enforces-on-itself) — 36
-- [The documentation tells the truth](#the-documentation-tells-the-truth) — 83
+- [The documentation tells the truth](#the-documentation-tells-the-truth) — 84
 
 ## Reviewing
 
@@ -747,7 +747,7 @@ _8 · `parser/parser.test.ts`_
 
 _Notes opted in by `geode-skills`: a skill scheduled in place of a card, and a different problem from its pool served each time it comes due (ADR 0038)._
 
-**62 behaviours.**
+**64 behaviours.**
 
 ### a note becomes an exercise only by naming its skills
 
@@ -822,13 +822,15 @@ _5 · `core/exercises.test.ts`_
 
 ### the Practice screen offers one solve at a time
 
-_6 · `core/exercises.test.ts`_
+_8 · `core/exercises.test.ts`_
 
 - offers the skill whose solve is most overdue, with an exercise picked by the same rules
 - is null when no skill is due for a solve
 - does not count a spot review against a solve: a spot shows no solution
 - counts a solve against every skill: a solved problem is not new to any of them
 - calls a solved problem a repeat when it is all a pool has left
+- lets a skill never solved wait in line from its first spot review, not behind every due one
+- puts a skill never spotted nor solved last, by name
 - counts skills due for a solve in the stats
 
 ### spot reviews are mixed in, in an order that gives nothing away
@@ -1833,7 +1835,7 @@ _5 · `behaviours/areas.test.ts`_
 
 _Documents that make checkable claims, checked._
 
-**83 behaviours.**
+**84 behaviours.**
 
 ### the demo collection
 
@@ -1970,8 +1972,9 @@ _10 · `journeys/reviewing.test.ts`_
 
 ### a solve on the Practice tab goes as the guide says
 
-_3 · `journeys/reviewing.test.ts`_
+_4 · `journeys/reviewing.test.ts`_
 
+- is right that a new skill waits in line from when you first spotted it
 - names the same four solve ratings, in the same order, with the same words
 - offers one solve, times it, and records the time beside the rating
 - is right that Space starts and pauses, only d stops the clock, and q leaves having recorded nothing

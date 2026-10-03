@@ -530,6 +530,7 @@ export class Store {
    * never due, though its schedule is kept (ADR 0010).
    */
   dueSkills(kind: string, now: string, limit: number): string[] {
+    if (kind === "solve") return this.solveQueue(now, limit);
     const due = this.many<{ skill: string }>(
       `SELECT s.skill FROM skill_state s
         WHERE s.kind = ? AND s.due <= ?
@@ -550,6 +551,33 @@ export class Store {
       limit - due.length,
     ).map((r) => r.skill);
     return [...due, ...fresh];
+  }
+
+  /**
+   * Skills due for a solve, longest-waiting first (ADR 0040). A skill already
+   * solved has waited since its due date. One never solved has waited since its
+   * first spot review, the day the user met it; before, never-solved skills
+   * came after every due one, and a skill rated low kept jumping the queue
+   * while new ones waited a week (#81). Never spotted either: last, by name.
+   * Every input is the log, so a rebuild reproduces the order.
+   */
+  private solveQueue(now: string, limit: number): string[] {
+    return this.many<{ skill: string }>(
+      `SELECT skill FROM (
+         SELECT s.skill, s.due AS waiting FROM skill_state s
+          WHERE s.kind = 'solve' AND s.due <= ?
+            AND EXISTS(SELECT 1 FROM exercise_skills es WHERE es.skill = s.skill)
+         UNION ALL
+         SELECT es.skill,
+                (SELECT MIN(r.rated_at) FROM skill_reviews r WHERE r.skill = es.skill AND r.kind = 'spot') AS waiting
+           FROM (SELECT DISTINCT skill FROM exercise_skills) es
+          WHERE NOT EXISTS(SELECT 1 FROM skill_state s WHERE s.skill = es.skill AND s.kind = 'solve')
+       )
+       ORDER BY waiting IS NULL, waiting, skill
+       LIMIT ?`,
+      now,
+      limit,
+    ).map((r) => r.skill);
   }
 
   /** How many skills `dueSkills` would return, counting no further than `limit` (ADR 0024). */

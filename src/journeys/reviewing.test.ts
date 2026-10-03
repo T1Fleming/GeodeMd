@@ -679,6 +679,18 @@ describe("a solve on the Practice tab goes as the guide says", () => {
 
   const NOTE = "---\ngeode-skills: [greedy]\n---\n# Jump Game\n\nReach the end.\n\n## Solution\n\nTrack the furthest reach.\n";
 
+  it("is right that a new skill waits in line from when you first spotted it", async () => {
+    expect(plain(await section())).toContain("A skill you have never solved has been waiting since you first spotted it");
+    open = await newCollection("laptop");
+    await open.write("a.md", NOTE);
+    await open.write("b.md", NOTE.replace("greedy", "two-pointers"));
+    await open.core.sync(T0);
+    await open.core.reviewSkill({ skill: "two-pointers", kind: "spot", exercise: "b.md", repeat: false }, 3, T0);
+    await open.core.reviewSkill({ skill: "greedy", kind: "solve", exercise: "a.md", repeat: false }, 1, new Date(T0.getTime() + 60_000), 600);
+    const later = new Date(T0.getTime() + 2 * 86_400_000);
+    expect(open.core.getSolveReview(later, startOfDay(later))!.skill).toBe("two-pointers");
+  });
+
   it("names the same four solve ratings, in the same order, with the same words", async () => {
     const rows = tableAfter(await section(), HEADING).map((cells) => [plain(cells[0]!), plain(cells[1]!)]);
     expect(rows).toEqual(SOLVE_RATING_KEYS.map(([key, label]) => [key, label]));

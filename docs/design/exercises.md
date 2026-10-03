@@ -114,7 +114,7 @@ A `SpotReview` sits in the same session as a card, as `ReviewItem = DueCard | Sp
 
 ## The Practice tab
 
-`Core.getSolveReview(now, dayStart)` returns one `SolveReview`: the skill whose solve is most overdue (never-solved skills after those, by name), asked with the exercise `chooseExercise` picks for `solve`. It returns null when no skill is due for a solve. Spot and solve schedules are separate. A spot review shows no solution, so having spotted an exercise doesn't use it up for a solve; having solved it uses it up for everything.
+`Core.getSolveReview(now, dayStart)` returns one `SolveReview`: the skill that has waited longest for a solve: a solved skill since its due date, a never-solved one since its first spot review, and one never spotted either last, by name (`store.solveQueue`, [ADR 0040](../decisions/0040-rate-every-skill-and-let-new-skills-wait-in-line.md)), asked with the exercise `chooseExercise` picks for `solve`. It returns null when no skill is due for a solve. Spot and solve schedules are separate. A spot review shows no solution, so having spotted an exercise doesn't use it up for a solve; having solved it uses it up for everything.
 
 The screen's decisions are in `renderer/model/practice.ts`, a pure state machine:
 - **`solving`**: the problem is showing. The clock is **not started**, **running** or **paused** (`clockState`). It counts in `ranMs`, plus the time since `since` while it runs. Space starts and pauses it; `d` finishes from any of the three.
