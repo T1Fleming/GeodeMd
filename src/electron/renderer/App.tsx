@@ -15,6 +15,7 @@ import { Review } from "./Review.js";
 import { Setup } from "./Setup.js";
 import { Stats } from "./Stats.js";
 import { Practice } from "./Practice.js";
+import type { HeldSolve } from "./Practice.js";
 import { Sync } from "./Sync.js";
 import type { OpenIn, Session } from "./model/session.js";
 import { choose, leftNote, switcherOptions } from "./model/vaults.js";
@@ -64,6 +65,9 @@ export function App(): React.JSX.Element {
   const [note, setNote] = useState<string | null>(null);
   const [boot, setBoot] = useState<Boot>({ at: "checking" });
   const [vaults, setVaults] = useState<VaultList | null>(null);
+  // The one piece of a screen that outlives the screen: a solve under way on
+  // Practice. Half an hour of work must survive a glance at another tab.
+  const heldSolve = useRef<HeldSolve | null>(null);
 
   const check = useCallback(async () => {
     setBoot({ at: "checking" });
@@ -215,9 +219,10 @@ export function App(): React.JSX.Element {
           be listening while you are on another tab. It also means leaving
           review and coming back draws a fresh queue — no position is kept, and
           none needs to be, because every rating was recorded when it was
-          given. */}
+          given. The exception is a solve under way on Practice, which has
+          nothing recorded yet: it is held in `heldSolve` and picked up again. */}
       {tab === "review" && <ReviewScreen vault={boot.config.id} onNote={setNote} onRegisterFlush={registerFlush} />}
-      {tab === "practice" && <Practice vault={boot.config.id} onNote={setNote} />}
+      {tab === "practice" && <Practice vault={boot.config.id} held={heldSolve} onNote={setNote} />}
       {tab === "sync" && <Sync />}
       {tab === "stats" && vaults && (
         <Stats

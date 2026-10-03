@@ -119,6 +119,10 @@ The screen's decisions are in `renderer/model/practice.ts`, a pure state machine
 - **`saving`**, then **`done`**: a rating was sent over `skills/review` with `kind: "solve"` and `took`. After that, nothing more is offered until the next visit.
 - **`left`**: `q` was pressed, and nothing was recorded.
 
+**A solve outlives the screen.** Each screen is mounted only while it shows, so the model is held by `App` (`heldSolve`), tagged with its vault, and `resumable` decides whether returning to the tab picks it up: yes while `solving`, `solved` or `saving`, no once `done` or `left`. The clock runs from the offer, so time spent on another tab counts, which is right: it measures the solve, not the screen. A note or a rating that arrives after the tab changed lands in the held model. One that arrives after a vault switch finds nothing held for it and is dropped (#81).
+
+**Escape does nothing on Practice.** It is the key a hand reaches for without thinking, and here it would discard the solve. Leaving takes `q`.
+
 A failed rating goes back to `solved`, so it can be given again. The keys and their stages are `host`'s `PRACTICE_KEYS` and `interpretPracticeKey`, and the words are `SOLVE_RATING_KEYS`, `clockText` and `nextSolveText`.
 
 **The clock redraws every second**, which is the one exception to the app's no-timer habit. It is safe for the reason `IdleCheck`'s is: nothing it draws changes what is on screen, and `took` is read on the keypress, not from the drawing.

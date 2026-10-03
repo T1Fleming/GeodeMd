@@ -102,7 +102,9 @@ export function interpretPracticeKey(key: string): PracticeAction {
   if (key === " " || key === "Enter") return { kind: "done" };
   if (key >= "1" && key <= "4") return { kind: "rate", rating: Number(key) as 1 | 2 | 3 | 4 };
   if (key === "o" || key === "O") return { kind: "open" };
-  if (key === "q" || key === "Q" || key === "Escape") return { kind: "leave" };
+  // Not Escape: it is the key a hand reaches for without thinking, and here it
+  // would throw away half an hour (#81). Leaving takes the `q` the legend shows.
+  if (key === "q" || key === "Q") return { kind: "leave" };
   return { kind: "ignore" };
 }
 

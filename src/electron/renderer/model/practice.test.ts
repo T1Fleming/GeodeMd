@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { SolveReview } from "../../../core/index.js";
-import { elapsed, noteArrived, press, recorded, start } from "./practice.js";
+import { elapsed, noteArrived, press, recorded, resumable, start } from "./practice.js";
 import type { Practice } from "./practice.js";
 
 const review: SolveReview = {
@@ -56,7 +56,26 @@ describe("a solve on the Practice screen", () => {
     const solving = start(review, T0);
     expect(press(solving, "q", at(5))).toEqual({ next: { at: "left" } });
     const solved: Practice = press(solving, " ", at(5)).next;
-    expect(press(solved, "Escape", at(6))).toEqual({ next: { at: "left" } });
+    expect(press(solved, "q", at(6))).toEqual({ next: { at: "left" } });
+  });
+
+  it("ignores Escape, which would throw away a solve by reflex", () => {
+    const solving = start(review, T0);
+    expect(press(solving, "Escape", at(20)).next).toBe(solving);
+    const solved = press(solving, " ", at(20)).next;
+    expect(press(solved, "Escape", at(21)).next).toBe(solved);
+  });
+
+  it("picks a solve under way back up on return to the tab, and nothing finished", () => {
+    const solving = start(review, T0);
+    const solved = press(solving, " ", at(5)).next;
+    const saving = press(solved, "3", at(6)).next;
+    expect([solving, solved, saving].every(resumable)).toBe(true);
+    expect(resumable(recorded(saving, null))).toBe(false);
+    expect(resumable(press(solving, "q", at(5)).next)).toBe(false);
+    expect(resumable(null)).toBe(false);
+    // The clock ran on while the tab was elsewhere: it measures the solve, not the screen.
+    expect(elapsed(solving, at(25))).toBe(25 * 60);
   });
 
   it("opens the note in an editor once the solution is showing, and not before", () => {

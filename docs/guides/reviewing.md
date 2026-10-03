@@ -232,7 +232,7 @@ A clock starts when the problem appears. Solve it wherever you solve things, in 
 
 `1` and `2` are facts: you finished or you didn't, and you peeked or you didn't. The difference between `3` and `4` is your judgement. There is no time limit deciding it, but the time each solve took is recorded beside its rating.
 
-`q` leaves without rating, before or after the solution is showing, and records nothing: the solve is still due next time. `o` opens the note in your editor once the solution is showing. After a rating, the tab says when the skill comes back and offers nothing more until your next visit. A solve takes half an hour, and a queue of them would make a sitting impossible to plan.
+`q` leaves without rating, before or after the solution is showing, and records nothing: the solve is still due next time. A solve survives a visit to another tab: come back and it is where you left it, with the clock still running. Only `q` leaves; Escape does nothing here, so a reflex can't throw half an hour away. `o` opens the note in your editor once the solution is showing. After a rating, the tab says when the skill comes back and offers nothing more until your next visit. A solve takes half an hour, and a queue of them would make a sitting impossible to plan.
 
 ### Cards for what gives the method away
 
