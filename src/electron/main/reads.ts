@@ -22,6 +22,7 @@
  * plain vitest against a real `Core` and a real temp collection.
  */
 
+import { isSpot } from "../../core/index.js";
 import type { Core, Counts, ReviewItem, SolveReview } from "../../core/index.js";
 import { isBusy } from "../../host/errors.js";
 import { startOfDay } from "../../host/present.js";
@@ -73,19 +74,58 @@ async function catchUp(core: Core, now: Date): Promise<void> {
 }
 
 /**
+ * Which exercises each screen has been offered today, per open vault (#81).
+ *
+ * The serving rule's first step keeps one exercise out of a day twice, but it
+ * counts only reviews already rated. The Review and Practice tabs each choose
+ * before the other has rated anything, so in testing the same exercise came
+ * up as a spot review and as a solve within a minute — and the spot's reveal
+ * named the solve's skill. Each tab now treats what the *other* was offered
+ * today as served. Not its own: a sitting drawn again after a visit elsewhere
+ * keeps asking with the exercise it had.
+ *
+ * Kept in memory and never stored: the choice is computed, as before, and a
+ * rebuild reproduces everything that is.
+ */
+interface Offered {
+  day: string;
+  review: Set<string>;
+  practice: Set<string>;
+}
+const offered = new WeakMap<Core, Offered>();
+
+function offeredToday(core: Core, dayStart: Date): Offered {
+  const day = dayStart.toISOString();
+  let o = offered.get(core);
+  if (!o || o.day !== day) {
+    o = { day, review: new Set(), practice: new Set() };
+    offered.set(core, o);
+  }
+  return o;
+}
+
+/**
  * The queue for a session, after catching up on anything already answered:
  * cards, and skills due for a spot review (ADR 0038). The start of the day is
  * this machine's, which is why it is worked out here and handed to `core`.
  */
 export async function dueCards(core: Core, now: Date, limit: number): Promise<ReviewItem[]> {
   await catchUp(core, now);
-  return core.getReviewItems(now, startOfDay(now), limit);
+  const dayStart = startOfDay(now);
+  const o = offeredToday(core, dayStart);
+  const items = core.getReviewItems(now, dayStart, limit, o.practice);
+  for (const item of items) if (isSpot(item)) o.review.add(item.filePath);
+  return items;
 }
 
 /** The one solve the Practice screen offers, after the same catch-up (ADR 0038). */
 export async function solveReview(core: Core, now: Date): Promise<SolveReview | null> {
   await catchUp(core, now);
-  return core.getSolveReview(now, startOfDay(now));
+  const dayStart = startOfDay(now);
+  const o = offeredToday(core, dayStart);
+  const review = core.getSolveReview(now, dayStart, o.review);
+  if (review) o.practice.add(review.filePath);
+  return review;
 }
 
 /** The collection's counts, after the same catch-up. */

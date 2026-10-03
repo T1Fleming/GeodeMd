@@ -15,7 +15,8 @@ import * as path from "node:path";
 import { Core } from "../../core/index.js";
 import { Store } from "../../store/index.js";
 import { appendLog, formatAt } from "../../files/index.js";
-import { counts, dueCards } from "./reads.js";
+import { isSpot } from "../../core/index.js";
+import { counts, dueCards, solveReview } from "./reads.js";
 
 const T0 = new Date("2026-09-22T12:00:00.000Z");
 const MTIME = new Date("2026-09-01T00:00:00.000Z");
@@ -79,6 +80,41 @@ describe("reading the queue", () => {
     await dueCards(core, T0, 10);
     const second = await dueCards(core, T0, 10);
     expect(second).toHaveLength(2);
+  });
+});
+
+describe("one exercise is not offered by both tabs in one day", () => {
+  async function exercises(): Promise<void> {
+    for (const name of ["x", "y"]) {
+      const abs = path.join(notes, `${name}.md`);
+      await fs.writeFile(abs, `---\ngeode-skills: [g]\n---\n# ${name}\n\nP\n\n## Solution\n\nS\n`, "utf8");
+      await fs.utimes(abs, MTIME, MTIME);
+    }
+    await core.sync(T0);
+  }
+
+  it("keeps Practice off the exercise the review sitting is asking with", async () => {
+    // Seen in testing (#81): spotted, then offered as a solve, a minute apart,
+    // with neither rated yet — and the spot's reveal named the solve's skill.
+    await exercises();
+    const spot = (await dueCards(core, T0, 50)).find(isSpot)!;
+    expect(spot.filePath).toBe("x.md");
+    expect((await solveReview(core, T0))!.filePath).toBe("y.md");
+  });
+
+  it("keeps the review sitting off the exercise Practice offered, and its own where it was", async () => {
+    await exercises();
+    expect((await solveReview(core, T0))!.filePath).toBe("x.md");
+    expect((await dueCards(core, T0, 50)).find(isSpot)!.filePath).toBe("y.md");
+    // Drawn again after a visit to Practice: still the same exercise.
+    expect((await dueCards(core, T0, 50)).find(isSpot)!.filePath).toBe("y.md");
+  });
+
+  it("forgets what was offered when the day changes", async () => {
+    await exercises();
+    await dueCards(core, T0, 50);
+    const tomorrow = new Date(T0.getTime() + 86_400_000);
+    expect((await solveReview(core, tomorrow))!.filePath).toBe("x.md");
   });
 });
 
