@@ -42,6 +42,12 @@ export const AREAS: readonly Area[] = [
       "NOT cards, because a false positive writes a stamp into someone's note.",
   },
   {
+    name: "Exercises",
+    blurb:
+      "Notes opted in by `geode-skills`: a skill scheduled in place of a card, and a " +
+      "different problem from its pool served each time it comes due (ADR 0038).",
+  },
+  {
     name: "Syncing notes",
     blurb: "Finding what changed, stamping it, pruning what is gone, and saying what happened.",
   },
@@ -89,6 +95,9 @@ export const AREAS: readonly Area[] = [
 /** The area a test file belongs to unless one of its groups says otherwise. */
 export const BY_FILE: Readonly<Record<string, string>> = {
   "parser/parser.test.ts": "Recognising a card",
+
+  "parser/exercise.test.ts": "Exercises",
+  "core/exercises.test.ts": "Exercises",
 
   "core/review.test.ts": "Reviewing",
   "core/busy.test.ts": "Reviewing",

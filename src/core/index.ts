@@ -12,9 +12,10 @@ import * as path from "node:path";
 import * as files from "../files/index.js";
 import { CONTEXT_VERSION, parse, parseNote, splitLines, stampLine, SYNTAX_VERSION, unstamp } from "../parser/index.js";
 import type { ContextEntry, ParsedCard } from "../parser/index.js";
+import { EXERCISE_VERSION, parseExercise } from "../parser/exercise.js";
 import { Store } from "../store/index.js";
-import type { CardState, DueRow } from "../store/index.js";
-import { fold, FsrsScheduler } from "../scheduler/index.js";
+import type { CardState, DueRow, PoolEntry } from "../store/index.js";
+import { fold, FsrsScheduler, SKILL_FSRS_PARAMS } from "../scheduler/index.js";
 import type { Scheduler } from "../scheduler/index.js";
 
 export interface Config {
@@ -92,6 +93,17 @@ export interface SyncSummary {
   cardLinesUnnested: number;
   /** Where the first `UNNESTED_SHOWN` of them are, as `path:line`. */
   unnestedAt: string[];
+  /** Exercises in the notes read this run (ADR 0038). */
+  exercisesFound: number;
+  /**
+   * Notes read this run that name their skills but cannot be served: the
+   * properties do not parse, or nothing marks where the statement ends. Left
+   * out of every pool, and named so it is not lost silently.
+   */
+  exercisesUnreadable: number;
+  exercisesWithoutSolution: number;
+  /** Where the first `UNNESTED_SHOWN` of either are. */
+  exerciseProblemsAt: string[];
   elapsedMs: number;
 }
 
@@ -101,6 +113,8 @@ export interface Counts {
   dueNow: number;
   dueBeforeMidnight: number;
   newCards: number;
+  /** Skills due for a spot review, new ones included (ADR 0038). */
+  spotsDue: number;
   /**
    * True when *any* capped count stopped at `COUNT_CAP`.
    *
@@ -123,6 +137,67 @@ export interface DueCard {
   locator: string;
   /** The headings and parent bullets above the card, outermost first (ADR 0031). */
   context: ContextEntry[];
+}
+
+/**
+ * A spot review: a skill that has come due, and the exercise chosen to ask it
+ * with (ADR 0038). Shown as the exercise's title and statement and nothing
+ * else — no path line, no skills — because the skill is the answer.
+ *
+ * `id` is the session's key and never a stamp: it names the skill, so one
+ * skill is never in a sitting twice. `filePath` is the exercise's note, which
+ * is what `o` opens once the answer is showing.
+ */
+export interface SpotReview {
+  kind: "spot";
+  id: string;
+  skill: string;
+  title: string;
+  statement: string;
+  /** Every skill the exercise names. Any of them is a right answer. */
+  skills: string[];
+  filePath: string;
+  lineNo: null;
+  locator: string;
+  /** This skill has served this exercise for a spot review before: the pool has run out. */
+  repeat: boolean;
+}
+
+/** What a review session is made of: cards, and skills due for a spot review. */
+export type ReviewItem = DueCard | SpotReview;
+
+/** True for a spot review, false for a card. */
+export function isSpot(item: ReviewItem): item is SpotReview {
+  return (item as SpotReview).kind === "spot";
+}
+
+/**
+ * Which exercise in a pool to serve, by the four rules of ADR 0038:
+ *
+ * 1. not served today, for any skill (`dayStart` and on, or `chosen` already
+ *    in this sitting);
+ * 2. not yet served for this skill and kind;
+ * 3. least recently served, for any skill — never served first;
+ * 4. first by path.
+ *
+ * Pure, and exported so the rules can be tested without a database. Null for
+ * an empty pool.
+ */
+export function chooseExercise(
+  pool: readonly PoolEntry[],
+  dayStart: string,
+  chosen: ReadonlySet<string> = new Set(),
+): PoolEntry | null {
+  const today = (e: PoolEntry): number => (chosen.has(e.path) || (e.last_any !== null && e.last_any >= dayStart) ? 1 : 0);
+  const ranked = [...pool].sort(
+    (a, b) =>
+      today(a) - today(b) ||
+      a.seen - b.seen ||
+      (a.last_any === null ? 0 : 1) - (b.last_any === null ? 0 : 1) ||
+      (a.last_any ?? "").localeCompare(b.last_any ?? "") ||
+      a.path.localeCompare(b.path),
+  );
+  return ranked[0] ?? null;
 }
 
 /**
@@ -162,6 +237,23 @@ const RESET_KEY = "reset";
 /** The `meta` key naming the rules that derived `cards.context` (ADR 0032). */
 const CONTEXT_KEY = "context";
 
+/** The `meta` key naming the rules that derived `exercises` (ADR 0038). */
+const EXERCISE_KEY = "exercise";
+
+/** The `meta` key naming the scheduler that derived `skill_state` (ADR 0038). */
+const SKILL_SCHEDULER_KEY = "skill-scheduler";
+
+/**
+ * The `meta` key naming which log lines this database's ingest understands.
+ *
+ * Ingest skips a line it cannot read and moves past it, so a build that meets
+ * a new kind of line for the first time would never go back for the ones an
+ * older build skipped. When this differs, every shard is read again once
+ * (ADR 0038). `2` reads skill reviews.
+ */
+const LOG_READER_KEY = "log-reader";
+const LOG_READER_VERSION = "2";
+
 /**
  * Schedules re-derived per transaction by `adoptScheduler`, with the event
  * loop let back in between. The same shape as the rest of `core`'s long
@@ -191,6 +283,10 @@ function emptySummary(): SyncSummary {
     logLinesSkipped: 0,
     cardLinesUnnested: 0,
     unnestedAt: [],
+    exercisesFound: 0,
+    exercisesUnreadable: 0,
+    exercisesWithoutSolution: 0,
+    exerciseProblemsAt: [],
     elapsedMs: 0,
   };
 }
@@ -200,13 +296,23 @@ const DEFER_WINDOW_MS = 2000;
 
 export class Core {
   private readonly scheduler: Scheduler;
+  /** What a skill is scheduled by: the same weights, no short-term steps (ADR 0038). */
+  private readonly skillScheduler: Scheduler;
 
   constructor(
     private readonly config: Config,
     private readonly store: Store,
     scheduler?: Scheduler,
+    skillScheduler?: Scheduler,
   ) {
     this.scheduler = scheduler ?? new FsrsScheduler();
+    this.skillScheduler = skillScheduler ?? new FsrsScheduler(SKILL_FSRS_PARAMS);
+  }
+
+  /** Record which schedulers derived what a dropped database is about to hold. */
+  private markSchedulers(): void {
+    this.store.setMeta(SCHEDULER_KEY, this.scheduler.version);
+    this.store.setMeta(SKILL_SCHEDULER_KEY, this.skillScheduler.version);
   }
 
   // -- section 8 -----------------------------------------------------------
@@ -229,7 +335,7 @@ export class Core {
     const reset = await files.readReset(notesPath);
     if (!dryRun && reset !== (this.store.getMeta(RESET_KEY) ?? null)) {
       this.store.dropAll();
-      this.store.setMeta(SCHEDULER_KEY, this.scheduler.version);
+      this.markSchedulers();
       if (reset !== null) this.store.setMeta(RESET_KEY, reset);
     }
 
@@ -240,7 +346,10 @@ export class Core {
     // The same for context, which a re-read can change without changing any
     // card — so it is caught up silently, with no notice (ADR 0032).
     const contextStale = this.store.getMeta(CONTEXT_KEY) !== CONTEXT_VERSION;
-    const full = opts.full === true || syntaxStale || contextStale;
+    // And for exercises, which no stamp marks: a note that already named its
+    // skills before this build would otherwise stay unread until edited.
+    const exerciseStale = this.store.getMeta(EXERCISE_KEY) !== EXERCISE_VERSION;
+    const full = opts.full === true || syntaxStale || contextStale || exerciseStale;
 
     // `known` is taken BEFORE the walk so that files inserted during this pass
     // cannot skew step 6's comparison.
@@ -308,6 +417,7 @@ export class Core {
       for (const i of unnested) {
         if (summary.unnestedAt.length < UNNESTED_SHOWN) summary.unnestedAt.push(`${cand.relPath}:${i + 1}`);
       }
+      this.readExercise(cand.relPath, text, dryRun, summary);
 
       // Step 4: defer, mint, write.
       // "within 2 seconds of" is symmetric. A signed comparison would defer a
@@ -398,12 +508,44 @@ export class Core {
     if (!dryRun && summary.filesSkippedOnError === 0) {
       if (syntaxStale) this.store.setMeta(SYNTAX_KEY, SYNTAX_VERSION);
       if (contextStale) this.store.setMeta(CONTEXT_KEY, CONTEXT_VERSION);
+      if (exerciseStale) this.store.setMeta(EXERCISE_KEY, EXERCISE_VERSION);
     }
 
     if (!dryRun) this.store.checkpoint();
 
     summary.elapsedMs = Date.now() - started;
     return summary;
+  }
+
+  /**
+   * Read a note as an exercise, and put what it is into the database (ADR 0038).
+   *
+   * Beside step 3 rather than inside steps 4-5: nothing is stamped, so there
+   * is nothing to defer and no write guard to wait for. A note that is not an
+   * exercise this time loses any row it had, which is what removing the
+   * property or a `## Solution` heading means.
+   */
+  private readExercise(relPath: string, text: string, dryRun: boolean, summary: SyncSummary): void {
+    const ex = parseExercise(text);
+    if (ex.kind === "exercise") summary.exercisesFound++;
+    if (ex.kind === "unreadable") summary.exercisesUnreadable++;
+    if (ex.kind === "no-solution") summary.exercisesWithoutSolution++;
+    if ((ex.kind === "unreadable" || ex.kind === "no-solution") && summary.exerciseProblemsAt.length < UNNESTED_SHOWN) {
+      summary.exerciseProblemsAt.push(relPath);
+    }
+    if (dryRun) return;
+    // Almost every note is not an exercise and never was. One indexed read
+    // keeps those to no write at all, which is what a sync of a large vault
+    // is measured on (ADR 0008).
+    if (ex.kind !== "exercise" && !this.store.getExercise(relPath)) return;
+    this.store.transaction(() =>
+      this.store.putExercise(
+        relPath,
+        ex.kind === "exercise"
+          ? { title: ex.title ?? noteName(relPath), statement: ex.statement, skills: ex.skills }
+          : null,
+      ),
+    );
   }
 
   /**
@@ -605,6 +747,16 @@ export class Core {
     let reviewsIngested = 0;
     let linesSkipped = 0;
 
+    // Lines an older build skipped were skipped for good: its read position
+    // moved past them. Read every shard again, once, under rules that can
+    // read them (ADR 0038).
+    if (this.store.getMeta(LOG_READER_KEY) !== LOG_READER_VERSION) {
+      this.store.transaction(() => {
+        this.store.resetLogCursors();
+        this.store.setMeta(LOG_READER_KEY, LOG_READER_VERSION);
+      });
+    }
+
     const shards = await files.listShards(this.config.notesPath);
     // Reviews from before a fresh start are history the vault set aside. They
     // may still arrive — a shard restored by a file syncer, or written by a
@@ -613,6 +765,8 @@ export class Core {
     const reset = await files.readReset(this.config.notesPath);
     /** card id -> earliest rated_at that actually inserted this pass. */
     const inserted = new Map<string, string>();
+    /** The same for skills, keyed by `skillKey`. */
+    const insertedSkills = new Map<string, string>();
 
     for (const shard of shards) {
       const cursor = this.store.getLogCursor(shard.name);
@@ -635,20 +789,23 @@ export class Core {
       bytesRead += consumed - offset;
 
       const rows: Array<{ card: string; at: string; rating: number }> = [];
+      const skillRows: SkillLine[] = [];
       for (const line of text.split("\n")) {
         if (line.trim() === "") continue;
         try {
-          const obj = JSON.parse(line) as { card?: unknown; at?: unknown; rating?: unknown };
-          if (
-            typeof obj.card !== "string" ||
-            typeof obj.at !== "string" ||
-            typeof obj.rating !== "number"
-          ) {
+          const obj = JSON.parse(line) as Record<string, unknown>;
+          if (typeof obj.at !== "string" || typeof obj.rating !== "number") {
             linesSkipped++;
             continue;
           }
           if (reset !== null && obj.at < reset) continue;
-          rows.push({ card: obj.card, at: obj.at, rating: obj.rating });
+          if (typeof obj.card === "string") {
+            rows.push({ card: obj.card, at: obj.at, rating: obj.rating });
+            continue;
+          }
+          const skill = skillLine(obj);
+          if (skill) skillRows.push(skill);
+          else linesSkipped++;
         } catch {
           // The expected malformed line is a truncated final line from a crash
           // mid-append — the very crash the log-first ordering exists to
@@ -665,11 +822,20 @@ export class Core {
             if (prev === undefined || r.at < prev) inserted.set(r.card, r.at);
           }
         }
+        for (const r of skillRows) {
+          if (this.store.insertSkillReview(r.skill, r.kind, r.at, r.rating, r.exercise, r.repeat)) {
+            reviewsIngested++;
+            const key = skillKey(r.skill, r.kind);
+            const prev = insertedSkills.get(key);
+            if (prev === undefined || r.at < prev) insertedSkills.set(key, r.at);
+          }
+        }
         this.store.setLogCursor(shard.name, shard.size, consumed);
       });
     }
 
     if (inserted.size > 0) this.replay(inserted, now);
+    if (insertedSkills.size > 0) this.replaySkills(insertedSkills, now);
     return { shardsSkipped, bytesRead, reviewsIngested, linesSkipped };
   }
 
@@ -705,6 +871,25 @@ export class Core {
     });
   }
 
+  /**
+   * `replay`, for skills: exactly the (skill, kind) pairs whose rows inserted.
+   * No card row to check for — a skill's schedule is kept whether or not its
+   * pool holds anything today (ADR 0010).
+   */
+  private replaySkills(inserted: Map<string, string>, now: Date): void {
+    this.store.transaction(() => {
+      for (const [key, earliestInserted] of inserted) {
+        const [skill, kind] = splitSkillKey(key);
+        const existing = this.store.getSkillState(skill, kind);
+        const state =
+          existing?.last_review && earliestInserted > existing.last_review
+            ? fold(this.skillScheduler, existing, this.store.skillHistory(skill, kind, existing.last_review), now)
+            : fold(this.skillScheduler, null, this.store.skillHistory(skill, kind), now);
+        this.store.putSkillState(skill, kind, state);
+      }
+    });
+  }
+
   // -- section 9 -----------------------------------------------------------
 
   getDueCards(now: Date, limit = 50): DueCard[] {
@@ -715,6 +900,83 @@ export class Core {
       for (const row of this.store.newCards(limit - out.length)) out.push(toDueCard(row));
     }
     return out;
+  }
+
+  /**
+   * Skills due for a spot review, each with the exercise chosen to ask it
+   * (ADR 0038). `dayStart` is the start of the user's day, which `host` works
+   * out — `core` reads no timezone, as it reads no clock.
+   *
+   * An exercise chosen for one skill counts as served today for the rest, so
+   * two skills sharing an exercise never put it in one sitting twice.
+   */
+  getSpotReviews(now: Date, dayStart: Date, limit: number): SpotReview[] {
+    const start = dayStart.toISOString();
+    const chosen = new Set<string>();
+    const out: SpotReview[] = [];
+    for (const skill of this.store.dueSkills("spot", now.toISOString(), limit)) {
+      const pick = chooseExercise(this.store.poolOf(skill, "spot"), start, chosen);
+      const exercise = pick && this.store.getExercise(pick.path);
+      if (!pick || !exercise) continue;
+      chosen.add(pick.path);
+      out.push({
+        kind: "spot",
+        id: `spot:${skill}`,
+        skill,
+        title: exercise.title,
+        statement: exercise.statement,
+        skills: this.store.skillsOfExercise(pick.path),
+        filePath: pick.path,
+        lineNo: null,
+        locator: pick.path,
+        repeat: pick.seen === 1,
+      });
+    }
+    return out;
+  }
+
+  /**
+   * A sitting: cards that are due, then skills due for a spot review, then
+   * cards never reviewed — `limit` in all. Spot reviews sit between the two
+   * halves of `getDueCards` because they are due, like the first half, and
+   * an exercise is something the user opted into, unlike a backlog of new
+   * cards (ADR 0038).
+   */
+  getReviewItems(now: Date, dayStart: Date, limit = 50): ReviewItem[] {
+    const out: ReviewItem[] = this.store.dueCards(now.toISOString(), limit).map(toDueCard);
+    if (out.length < limit) out.push(...this.getSpotReviews(now, dayStart, limit - out.length));
+    if (out.length < limit) {
+      for (const row of this.store.newCards(limit - out.length)) out.push(toDueCard(row));
+    }
+    return out;
+  }
+
+  /**
+   * Record a review of a skill: the log first, then the database, as
+   * `reviewCard` does, and for the same reason. Returns the skill's new state.
+   *
+   * `took` is a solve's length in seconds, and is only written when given.
+   */
+  async reviewSkill(
+    review: { skill: string; kind: SkillKind; exercise: string; repeat: boolean },
+    rating: 1 | 2 | 3 | 4,
+    now: Date,
+    took?: number,
+  ): Promise<CardState> {
+    const { skill, kind, exercise, repeat } = review;
+    const previous = this.store.getSkillState(skill, kind) ?? null;
+    const at = files.formatAt(now);
+    const line: files.SkillLogLine = { skill, kind, exercise, at, rating };
+    if (took !== undefined) line.took = round1(took);
+    if (repeat) line.repeat = true;
+    await files.appendLog(this.config.notesPath, this.config.device, line);
+
+    const next = fold(this.skillScheduler, previous, [{ rated_at: at, rating }], now);
+    this.store.transaction(() => {
+      this.store.insertSkillReview(skill, kind, at, rating, exercise, repeat);
+      this.store.putSkillState(skill, kind, next);
+    });
+    return next;
   }
 
   /**
@@ -779,12 +1041,14 @@ export class Core {
     const dueNow = this.store.countDue(now.toISOString(), limit);
     const dueBeforeMidnight = this.store.countDueBefore(midnight.toISOString(), limit);
     const newCards = this.store.countNew(limit);
+    const spotsDue = this.store.countDueSkills("spot", now.toISOString(), limit);
     return {
       total: this.store.countCards(),
       dueNow,
       dueBeforeMidnight,
       newCards,
-      capped: dueNow >= limit || dueBeforeMidnight >= limit || newCards >= limit,
+      spotsDue,
+      capped: dueNow >= limit || dueBeforeMidnight >= limit || newCards >= limit || spotsDue >= limit,
     };
   }
 
@@ -870,8 +1134,8 @@ export class Core {
 
   async rebuild(now: Date, opts: SyncOptions = {}): Promise<SyncSummary> {
     this.store.dropAll();
-    // Everything the sync below derives, it derives with this scheduler.
-    this.store.setMeta(SCHEDULER_KEY, this.scheduler.version);
+    // Everything the sync below derives, it derives with these schedulers.
+    this.markSchedulers();
     return this.sync(now, opts);
   }
 
@@ -897,6 +1161,7 @@ export class Core {
    * Returns null when there was nothing to re-derive.
    */
   async adoptScheduler(now: Date): Promise<Rescheduled | null> {
+    this.adoptSkillScheduler(now);
     const to = this.scheduler.version;
     const from = this.store.getMeta(SCHEDULER_KEY) ?? null;
     if (from === to) return null;
@@ -919,6 +1184,65 @@ export class Core {
     }
     return ids.length === 0 ? null : { from, to, cards: ids.length };
   }
+
+  /**
+   * `adoptScheduler`, for `skill_state`. One transaction and no report: a
+   * vault holds tens of skills where it holds thousands of cards, and a skill's
+   * next due date moving is not news worth a notice.
+   */
+  private adoptSkillScheduler(now: Date): void {
+    const to = this.skillScheduler.version;
+    if (this.store.getMeta(SKILL_SCHEDULER_KEY) === to) return;
+    this.store.transaction(() => {
+      for (const { skill, kind } of this.store.scheduledSkills()) {
+        const history = this.store.skillHistory(skill, kind);
+        if (history.length === 0) this.store.deleteSkillState(skill, kind);
+        else this.store.putSkillState(skill, kind, fold(this.skillScheduler, null, history, now));
+      }
+      this.store.setMeta(SKILL_SCHEDULER_KEY, to);
+    });
+  }
+}
+
+/** A skill review as the log holds it, once checked. */
+interface SkillLine {
+  skill: string;
+  kind: SkillKind;
+  exercise: string;
+  at: string;
+  rating: number;
+  repeat: boolean;
+}
+
+/** The two kinds of review a skill has, each with its own schedule (ADR 0038). */
+export type SkillKind = "spot" | "solve";
+
+/** A log line as a skill review, or null when it is not a well-formed one. */
+function skillLine(obj: Record<string, unknown>): SkillLine | null {
+  if (typeof obj.skill !== "string" || typeof obj.exercise !== "string") return null;
+  if (obj.kind !== "spot" && obj.kind !== "solve") return null;
+  return {
+    skill: obj.skill,
+    kind: obj.kind,
+    exercise: obj.exercise,
+    at: obj.at as string,
+    rating: obj.rating as number,
+    repeat: obj.repeat === true,
+  };
+}
+
+function skillKey(skill: string, kind: SkillKind): string {
+  return `${kind}\u0000${skill}`;
+}
+
+function splitSkillKey(key: string): [string, SkillKind] {
+  const at = key.indexOf("\u0000");
+  return [key.slice(at + 1), key.slice(0, at) as SkillKind];
+}
+
+/** A note's file name without its extension, which stands in for a missing title. */
+function noteName(relPath: string): string {
+  return relPath.slice(relPath.lastIndexOf("/") + 1).replace(/\.(?:md|markdown)$/i, "");
 }
 
 function round1(n: number): number {

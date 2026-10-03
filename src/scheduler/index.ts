@@ -63,6 +63,28 @@ export const FSRS_PARAMS: FSRSParameters = generatorParameters({
 });
 
 /**
+ * Frozen, for the same reasons: the parameters a **skill** is scheduled by
+ * ([ADR 0038](../../docs/decisions/0038-exercises.md)).
+ *
+ * The weights are the cards' — nothing measured says a skill fades at another
+ * rate. The difference is the short-term steps, which are off: they exist to
+ * show a card again in one to ten minutes, and a problem re-solved a minute
+ * after it was solved tests nothing but the minute.
+ */
+export const SKILL_FSRS_PARAMS: FSRSParameters = generatorParameters({
+  w: [
+    0.212, 1.2931, 2.3065, 8.2956, 6.4133, 0.8334, 3.0194, 0.001, 1.8722, 0.1666, 0.796, 1.4835,
+    0.0614, 0.2629, 1.6483, 0.6014, 1.8729, 0.5425, 0.0912, 0.0658, 0.1542,
+  ],
+  request_retention: 0.9,
+  maximum_interval: 36500,
+  enable_fuzz: false,
+  enable_short_term: false,
+  learning_steps: [],
+  relearning_steps: [],
+});
+
+/**
  * The exact `ts-fsrs` this was measured against — the same string as the pin
  * in package.json, which `scheduler.test.ts` checks, so a bump cannot land
  * without changing it.
@@ -78,7 +100,14 @@ export const TS_FSRS_VERSION = "5.4.2";
  * them re-derives every schedule on the next launch without anyone having to
  * remember to — the failure mode of a hand-kept version number.
  */
-export const SCHEDULER_VERSION = `ts-fsrs@${TS_FSRS_VERSION} ${JSON.stringify(FSRS_PARAMS)}`;
+export const SCHEDULER_VERSION = versionOf(FSRS_PARAMS);
+
+/** Which scheduler derived `skill_state`, recorded and compared the same way. */
+export const SKILL_SCHEDULER_VERSION = versionOf(SKILL_FSRS_PARAMS);
+
+function versionOf(params: FSRSParameters): string {
+  return `ts-fsrs@${TS_FSRS_VERSION} ${JSON.stringify(params)}`;
+}
 
 // `Rating.Again` is the library's name; the app calls it *forgot* (ADR 0036).
 const RATINGS = {
@@ -127,8 +156,14 @@ function fromCardState(s: CardState): EngineCard {
 }
 
 export class FsrsScheduler implements Scheduler {
-  private readonly engine = fsrs(FSRS_PARAMS);
-  readonly version = SCHEDULER_VERSION;
+  private readonly engine: ReturnType<typeof fsrs>;
+  readonly version: string;
+
+  /** The cards' parameters unless told otherwise; `SKILL_FSRS_PARAMS` for skills. */
+  constructor(params: FSRSParameters = FSRS_PARAMS) {
+    this.engine = fsrs(params);
+    this.version = versionOf(params);
+  }
 
   initial(now: Date): CardState {
     return toCardState(createEmptyCard(now));

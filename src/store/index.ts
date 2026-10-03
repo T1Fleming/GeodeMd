@@ -56,6 +56,33 @@ export interface ReviewRow {
   rating: number;
 }
 
+/** An exercise as sync found it (ADR 0038). Derived from its note alone. */
+export interface ExerciseRow {
+  path: string;
+  title: string;
+  statement: string;
+}
+
+/** A spot or solve review of a skill, as the log holds it (ADR 0038). */
+export interface SkillReviewRow {
+  rated_at: string;
+  rating: number;
+  exercise: string;
+}
+
+/**
+ * One exercise in a skill's pool, with what serving it would need to know:
+ * when it was last served for any skill, and whether this skill has served it
+ * for this kind of review before. Ranking them is `core`'s.
+ */
+export interface PoolEntry {
+  path: string;
+  /** The latest `rated_at` of any skill review that served it; null if never served. */
+  last_any: string | null;
+  /** 1 when this skill has served it for this kind before. */
+  seen: number;
+}
+
 export interface DueRow {
   id: string;
   question: string;
@@ -115,6 +142,49 @@ CREATE TABLE IF NOT EXISTS card_state (
 );
 CREATE INDEX IF NOT EXISTS idx_state_due ON card_state(due);
 
+-- Exercises (ADR 0038): one row per note that names its skills, and one per
+-- pool it is in. Derived from the notes, and pruned with their file.
+CREATE TABLE IF NOT EXISTS exercises (
+  path       TEXT PRIMARY KEY,
+  title      TEXT NOT NULL,
+  statement  TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS exercise_skills (
+  skill  TEXT NOT NULL,
+  path   TEXT NOT NULL,
+  PRIMARY KEY (skill, path)
+) WITHOUT ROWID;
+CREATE INDEX IF NOT EXISTS idx_exercise_skills_path ON exercise_skills(path);
+
+-- A skill's schedule, one per kind of review. Replayed from skill_reviews, the
+-- way card_state is from reviews, and kept when the pool empties (ADR 0010).
+CREATE TABLE IF NOT EXISTS skill_state (
+  skill       TEXT NOT NULL,
+  kind        TEXT NOT NULL,
+  due         TEXT NOT NULL,
+  stability   REAL,
+  difficulty  REAL,
+  reps        INTEGER NOT NULL DEFAULT 0,
+  lapses      INTEGER NOT NULL DEFAULT 0,
+  state       INTEGER NOT NULL,
+  last_review TEXT,
+  learning_steps INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (skill, kind)
+);
+CREATE INDEX IF NOT EXISTS idx_skill_state_due ON skill_state(kind, due);
+
+-- No foreign key, like reviews: history outlives the pool it was served from.
+CREATE TABLE IF NOT EXISTS skill_reviews (
+  skill     TEXT NOT NULL,
+  kind      TEXT NOT NULL,
+  rated_at  TEXT NOT NULL,
+  rating    INTEGER NOT NULL,
+  exercise  TEXT NOT NULL,
+  repeat    INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (skill, kind, rated_at)
+) WITHOUT ROWID;
+CREATE INDEX IF NOT EXISTS idx_skill_reviews_exercise ON skill_reviews(exercise, rated_at);
+
 -- Facts about the cache rather than the notes: today only which scheduler
 -- derived card_state (ADR 0028). Derived from the code, the way the schema is,
 -- so a rebuild writes the current one.
@@ -124,7 +194,18 @@ CREATE TABLE IF NOT EXISTS meta (
 );
 `;
 
-const TABLES = ["cards", "files", "reviews", "log_files", "card_state", "meta"] as const;
+const TABLES = [
+  "cards",
+  "files",
+  "reviews",
+  "log_files",
+  "card_state",
+  "meta",
+  "exercises",
+  "exercise_skills",
+  "skill_state",
+  "skill_reviews",
+] as const;
 
 export class Store {
   readonly db: Db;
@@ -252,6 +333,7 @@ export class Store {
   deleteFiles(paths: string[]): void {
     for (const p of paths) {
       this.run("DELETE FROM cards WHERE file_path = ?", p);
+      this.putExercise(p, null);
       this.run("DELETE FROM files WHERE path = ?", p);
     }
   }
@@ -366,6 +448,173 @@ export class Store {
     return this.one<{ n: number }>("SELECT COUNT(*) AS n FROM reviews")!.n;
   }
 
+  // -- exercises (ADR 0038) ------------------------------------------------
+
+  /**
+   * Replace what a note holds as an exercise: its row and its pools, or
+   * nothing when `exercise` is null. Whole, every time — a note's skills are a
+   * list, and diffing it would buy nothing a re-read does not already pay for.
+   */
+  putExercise(path: string, exercise: { title: string; statement: string; skills: string[] } | null): void {
+    this.run("DELETE FROM exercise_skills WHERE path = ?", path);
+    this.run("DELETE FROM exercises WHERE path = ?", path);
+    if (!exercise) return;
+    this.run(
+      "INSERT INTO exercises (path, title, statement) VALUES (?, ?, ?)",
+      path,
+      exercise.title,
+      exercise.statement,
+    );
+    for (const skill of exercise.skills) {
+      this.run("INSERT INTO exercise_skills (skill, path) VALUES (?, ?)", skill, path);
+    }
+  }
+
+  getExercise(path: string): ExerciseRow | undefined {
+    return this.one<ExerciseRow>("SELECT path, title, statement FROM exercises WHERE path = ?", path);
+  }
+
+  /** The skills an exercise names, in name order. */
+  skillsOfExercise(path: string): string[] {
+    return this.many<{ skill: string }>(
+      "SELECT skill FROM exercise_skills WHERE path = ? ORDER BY skill",
+      path,
+    ).map((r) => r.skill);
+  }
+
+  countExercises(): number {
+    return this.one<{ n: number }>("SELECT COUNT(*) AS n FROM exercises")!.n;
+  }
+
+  /** Skills with at least one exercise in their pool. */
+  countSkills(): number {
+    return this.one<{ n: number }>("SELECT COUNT(DISTINCT skill) AS n FROM exercise_skills")!.n;
+  }
+
+  /**
+   * A skill's pool, with what the serving rule ranks it by (ADR 0038). Every
+   * input is the notes and the log, so a rebuild reproduces the choice.
+   */
+  poolOf(skill: string, kind: string): PoolEntry[] {
+    return this.many<PoolEntry>(
+      `SELECT es.path,
+              (SELECT MAX(r.rated_at) FROM skill_reviews r WHERE r.exercise = es.path) AS last_any,
+              EXISTS(SELECT 1 FROM skill_reviews r
+                      WHERE r.skill = es.skill AND r.kind = ? AND r.exercise = es.path) AS seen
+         FROM exercise_skills es
+        WHERE es.skill = ?
+        ORDER BY es.path`,
+      kind,
+      skill,
+    );
+  }
+
+  /**
+   * Skills due for one kind of review: those whose schedule has come due, then
+   * those never reviewed for it, by name — the order cards are served in.
+   * Only skills whose pool holds an exercise: one with nothing to serve is
+   * never due, though its schedule is kept (ADR 0010).
+   */
+  dueSkills(kind: string, now: string, limit: number): string[] {
+    const due = this.many<{ skill: string }>(
+      `SELECT s.skill FROM skill_state s
+        WHERE s.kind = ? AND s.due <= ?
+          AND EXISTS(SELECT 1 FROM exercise_skills es WHERE es.skill = s.skill)
+        ORDER BY s.due, s.skill
+        LIMIT ?`,
+      kind,
+      now,
+      limit,
+    ).map((r) => r.skill);
+    if (due.length >= limit) return due;
+    const fresh = this.many<{ skill: string }>(
+      `SELECT DISTINCT es.skill FROM exercise_skills es
+        WHERE NOT EXISTS(SELECT 1 FROM skill_state s WHERE s.skill = es.skill AND s.kind = ?)
+        ORDER BY es.skill
+        LIMIT ?`,
+      kind,
+      limit - due.length,
+    ).map((r) => r.skill);
+    return [...due, ...fresh];
+  }
+
+  /** How many skills `dueSkills` would return, counting no further than `limit` (ADR 0024). */
+  countDueSkills(kind: string, now: string, limit: number): number {
+    return this.dueSkills(kind, now, limit).length;
+  }
+
+  /** INSERT OR IGNORE; true when the row actually inserted. */
+  insertSkillReview(
+    skill: string,
+    kind: string,
+    ratedAt: string,
+    rating: number,
+    exercise: string,
+    repeat: boolean,
+  ): boolean {
+    return (
+      this.run(
+        `INSERT OR IGNORE INTO skill_reviews (skill, kind, rated_at, rating, exercise, repeat)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        skill,
+        kind,
+        ratedAt,
+        rating,
+        exercise,
+        repeat ? 1 : 0,
+      ).changes > 0
+    );
+  }
+
+  /** One skill's history for one kind, chronologically — a PK range scan. */
+  skillHistory(skill: string, kind: string, after: string | null = null): SkillReviewRow[] {
+    return this.many<SkillReviewRow>(
+      `SELECT rated_at, rating, exercise FROM skill_reviews
+        WHERE skill = ? AND kind = ? AND rated_at > ? ORDER BY rated_at`,
+      skill,
+      kind,
+      after ?? "",
+    );
+  }
+
+  countSkillReviews(): number {
+    return this.one<{ n: number }>("SELECT COUNT(*) AS n FROM skill_reviews")!.n;
+  }
+
+  getSkillState(skill: string, kind: string): CardState | undefined {
+    return this.one<CardState>(
+      `SELECT due, stability, difficulty, reps, lapses, state, last_review, learning_steps
+         FROM skill_state WHERE skill = ? AND kind = ?`,
+      skill,
+      kind,
+    );
+  }
+
+  putSkillState(skill: string, kind: string, s: CardState): void {
+    this.stmt(
+      `INSERT INTO skill_state
+         (skill, kind, due, stability, difficulty, reps, lapses, state, last_review, learning_steps)
+       VALUES (@skill, @kind, @due, @stability, @difficulty, @reps, @lapses, @state, @last_review,
+               @learning_steps)
+       ON CONFLICT(skill, kind) DO UPDATE SET
+         due = excluded.due, stability = excluded.stability,
+         difficulty = excluded.difficulty, reps = excluded.reps,
+         lapses = excluded.lapses, state = excluded.state,
+         last_review = excluded.last_review, learning_steps = excluded.learning_steps`,
+    ).run({ skill, kind, ...s } as never);
+  }
+
+  /** Every (skill, kind) with a schedule, including those whose pool is empty. */
+  scheduledSkills(): Array<{ skill: string; kind: string }> {
+    return this.many<{ skill: string; kind: string }>(
+      "SELECT skill, kind FROM skill_state ORDER BY skill, kind",
+    );
+  }
+
+  deleteSkillState(skill: string, kind: string): void {
+    this.run("DELETE FROM skill_state WHERE skill = ? AND kind = ?", skill, kind);
+  }
+
   // -- log cursor ----------------------------------------------------------
 
   getLogCursor(name: string): { size: number; offset: number } | undefined {
@@ -373,6 +622,15 @@ export class Store {
       "SELECT size, offset FROM log_files WHERE name = ?",
       name,
     );
+  }
+
+  /**
+   * Forget how far every shard has been read, so the next ingest reads each
+   * one again from the start. `INSERT OR IGNORE` makes that harmless; it is how
+   * lines an older build skipped get read (ADR 0038).
+   */
+  resetLogCursors(): void {
+    this.run("DELETE FROM log_files");
   }
 
   setLogCursor(name: string, size: number, offset: number): void {

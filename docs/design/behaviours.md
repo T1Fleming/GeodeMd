@@ -11,10 +11,11 @@ app do*, and *where is that proven*. What it deliberately cannot tell you is wha
 app does **untested** — an area that looks thin here is thinly covered, and that is
 worth reading as a finding rather than a gap in the document.
 
-795 behaviours in 12 areas, which follow [the guides](../guides/) rather than the source tree.
+828 behaviours in 13 areas, which follow [the guides](../guides/) rather than the source tree.
 
 - [Reviewing](#reviewing) — 213
 - [Recognising a card](#recognising-a-card) — 129
+- [Exercises](#exercises) — 33
 - [Syncing notes](#syncing-notes) — 89
 - [Recovery and the log](#recovery-and-the-log) — 54
 - [Moving between machines](#moving-between-machines) — 16
@@ -695,6 +696,80 @@ _8 · `parser/parser.test.ts`_
 - leaves an id with a character it cannot hold alone
 - leaves an id without its prefix alone
 
+## Exercises
+
+_Notes opted in by `geode-skills`: a skill scheduled in place of a card, and a different problem from its pool served each time it comes due (ADR 0038)._
+
+**33 behaviours.**
+
+### a note becomes an exercise only by naming its skills
+
+_6 · `parser/exercise.test.ts`_
+
+- reads the skills, the title, and the statement up to ## Solution
+- is an ordinary note without properties, without geode-skills, or with an empty list
+- ignores form, so a user's own form: exercise makes nothing an exercise
+- reads a block list as well as a flow list, trimmed and without repeats
+- reads only the properties block on line 1, not a geode-skills line in the body
+- keeps CRLF out of what it reads
+
+### an exercise that cannot be read is reported, not guessed at
+
+_3 · `parser/exercise.test.ts`_
+
+- is unreadable when the properties do not parse
+- is unreadable when geode-skills is not a list of non-blank strings
+- is left out of every pool without ## Solution, so a spot review cannot show the solution
+
+### where an exercise's statement ends
+
+_4 · `parser/exercise.test.ts`_
+
+- matches ## Solution in any case, with trailing spaces or closing hashes
+- does not end at a ## Solution inside a fenced block
+- starts straight after the properties when the note has no title
+- leaves ordinary cards in an exercise note to the card parser
+
+### sync reads a note's skills into pools
+
+_6 · `core/exercises.test.ts`_
+
+- puts an exercise in every pool it names, and writes nothing into the note
+- titles an exercise with no heading by its file name
+- reports an exercise it cannot serve, and leaves it out of every pool
+- takes a note out of its pools when the property or the heading goes, or the note does
+- previews without writing a row
+- re-reads every note once when the exercise rules change, so an untouched note is found
+
+### which exercise a skill is served with
+
+_3 · `core/exercises.test.ts`_
+
+- prefers one not served today, then one fresh to this skill, then the least recent, then by path
+- counts one already chosen in this sitting as served today
+- makes the worked example's nine picks, in order
+
+### a spot review is in the sitting, asked with an exercise from the pool
+
+_6 · `core/exercises.test.ts`_
+
+- serves due cards, then skills due for a spot review, then new cards
+- carries the title, the statement and every skill, and nothing that names the skill asked
+- never puts one exercise in a sitting twice for two skills that share it
+- never makes a skill with an empty pool due, and keeps its schedule for when it fills
+- brings a skill back in days, never minutes, whatever the rating
+- counts skills due for a spot review in the stats, capped like every other count
+
+### skill reviews in the log
+
+_5 · `core/exercises.test.ts`_
+
+- records a spot review in the log before the database, as a card's is
+- reads skill reviews another device wrote
+- skips a malformed skill line as it skips a malformed card line
+- reads again, once, the lines an older build skipped and moved past
+- re-derives skill schedules when the skill scheduler changes
+
 ## Syncing notes
 
 _Finding what changed, stamping it, pruning what is gone, and saying what happened._
@@ -937,7 +1012,7 @@ _4 · `files/files.test.ts`_
 
 _4 · `core/rebuild.test.ts`_
 
-- reproduces cards, files, reviews and card_state IDENTICALLY, in full
+- reproduces cards, files, reviews, card_state and every skill table IDENTICALLY, in full
 - is a differential test between fold-forward and from-scratch replay
 - catches cards.reviewed drifting out of agreement with card_state
 - a card authored while the database was gone still gets its id

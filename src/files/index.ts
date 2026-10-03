@@ -311,7 +311,22 @@ export function formatAt(d: Date): string {
  * far under PIPE_BUF are also why two concurrent processes interleave whole
  * lines and why no lock file is needed.
  */
-export async function appendLog(root: string, device: string, line: LogLine): Promise<void> {
+/**
+ * One review of a skill (ADR 0038), in the same shards as card reviews.
+ * `took` is a solve's length in seconds — `elapsed` above is FSRS days, and
+ * measures nothing about solving. `repeat` is written only when true.
+ */
+export interface SkillLogLine {
+  skill: string;
+  kind: "spot" | "solve";
+  exercise: string;
+  at: string;
+  rating: 1 | 2 | 3 | 4;
+  took?: number;
+  repeat?: true;
+}
+
+export async function appendLog(root: string, device: string, line: LogLine | SkillLogLine): Promise<void> {
   const dir = path.join(root, LOG_DIR);
   await fs.mkdir(dir, { recursive: true });
   const file = path.join(dir, shardName(device, line.at));
