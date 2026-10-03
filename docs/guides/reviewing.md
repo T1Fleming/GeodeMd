@@ -213,7 +213,8 @@ What makes it work:
 - **Tag only the skills the note genuinely uses.** Since any tag counts as right, a note with two tags tests each of them less well.
 - **A skill comes back in days, never minutes**, whatever you press. Re-asking a problem a minute later would test nothing but the minute.
 - **One problem is not asked twice in a day** for two different skills, as long as either skill has another exercise.
-- **When every exercise for a skill has been asked**, the least recent is asked again, and the reveal says `You have seen every exercise for greedy. Add one to its pool.` Add a note, and the next review asks it.
+- **A problem you have solved is used up** for every skill it is tagged with, for spotting and solving alike: you have read its solution, so it is no longer new to any of them. Spotting a problem doesn't use it up for solving, since a spot review shows no solution.
+- **When every exercise for a skill has been asked or solved**, the least recent is asked again, and the reveal says `You have seen every exercise for greedy. Add one to its pool.` Add a note, and the next review asks it.
 
 `o` opens the exercise's note once the answer is showing. `a` is not offered: annotations are for cards. Once the answer is showing, the review also lists the other exercises for the skill, and the ones that share the exercise's other skills. Seeing problems with the same structure side by side, especially ones that look nothing alike, is how you learn to recognise it.
 

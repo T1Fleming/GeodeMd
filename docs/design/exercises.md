@@ -80,7 +80,7 @@ Skill reviews go in the same shards as card reviews:
 `Core.getSpotReviews(now, dayStart, limit)` takes the skills due for a spot review: those whose schedule has come due, oldest first, then those never reviewed, by name. For each one, `chooseExercise` ranks the pool:
 
 1. **not served today**, counting any skill and either kind (`last_any >= dayStart`, or chosen earlier in this same call);
-2. **not yet served for this skill and kind** (`seen`);
+2. **still new** (`seen` is 0): not served for this skill and kind, and **not solved for any skill**. A solve shows the solution, so the problem is no longer new to any skill it is tagged with ([ADR 0039](../decisions/0039-exercises-after-first-use.md));
 3. **least recently served**, counting any skill, with never-served exercises first;
 4. **first by path**.
 
@@ -111,7 +111,7 @@ A `SpotReview` sits in the same session as a card, as `ReviewItem = DueCard | Sp
 
 ## The Practice tab
 
-`Core.getSolveReview(now, dayStart)` returns one `SolveReview`: the skill whose solve is most overdue (never-solved skills after those, by name), asked with the exercise `chooseExercise` picks for `solve`. It returns null when no skill is due for a solve. Spot and solve schedules are separate, and so are the serving rule's step 2 and the repeat flag. A spot review shows no solution, so having spotted an exercise doesn't use it up for a solve.
+`Core.getSolveReview(now, dayStart)` returns one `SolveReview`: the skill whose solve is most overdue (never-solved skills after those, by name), asked with the exercise `chooseExercise` picks for `solve`. It returns null when no skill is due for a solve. Spot and solve schedules are separate. A spot review shows no solution, so having spotted an exercise doesn't use it up for a solve; having solved it uses it up for everything.
 
 The screen's decisions are in `renderer/model/practice.ts`, a pure state machine:
 - **`solving`**: the clock runs from the offer.

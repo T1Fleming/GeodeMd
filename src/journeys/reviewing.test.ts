@@ -626,6 +626,17 @@ describe("an exercise is asked as the guide says", () => {
     expect(new Date(next.due).getTime() - T0.getTime()).toBeGreaterThanOrEqual(86_400_000);
   });
 
+  it("is right that a problem you have solved is used up for every skill it is tagged with", async () => {
+    expect(plain(await section())).toContain("A problem you have solved is used up for every skill it is tagged with");
+    open = await newCollection();
+    await open.write("a.md", (await exampleNote()).replace("[monotonic-stack]", "[monotonic-stack, two-pointers]"));
+    await open.core.sync(T0);
+    await open.core.reviewSkill({ skill: "two-pointers", kind: "solve", exercise: "a.md", repeat: false }, 3, T0, 900);
+    const later = new Date(T0.getTime() + 2 * 86_400_000);
+    const spot = open.core.getSpotReviews(later, startOfDay(later), 10).find((r) => r.skill === "monotonic-stack");
+    expect(spot!.repeat).toBe(true);
+  });
+
   it("says what it says when a skill has run out of exercises, and offers no annotation", async () => {
     expect(await section()).toContain(`\`${repeatText("greedy")}\``);
     expect(plain(await section())).toContain("a is not offered: annotations are for cards.");

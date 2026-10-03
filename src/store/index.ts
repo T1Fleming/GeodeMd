@@ -79,7 +79,11 @@ export interface PoolEntry {
   path: string;
   /** The latest `rated_at` of any skill review that served it; null if never served. */
   last_any: string | null;
-  /** 1 when this skill has served it for this kind before. */
+  /**
+   * 1 when it is no longer new here: this skill has served it for this kind
+   * before, or any skill has solved it — a solve shows the solution, which no
+   * skill can then be asked to find (ADR 0039).
+   */
   seen: number;
 }
 
@@ -509,7 +513,8 @@ export class Store {
       `SELECT es.path,
               (SELECT MAX(r.rated_at) FROM skill_reviews r WHERE r.exercise = es.path) AS last_any,
               EXISTS(SELECT 1 FROM skill_reviews r
-                      WHERE r.skill = es.skill AND r.kind = ? AND r.exercise = es.path) AS seen
+                      WHERE r.exercise = es.path
+                        AND ((r.skill = es.skill AND r.kind = ?) OR r.kind = 'solve')) AS seen
          FROM exercise_skills es
         WHERE es.skill = ?
         ORDER BY es.path`,
