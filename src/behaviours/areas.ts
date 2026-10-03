@@ -165,6 +165,7 @@ export const BY_GROUP: Readonly<Record<string, string>> = {
   "host/present.test.ts:what the app says when due dates were worked out again":
     "Recovery and the log",
   "electron/main/active.test.ts:opening a vault another scheduler scheduled": "Recovery and the log",
+  "electron/main/reads.test.ts:one exercise is not offered by both tabs in one day": "Exercises",
 
   "host/host.test.ts:keeping a list of vaults": "Keeping several vaults",
   "electron/renderer/model/setup.test.ts:adding a vault beside the open one": "Keeping several vaults",

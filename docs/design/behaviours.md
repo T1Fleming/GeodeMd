@@ -11,11 +11,11 @@ app do*, and *where is that proven*. What it deliberately cannot tell you is wha
 app does **untested** — an area that looks thin here is thinly covered, and that is
 worth reading as a finding rather than a gap in the document.
 
-900 behaviours in 13 areas, which follow [the guides](../guides/) rather than the source tree.
+903 behaviours in 13 areas, which follow [the guides](../guides/) rather than the source tree.
 
 - [Reviewing](#reviewing) — 235
 - [Recognising a card](#recognising-a-card) — 129
-- [Exercises](#exercises) — 59
+- [Exercises](#exercises) — 62
 - [Syncing notes](#syncing-notes) — 89
 - [Recovery and the log](#recovery-and-the-log) — 59
 - [Moving between machines](#moving-between-machines) — 17
@@ -747,7 +747,7 @@ _8 · `parser/parser.test.ts`_
 
 _Notes opted in by `geode-skills`: a skill scheduled in place of a card, and a different problem from its pool served each time it comes due (ADR 0038)._
 
-**59 behaviours.**
+**62 behaviours.**
 
 ### a note becomes an exercise only by naming its skills
 
@@ -862,6 +862,14 @@ _12 · `electron/renderer/model/practice.test.ts`_
 - picks a solve under way back up on return to the tab, and nothing finished
 - opens the note in an editor once the solution is showing, and not before
 - drops a note that arrives after the rating
+
+### one exercise is not offered by both tabs in one day
+
+_3 · `electron/main/reads.test.ts`_
+
+- keeps Practice off the exercise the review sitting is asking with
+- keeps the review sitting off the exercise Practice offered, and its own where it was
+- forgets what was offered when the day changes
 
 ## Syncing notes
 

@@ -88,6 +88,8 @@ Skill reviews go in the same shards as card reviews:
 
 `dayStart` is `host`'s `startOfDay(now)`, the start of the local day. `core` reads no timezone.
 
+**Rule 1 also counts what the other tab has on screen** (#81). It sees only rated reviews, and the Review and Practice tabs each choose before the other has rated anything, so in testing one exercise was spotted and then offered as a solve a minute later. `main/reads.ts` remembers, per open vault and per day, which exercises each tab was offered, and hands the *other* tab's to `core` as `avoid`. `core` treats those as served today. A tab's own earlier offers are not avoided, so a sitting drawn again after a visit to Practice keeps its exercise. This memory is never stored; like the rest of the choice, it doesn't need to be.
+
 `Core.getReviewItems` builds a sitting:
 1. due cards, with spot reviews mixed in among them;
 2. new cards.

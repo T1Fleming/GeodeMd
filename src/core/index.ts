@@ -982,8 +982,10 @@ export class Core {
    * An exercise chosen for one skill counts as served today for the rest, so
    * two skills sharing an exercise never put it in one sitting twice.
    */
-  getSpotReviews(now: Date, dayStart: Date, limit: number): SpotReview[] {
-    const chosen = new Set<string>();
+  getSpotReviews(now: Date, dayStart: Date, limit: number, avoid: ReadonlySet<string> = new Set()): SpotReview[] {
+    // Seeded with `avoid`: exercises already on screen elsewhere today, which
+    // count as served today though nothing has rated them yet (#81).
+    const chosen = new Set<string>(avoid);
     const out: SpotReview[] = [];
     for (const skill of this.store.dueSkills("spot", now.toISOString(), limit)) {
       const review = this.skillReview(skill, "spot", dayStart, chosen);
@@ -1002,9 +1004,9 @@ export class Core {
    * One, not a list: a solve takes half an hour, and a screen offering a
    * queue of them would make a sitting as unpredictable as the cards are not.
    */
-  getSolveReview(now: Date, dayStart: Date): SolveReview | null {
+  getSolveReview(now: Date, dayStart: Date, avoid: ReadonlySet<string> = new Set()): SolveReview | null {
     for (const skill of this.store.dueSkills("solve", now.toISOString(), 10)) {
-      const review = this.skillReview(skill, "solve", dayStart, new Set());
+      const review = this.skillReview(skill, "solve", dayStart, avoid);
       if (review) return review as SolveReview;
     }
     return null;
@@ -1046,9 +1048,9 @@ export class Core {
    * in, not queued after the due cards, so that neither their order nor their
    * place gives the skill away (ADR 0039).
    */
-  getReviewItems(now: Date, dayStart: Date, limit = 50): ReviewItem[] {
+  getReviewItems(now: Date, dayStart: Date, limit = 50, avoid: ReadonlySet<string> = new Set()): ReviewItem[] {
     const due = this.store.dueCards(now.toISOString(), limit).map(toDueCard);
-    const spots = due.length < limit ? this.getSpotReviews(now, dayStart, limit - due.length) : [];
+    const spots = due.length < limit ? this.getSpotReviews(now, dayStart, limit - due.length, avoid) : [];
     const out = mixIn(due, spots, dayStart);
     if (out.length < limit) {
       for (const row of this.store.newCards(limit - out.length)) out.push(toDueCard(row));
