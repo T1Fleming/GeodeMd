@@ -94,6 +94,24 @@ describe("where an exercise's statement ends", () => {
     }
   });
 
+  it("ends at a heading that gives the answer away, above ## Solution", () => {
+    // Seen in use (#81): "## Intuition" put "a fixed-size sliding window" on the question screen.
+    for (const spoiler of ["## Intuition", "## Approach", "## Hints", "## hint", "## Explanation ##"]) {
+      const note = `---\ngeode-skills: [g]\n---\n# T\nS\n${spoiler}\nthe skill, named\n## Solution\nanswer\n`;
+      expect(parseExercise(note), spoiler).toMatchObject({ kind: "exercise", title: "T", statement: "S" });
+    }
+  });
+
+  it("keeps the problem's own sections, like ## Examples, in the statement", () => {
+    const note = "---\ngeode-skills: [g]\n---\n# T\nS\n## Examples\nin -> out\n## Approach\nx\n## Solution\ny\n";
+    expect(parseExercise(note)).toMatchObject({ statement: "S\n## Examples\nin -> out" });
+  });
+
+  it("still needs ## Solution when a spoiler heading ends the statement", () => {
+    const note = "---\ngeode-skills: [g]\n---\n# T\nS\n## Approach\nx\n";
+    expect(parseExercise(note)).toEqual({ kind: "no-solution", skills: ["g"] });
+  });
+
   it("does not end at a ## Solution inside a fenced block", () => {
     const note = "---\ngeode-skills: [g]\n---\n# T\n```md\n## Solution\n```\nmore\n## Solution\nanswer\n";
     expect(parseExercise(note)).toMatchObject({ statement: "```md\n## Solution\n```\nmore" });
