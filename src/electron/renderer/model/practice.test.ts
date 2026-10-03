@@ -69,6 +69,24 @@ describe("a solve on the Practice screen", () => {
     expect(press(solving, "h", at(3))).toEqual({ next: solving, effect: { kind: "clock" } });
   });
 
+  it("rates each skill a multi-skill exercise names, then sends them together", () => {
+    // ADR 0040 (#81).
+    const many: SolveReview = { ...review, skills: ["greedy", "two-pointers", "dp"] };
+    let p: Practice = press(press(start(many), " ", T0).next, "d", at(9)).next;
+    p = press(p, "3", at(10)).next;
+    expect(p).toMatchObject({ at: "solved", given: [{ skill: "greedy", rating: 3 }] });
+    p = press(p, "2", at(10)).next;
+    const { next, effect } = press(p, "1", at(10));
+    expect(next.at).toBe("saving");
+    expect(effect).toEqual({
+      kind: "rate",
+      review: many,
+      rating: 3,
+      took: 9 * 60,
+      others: [{ skill: "two-pointers", rating: 2 }, { skill: "dp", rating: 1 }],
+    });
+  });
+
   it("records the rating with the time taken, and offers no second solve", () => {
     const solved = noteArrived(solvedAt(14), "# Jump Game\n");
     const { next, effect } = press(solved, "4", at(15));

@@ -32,6 +32,7 @@ import {
   isSpot,
   repeatText,
   SPOT_PROMPT,
+  ratingOrder,
   SPOT_RATING_KEYS,
   SOLVE_RATING_KEYS,
   practiceKeysAt,
@@ -659,6 +660,28 @@ describe("an exercise is asked as the guide says", () => {
     const later = new Date(T0.getTime() + 15 * 60_000);
     const kinds = open.core.getReviewItems(later, startOfDay(later), 10).map((i) => (isSpot(i) ? "spot" : "card"));
     expect(kinds).toEqual(["card", "spot", "card"]);
+  });
+
+  it("is right that each skill an exercise names is rated on its own", async () => {
+    const text = plain(await section());
+    expect(text).toContain("Each one is rated on its own, starting with the one that came due");
+    expect(text).toContain("A tag the problem doesn't need is a rating that means nothing.");
+    open = await newCollection();
+    await open.write("a.md", (await exampleNote()).replace("[monotonic-stack]", "[monotonic-stack, two-pointers]"));
+    await open.core.sync(T0);
+    const [spot] = open.core.getReviewItems(T0, startOfDay(T0), 10).filter(isSpot);
+    expect(ratingOrder(spot!)).toEqual([spot!.skill, ...spot!.skills.filter((s) => s !== spot!.skill)]);
+    await open.core.reviewSkill(
+      { skill: spot!.skill, kind: "spot", exercise: spot!.filePath, repeat: spot!.repeat },
+      3,
+      T0,
+      undefined,
+      ratingOrder(spot!).slice(1).map((skill) => ({ skill, rating: 1 as const })),
+    );
+    // One log line per skill, all at the same moment.
+    const dir = path.join(open.notes, ".sr", "log");
+    const lines = (await fs.readFile(path.join(dir, (await fs.readdir(dir))[0]!), "utf8")).trim().split("\n").map((l) => JSON.parse(l));
+    expect(lines.map((l) => [l.skill, l.rating])).toEqual(ratingOrder(spot!).map((skill, i) => [skill, i === 0 ? 3 : 1]));
   });
 
   it("says what it says when a skill has run out of exercises, and offers no annotation", async () => {

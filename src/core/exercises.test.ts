@@ -428,6 +428,48 @@ describe("the Practice screen offers one solve at a time", () => {
     expect(core.getSolveReview(T0, dayOf(T0.toISOString()))!.skill).toBe("zebra");
   });
 
+  it("rates every skill the exercise names, each in its own log line and schedule", async () => {
+    // ADR 0040: naming one of three skills is not the whole answer (#81).
+    await write("a.md", exercise(["load-balancer", "cache", "queue"], "Flash Sale"));
+    await write("b.md", exercise(["cache"], "Hot Catalog"));
+    await core.sync(T0);
+    // cache was solved on b.md before, so a.md is new to it; queue has never seen either.
+    await core.reviewSkill({ skill: "cache", kind: "spot", exercise: "a.md", repeat: false }, 3, new Date("2026-10-01T08:00:00.000Z"));
+    await core.reviewSkill(
+      { skill: "load-balancer", kind: "spot", exercise: "a.md", repeat: false },
+      4,
+      T0,
+      undefined,
+      [{ skill: "cache", rating: 1 }, { skill: "queue", rating: 3 }],
+    );
+    const lines = (await fs.readFile(path.join(notes, ".sr", "log", "test-2026-10.jsonl"), "utf8")).trim().split("\n").map((l) => JSON.parse(l));
+    const at = T0.toISOString();
+    expect(lines.filter((l) => l.at === at)).toEqual([
+      { skill: "load-balancer", kind: "spot", exercise: "a.md", at, rating: 4 },
+      { skill: "cache", kind: "spot", exercise: "a.md", at, rating: 1, repeat: true },
+      { skill: "queue", kind: "spot", exercise: "a.md", at, rating: 3 },
+    ]);
+    // Each skill's own schedule moved: cache's `1` brings it back soonest.
+    const due = (s: string) => new Date(store.getSkillState(s, "spot")!.due).getTime();
+    expect(due("cache")).toBeLessThan(due("queue"));
+    expect(due("queue")).toBeLessThan(due("load-balancer"));
+  });
+
+  it("rebuilds every skill's schedule exactly from a review that rated several", async () => {
+    await write("a.md", exercise(["load-balancer", "cache", "queue"], "Flash Sale"));
+    await core.sync(T0);
+    await core.reviewSkill(
+      { skill: "cache", kind: "solve", exercise: "a.md", repeat: false },
+      2,
+      T0,
+      900,
+      [{ skill: "load-balancer", rating: 4 }, { skill: "queue", rating: 1 }],
+    );
+    const before = ["cache", "load-balancer", "queue"].map((s) => store.getSkillState(s, "solve"));
+    await core.rebuild(new Date(T0.getTime() + 3_600_000));
+    expect(["cache", "load-balancer", "queue"].map((s) => store.getSkillState(s, "solve"))).toEqual(before);
+  });
+
   it("counts skills due for a solve in the stats", async () => {
     await write("a.md", exercise(["greedy", "dp"]));
     await core.sync(T0);
