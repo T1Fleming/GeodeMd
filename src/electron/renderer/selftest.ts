@@ -346,10 +346,48 @@ async function runSpotChecks(): Promise<void> {
     left.ok ? left.value.filter((i) => i.id.startsWith("spot:")).map((i) => i.id).join(", ") : left.message,
   );
 
+  await runPracticeChecks();
+
   // A new sitting, so the card checks start at `1 /` as they expect.
-  await click(".tabs .tab", "Sync");
   await click(".tabs .tab", "Review");
   await until(".question");
+}
+
+/**
+ * One solve on the Practice tab (ADR 0038): the clock runs, a stray key does
+ * not stop it, Space does, the note opens with the solve's own rating words,
+ * and a clicked rating is recorded with nothing more offered.
+ */
+async function runPracticeChecks(): Promise<void> {
+  await click(".tabs .tab", "Practice");
+  if (!(await until(".practice .clock"))) {
+    check("the Practice tab offers a solve", false, text("main"));
+    return;
+  }
+  check("the Practice tab offers a solve, with the exercise's title", text(".practice .spot-title") !== "", text(".practice .spot-title"));
+  check("and a running clock", /^\d+:\d\d$/.test(text(".practice .clock")), text(".practice .clock"));
+  const legend = all(".practice .legend .action");
+  check("offering done and leave", legend.join(" / ") === "space done — show the solution / q leave", legend.join(" / "));
+  await shot("practice-01-solving");
+
+  await key("3");
+  check("a stray key does not stop the clock", exists(".practice .spot-title") && !exists(".practice .rating"), text(".practice .legend"));
+  await key(" ");
+  await until(".practice .viewer .note");
+  check("space shows the note", exists(".practice .viewer .note"), text(".practice .viewer").slice(0, 60));
+  const ratings = all(".practice .legend .rating");
+  check(
+    "with the solve's own rating words",
+    ratings.join(" / ") === "1 couldn't solve it / 2 solved with help / 3 solved on my own / 4 solved on my own, easily",
+    ratings.join(" / "),
+  );
+  await shot("practice-02-solved");
+
+  await click(".practice .legend .rating", "3 solved on my own");
+  await until(".practice.done h2");
+  check("a clicked rating is recorded", text(".practice.done h2").includes("solved on my own"), text(".practice.done h2"));
+  check("and says when the skill comes back", text(".practice.done").includes("comes back for a solve on"), text(".practice.done"));
+  await shot("practice-03-done");
 }
 
 async function runAnnotationChecks(): Promise<void> {
@@ -488,9 +526,10 @@ async function runStatsChecks(): Promise<void> {
   check("the vault screen opens", await until(".tiles"), text(".screen h2"));
 
   const labels = all(".tile .label");
-  // A fifth, "skills to spot", only while a skill is due for a spot review;
-  // the spot checks answer every one before this runs (ADR 0038).
-  check("all four counts are shown", labels.length === 4, labels.join(" / "));
+  // "skills to spot" and "skills to solve" join them only while a skill is
+  // due for one (ADR 0038), and nothing else may.
+  const core = labels.filter((l) => l !== "skills to spot" && l !== "skills to solve");
+  check("all four counts are shown", core.length === 4, labels.join(" / "));
   // `due` is an instant, so "due today" is ambiguous — due now is the
   // actionable number and the forecast is a separate line.
   check(

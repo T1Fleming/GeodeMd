@@ -72,6 +72,7 @@ export function Stats({
         {/* Only in a vault with exercises due: everyone else would see a zero
             for a feature they never asked for (ADR 0038). */}
         {data.spotsDue > 0 && <Tile value={countText(data.spotsDue)} label="skills to spot" strong />}
+        {data.solvesDue > 0 && <Tile value={countText(data.solvesDue)} label="skills to solve" />}
       </div>
       <p className="muted lead">
         {data.dueNow + data.newCards + data.spotsDue > 0

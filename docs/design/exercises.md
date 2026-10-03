@@ -2,7 +2,9 @@
 
 An **exercise** is a note opted in by a `geode-skills` property. A **skill** is what gets a schedule. When a skill comes due, the review asks it with an exercise from its **pool** (every exercise tagged with it), and a different one each time. The decisions and the alternatives are in [ADR 0038](../decisions/0038-exercises.md); the user's side is in [the reviewing guide](../guides/reviewing.md#exercises-a-different-problem-each-time). This page covers how it works now.
 
-Built so far: **phase 1**, spot reviews (which skill does this problem call for?), served in the normal review queue. Solve reviews and the Practice screen are phase 2 (#77).
+Built so far:
+- **phase 1**: spot reviews ("which skill does this problem call for?"), served in the normal review queue;
+- **phase 2**: solve reviews, one per visit to the Practice tab, timed.
 
 ## Reading a note: `parser/exercise.ts`
 
@@ -60,7 +62,7 @@ Skill reviews go in the same shards as card reviews:
 {"skill":"greedy","kind":"spot","exercise":"leetcode/jump-game.md","at":"2026-11-02T08:09:40.551Z","rating":4,"repeat":true}
 ```
 
-- `repeat` is written only when true. `took` (seconds, solve reviews only) arrives with phase 2.
+- `repeat` is written only when true. `took` is a solve's length in seconds, and only solve reviews carry it. It is recorded for later analysis, and no rating depends on it: there is no time box.
 - Uniqueness is `(skill, kind, at)`.
 - Ingest tells the two kinds of line apart by `card` versus `skill`. A line that is neither is a skipped line, as before.
 - Replaying skills follows the same two rules as cards: which skills to replay is decided by insertion, and how to replay them is free. The difference is that no row has to exist first.
@@ -104,4 +106,23 @@ A `SpotReview` sits in the same session as a card, as `ReviewItem = DueCard | Sp
 - **Rating** goes over `skills/review`, not `cards/review`, and carries the exercise and the repeat flag. `Rated.next` is the skill's new schedule, which is never inside this sitting.
 - **A repeat** shows `repeatText(skill)` on the reveal.
 
-The self-test checks all of this whenever the folder it drives holds an exercise. Without one, the spot review checks report as skipped.
+- **After the reveal**, `relatedLines` lists the rest of the pool and, for each of the exercise's other skills, the exercises that share it. Spot reviews and solves both carry these as `related`, worked out when the review is built.
+- **The finished screen's tally** counts spot reviews apart (`spotCounts`) and names them in their own words (`sessionBreakdown`).
+
+## The Practice tab
+
+`Core.getSolveReview(now, dayStart)` returns one `SolveReview`: the skill whose solve is most overdue (never-solved skills after those, by name), asked with the exercise `chooseExercise` picks for `solve`. It returns null when no skill is due for a solve. Spot and solve schedules are separate, and so are the serving rule's step 2 and the repeat flag. A spot review shows no solution, so having spotted an exercise doesn't use it up for a solve.
+
+The screen's decisions are in `renderer/model/practice.ts`, a pure state machine:
+- **`solving`**: the clock runs from the offer.
+- **`solved`**: Space or Enter stopped the clock, and the note was read with `note/read`.
+- **`saving`**, then **`done`**: a rating was sent over `skills/review` with `kind: "solve"` and `took`. After that, nothing more is offered until the next visit.
+- **`left`**: `q` was pressed, and nothing was recorded.
+
+A failed rating goes back to `solved`, so it can be given again. The keys and their stages are `host`'s `PRACTICE_KEYS` and `interpretPracticeKey`, and the words are `SOLVE_RATING_KEYS`, `clockText` and `nextSolveText`.
+
+**The clock redraws every second**, which is the one exception to the app's no-timer habit. It is safe for the reason `IdleCheck`'s is: nothing it draws changes what is on screen, and `took` is read on the keypress, not from the drawing.
+
+Stats shows "skills to solve" beside "skills to spot" when either is non-zero. Solves are left out of the review backlog, because they are offered one at a time.
+
+The self-test checks all of this whenever the folder it drives holds an exercise. Without one, these checks report as skipped.

@@ -224,6 +224,7 @@ describe("a spot review is in the sitting, asked with an exercise from the pool"
       lineNo: null,
       locator: "monotonic-stack/ex.md",
       repeat: false,
+      related: { pool: [], others: [] },
     });
   });
 
@@ -337,5 +338,68 @@ describe("skill reviews in the log", () => {
     store.setMeta("skill-scheduler", "an older one");
     await core.adoptScheduler(T0);
     expect(store.getSkillState("greedy", "spot")).toEqual(right);
+  });
+});
+
+describe("the Practice screen offers one solve at a time", () => {
+  it("offers the skill whose solve is most overdue, with an exercise picked by the same rules", async () => {
+    await workedExample();
+    const day = dayOf(T0.toISOString());
+    // Nothing solved yet: every skill is new, and the first by name is offered.
+    const first = core.getSolveReview(T0, day)!;
+    expect([first.kind, first.id, first.skill, first.filePath]).toEqual([
+      "solve",
+      "solve:greedy",
+      "greedy",
+      "leetcode/container-with-most-water.md",
+    ]);
+    await core.reviewSkill({ skill: "greedy", kind: "solve", exercise: first.filePath, repeat: false }, 3, T0, 1500);
+    expect(core.getSolveReview(T0, day)!.skill).toBe("monotonic-stack");
+  });
+
+  it("is null when no skill is due for a solve", async () => {
+    await write("a.md", exercise(["greedy"]));
+    await core.sync(T0);
+    await core.reviewSkill({ skill: "greedy", kind: "solve", exercise: "a.md", repeat: false }, 3, T0, 1500);
+    expect(core.getSolveReview(new Date(T0.getTime() + 3_600_000), dayOf(T0.toISOString()))).toBeNull();
+  });
+
+  it("does not count a spot review against a solve: a spot shows no solution", async () => {
+    await write("a.md", exercise(["greedy"], "A"));
+    await write("b.md", exercise(["greedy"], "B"));
+    await core.sync(T0);
+    await core.reviewSkill({ skill: "greedy", kind: "spot", exercise: "a.md", repeat: false }, 3, new Date("2026-10-01T08:00:00.000Z"));
+    // b.md was never served at all, but a.md has not been served for a solve:
+    // step 2 is per kind, so step 3 (never served first) decides.
+    expect(core.getSolveReview(T0, dayOf(T0.toISOString()))!.filePath).toBe("b.md");
+    expect(core.getSolveReview(T0, dayOf(T0.toISOString()))!.repeat).toBe(false);
+  });
+
+  it("counts skills due for a solve in the stats", async () => {
+    await write("a.md", exercise(["greedy", "dp"]));
+    await core.sync(T0);
+    expect(core.stats(T0, 100).solvesDue).toBe(2);
+  });
+});
+
+describe("the exercises shown beside one once it is answered", () => {
+  it("lists the rest of the pool, and who shares each of its other skills", async () => {
+    await workedExample();
+    const solve = core.getSolveReview(T0, dayOf(T0.toISOString()))!;
+    // greedy, asked with Container — which is also tagged two-pointers.
+    expect(solve.related).toEqual({
+      pool: [{ path: "leetcode/jump-game.md", title: "Jump Game" }],
+      others: [
+        { skill: "two-pointers", exercises: [{ path: "leetcode/trapping-rain-water.md", title: "Trapping Rain Water" }] },
+      ],
+    });
+  });
+
+  it("leaves out another skill that no other exercise shares", async () => {
+    await write("a.md", exercise(["greedy", "rare"], "A"));
+    await write("b.md", exercise(["greedy"], "B"));
+    await core.sync(T0);
+    const [spot] = core.getSpotReviews(T0, dayOf(T0.toISOString()), 1);
+    expect(spot!.related).toEqual({ pool: [{ path: "b.md", title: "B" }], others: [] });
   });
 });

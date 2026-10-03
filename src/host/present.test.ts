@@ -29,6 +29,13 @@ import {
   repeatText,
   SPOT_PROMPT,
   startOfDay,
+  clockText,
+  interpretPracticeKey,
+  nextSolveText,
+  practiceKeysAt,
+  relatedLines,
+  sessionBreakdown,
+  SOLVE_RATING_KEYS,
 } from "./present.js";
 import type { SpotReview, SyncSummary } from "../core/index.js";
 
@@ -430,6 +437,7 @@ describe("how a spot review is worded and offered", () => {
     lineNo: null,
     locator: "greedy/jump-game.md",
     repeat: false,
+    related: { pool: [], others: [] },
   };
   const card = { id: "sr-000000000001", question: "Q", answer: "A", filePath: "a.md", lineNo: 1, locator: "a.md:1", context: [] };
 
@@ -504,5 +512,53 @@ describe("what a sync summary says about exercises", () => {
     expect(
       exerciseReason({ ...base, exercisesUnreadable: 12, exerciseProblemsAt: ["a.md", "b.md"] }),
     ).toContain("12 notes name their skills but are not served: a.md, b.md, and 10 more.");
+  });
+});
+
+describe("how the Practice screen is worded and keyed", () => {
+  it("names the solve ratings by what happened, with the same four keys", () => {
+    expect(SOLVE_RATING_KEYS).toEqual([
+      ["1", "couldn't solve it"],
+      ["2", "solved with help"],
+      ["3", "solved on my own"],
+      ["4", "solved on my own, easily"],
+    ]);
+  });
+
+  it("stops the clock on Space or Enter only, and offers leave at both stages", () => {
+    expect(interpretPracticeKey(" ")).toEqual({ kind: "done" });
+    expect(interpretPracticeKey("Enter")).toEqual({ kind: "done" });
+    expect(interpretPracticeKey("x")).toEqual({ kind: "ignore" });
+    expect(practiceKeysAt("solving").map((k) => k.shown)).toEqual(["space", "q"]);
+    expect(practiceKeysAt("solved").map((k) => k.shown)).toEqual(["o", "q"]);
+  });
+
+  it("shows the clock as m:ss, and h:mm:ss past the hour", () => {
+    expect(clockText(0)).toBe("0:00");
+    expect(clockText(38 * 60_000 + 4_500)).toBe("38:04");
+    expect(clockText(3_725_000)).toBe("1:02:05");
+  });
+
+  it("says when a skill comes back as a date", () => {
+    expect(nextSolveText("greedy", new Date(2026, 9, 12, 19, 54))).toMatch(/^greedy comes back for a solve on .*12/);
+  });
+
+  it("lists the rest of the pool, then who shares each other skill", () => {
+    const related = {
+      pool: [{ path: "j.md", title: "Jump Game" }],
+      others: [{ skill: "two-pointers", exercises: [{ path: "t.md", title: "Trapping Rain Water" }] }],
+    };
+    expect(relatedLines({ skill: "greedy", related })).toEqual([
+      { label: "Also in greedy", titles: ["Jump Game"] },
+      { label: "Also tagged two-pointers, with", titles: ["Trapping Rain Water"] },
+    ]);
+    expect(relatedLines({ skill: "greedy", related: { pool: [], others: [] } })).toEqual([]);
+  });
+
+  it("tallies spot reviews in their own words, after the cards", () => {
+    expect(sessionBreakdown({ 1: 0, 2: 0, 3: 2, 4: 0 }, { 1: 1, 2: 0, 3: 0, 4: 0 })).toEqual([
+      { label: "good", count: 2 },
+      { label: "wrong skill (spot)", count: 1 },
+    ]);
   });
 });

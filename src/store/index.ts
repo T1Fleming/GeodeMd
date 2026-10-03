@@ -482,6 +482,15 @@ export class Store {
     ).map((r) => r.skill);
   }
 
+  /** A skill's pool as it is shown: each exercise's path and title, by title. */
+  poolTitles(skill: string): Array<{ path: string; title: string }> {
+    return this.many<{ path: string; title: string }>(
+      `SELECT e.path, e.title FROM exercise_skills es JOIN exercises e ON e.path = es.path
+        WHERE es.skill = ? ORDER BY e.title, e.path`,
+      skill,
+    );
+  }
+
   countExercises(): number {
     return this.one<{ n: number }>("SELECT COUNT(*) AS n FROM exercises")!.n;
   }

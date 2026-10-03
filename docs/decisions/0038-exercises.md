@@ -1,6 +1,6 @@
 # 0038 — Exercises: schedule the skill, serve a different problem each time
 
-- **Status:** Accepted. Phase 1 (skills, pools, spot reviews) is built; phase 2 (solve reviews) is tracked in [#77](https://github.com/T1Fleming/GeodeMd/issues/77). How it works now is in [`design/exercises.md`](../design/exercises.md)
+- **Status:** Accepted, and built: phase 1 (skills, pools, spot reviews) and phase 2 (solve reviews on the Practice tab). Phase 3 stays open in [#77](https://github.com/T1Fleming/GeodeMd/issues/77). How it works now is in [`design/exercises.md`](../design/exercises.md)
 - **Date:** 2026-10-02
 
 ## Context
