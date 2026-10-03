@@ -23,6 +23,7 @@ import {
   interpretKey,
   interpretViewingKey,
   isSpot,
+  ratingOrder,
 } from "../../../host/present.js";
 import type { KeyAction, RatingCounts } from "../../../host/present.js";
 import * as queue from "../../../host/queue.js";
@@ -126,12 +127,25 @@ export interface Session {
   openIn: OpenIn;
   /** The card's note, when it is showing inside the app. See `Viewer`. */
   viewer: Viewer;
+  /**
+   * A spot review's ratings so far, one per skill in `ratingOrder` (ADR 0040).
+   * The keys rate the next skill in that order; the last one sends them all.
+   * Empty for a card, and for a spot review not yet rated.
+   */
+  skillRatings: ReadonlyArray<{ skill: string; rating: 1 | 2 | 3 | 4 }>;
 }
 
 /** Effects the caller performs. The session itself touches nothing. */
 export type Effect =
   /** `item` too, so a spot review is recorded as one, with its exercise (ADR 0038). */
-  | { kind: "rate"; cardId: string; rating: 1 | 2 | 3 | 4; item: ReviewItem }
+  | {
+      kind: "rate";
+      cardId: string;
+      rating: 1 | 2 | 3 | 4;
+      item: ReviewItem;
+      /** A spot review's other skills, each with its own rating (ADR 0040). */
+      others?: Array<{ skill: string; rating: 1 | 2 | 3 | 4 }>;
+    }
   | { kind: "open"; card: ReviewItem }
   /**
    * Find out whether the card just revealed has an annotation. A fetch on
@@ -166,6 +180,7 @@ export function begin(cards: readonly ReviewItem[], openIn: OpenIn = "editor"): 
     annotation: UNKNOWN,
     openIn,
     viewer: CLOSED,
+    skillRatings: [],
   };
 }
 
@@ -365,10 +380,20 @@ export function press(
   }
 
   if (action.kind === "rate") {
-    const bump = (c: RatingCounts): RatingCounts => ({ ...c, [action.rating]: c[action.rating] + 1 });
+    // A spot review rates each of its skills in turn (ADR 0040); every key but
+    // the last one only takes note, and nothing is sent until all are given.
+    const order = isSpot(card) ? ratingOrder(card) : [];
+    const given = [...s.skillRatings, { skill: order[s.skillRatings.length] ?? "", rating: action.rating }];
+    if (isSpot(card) && given.length < order.length) return { next: { ...s, skillRatings: given } };
+
+    // The tally counts the review once, by the rating of the skill that came due.
+    const first = isSpot(card) ? given[0]!.rating : action.rating;
+    const bump = (c: RatingCounts): RatingCounts => ({ ...c, [first]: c[first] + 1 });
     const counts = isSpot(card) ? s.counts : bump(s.counts);
     const spotCounts = isSpot(card) ? bump(s.spotCounts) : s.spotCounts;
-    const q = queue.rated(s.queue, card);
+    const others = given.slice(1);
+    let q = queue.rated(s.queue, card);
+    if (others.length > 0) q = queue.withoutSkills(q, others.map((o) => o.skill));
     return {
       next: {
         ...s,
@@ -378,8 +403,15 @@ export function press(
         counts,
         spotCounts,
         annotation: UNKNOWN,
+        skillRatings: [],
       },
-      effect: { kind: "rate", cardId: card.id, rating: action.rating, item: card },
+      effect: {
+        kind: "rate",
+        cardId: card.id,
+        rating: first,
+        item: card,
+        ...(others.length > 0 ? { others } : {}),
+      },
     };
   }
 

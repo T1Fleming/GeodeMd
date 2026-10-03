@@ -168,6 +168,27 @@ export function relatedLines(review: Pick<SkillReview, "skill"> & { related: Rel
 /** What a spot review asks, under the exercise's statement. */
 export const SPOT_PROMPT = "Which skill does this call for?";
 
+/** The same, for an exercise that names several skills: each is rated (ADR 0040). */
+export const SPOT_PROMPT_MANY = "Which skills does this call for?";
+
+/** The prompt for an exercise naming `skills` skills. */
+export function spotPrompt(skills: number): string {
+  return skills > 1 ? SPOT_PROMPT_MANY : SPOT_PROMPT;
+}
+
+/**
+ * The order an exercise's skills are rated in once its answer shows
+ * (ADR 0040): the one that came due first, then the rest in the note's order.
+ */
+export function ratingOrder(review: { skill: string; skills: readonly string[] }): string[] {
+  return [review.skill, ...review.skills.filter((s) => s !== review.skill)];
+}
+
+/** What the reveal says above the rating keys: which skill the next key rates, and of how many. Null for one. */
+export function rateSkillText(skill: string, index: number, total: number): string | null {
+  return total > 1 ? `Rate ${skill} (${index + 1} of ${total})` : null;
+}
+
 /**
  * What a spot review says when its skill had nothing fresh to serve: every
  * exercise in the pool has been asked for this skill, so this one is a repeat

@@ -17,6 +17,8 @@ import {
   interpretPracticeKey,
   nextSolveText,
   practiceKeysAt,
+  rateSkillText,
+  ratingOrder,
   relatedLines,
   repeatText,
   startPauseLabel,
@@ -115,7 +117,7 @@ export function Practice({
         });
         return;
       }
-      const request = { skill: review.skill, kind: "solve" as const, exercise: review.filePath, repeat: review.repeat, ...(effect.took === null ? {} : { took: effect.took }) };
+      const request = { skill: review.skill, kind: "solve" as const, exercise: review.filePath, repeat: review.repeat, ...(effect.took === null ? {} : { took: effect.took }), ...(effect.others ? { others: effect.others } : {}) };
       void window.geode.skillsReview(request, effect.rating).then((r) => {
         if (!r.ok) {
           onNote(r.message);
@@ -195,6 +197,7 @@ export function Practice({
       took={model.took}
       note={model.note}
       saving={model.at === "saving"}
+      given={model.at === "solved" ? (model.given ?? []) : []}
       clockHidden={clockHidden}
       onKey={handle}
     />
@@ -252,6 +255,7 @@ function Solved({
   took,
   note,
   saving,
+  given,
   clockHidden,
   onKey,
 }: {
@@ -259,6 +263,7 @@ function Solved({
   took: number | null;
   note: string | null;
   saving: boolean;
+  given: ReadonlyArray<{ skill: string; rating: 1 | 2 | 3 | 4 }>;
   clockHidden: boolean;
   onKey: (k: string) => void;
 }): React.JSX.Element {
@@ -292,6 +297,13 @@ function Solved({
           </ul>
         )}
       </section>
+      {/* Each skill rated in turn (ADR 0040): which one the keys rate next, and how the rest went. */}
+      {rateSkillText(ratingOrder(review)[given.length] ?? "", given.length, ratingOrder(review).length) && (
+        <p className="rate-which">
+          {given.map((g) => `${g.skill}: ${SOLVE_RATING_KEYS[g.rating - 1]![1]} · `).join("")}
+          {rateSkillText(ratingOrder(review)[given.length] ?? "", given.length, ratingOrder(review).length)}
+        </p>
+      )}
       <footer className="legend">
         <div className="ratings">
           {SOLVE_RATING_KEYS.map(([key, label]) => (

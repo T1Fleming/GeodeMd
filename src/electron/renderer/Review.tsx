@@ -19,7 +19,10 @@ import {
   sessionBreakdown,
   repeatText,
   restingText,
-  SPOT_PROMPT,
+  rateSkillText,
+  ratingOrder,
+  SPOT_RATING_KEYS,
+  spotPrompt,
 } from "../../host/present.js";
 import { IdleCheck } from "./IdleCheck.js";
 import { cardLineNote } from "../../host/note.js";
@@ -66,7 +69,11 @@ interface Props {
    * null if that could not be learned. The session needs it to know whether
    * FSRS wants the card again in the same sitting (ADR 0023).
    */
-  onRate: (item: ReviewItem, rating: 1 | 2 | 3 | 4) => Promise<Scheduled | null>;
+  onRate: (
+    item: ReviewItem,
+    rating: 1 | 2 | 3 | 4,
+    others?: Array<{ skill: string; rating: 1 | 2 | 3 | 4 }>,
+  ) => Promise<Scheduled | null>;
   onOpen: (card: ReviewItem) => void;
   /** What `o` does this sitting: an editor, or the viewer here (#51). */
   openIn: OpenIn;
@@ -186,7 +193,7 @@ export function Review({
       // flight until this resolves, and what comes back decides whether it
       // returns in ten minutes or not at all. Rating the *last* card is why
       // the session cannot simply end here.
-      void onRate(effect.item, effect.rating).then((next) => {
+      void onRate(effect.item, effect.rating, effect.others).then((next) => {
         commit(scheduled(live.current, effect.cardId, next, new Date()));
       });
     },
@@ -323,7 +330,7 @@ export function Review({
             {/* Keyed by card, so what was expanded for one card is not
                 expanded for the next. */}
             {isSpot(card) ? (
-              <SpotFront key={card.id} spot={card} revealed={session.revealed} />
+              <SpotFront key={card.id} spot={card} revealed={session.revealed} given={session.skillRatings} />
             ) : (
               <Front key={card.id} card={card} revealed={session.revealed} />
             )}
@@ -638,11 +645,23 @@ function Front({ card, revealed }: { card: DueCard; revealed: boolean }): React.
 /**
  * A spot review: the exercise's title and statement, and the question, with
  * nothing above them — no path, no skills — because the skill is the answer
- * (ADR 0038). The reveal names every skill the exercise has; any of them is
- * right. The statement is a note's Markdown, rendered and sanitised as the
- * viewer renders a note.
+ * (ADR 0038). The reveal names every skill the exercise has, in the order
+ * they are rated, and each is rated on its own (ADR 0040): the one the keys
+ * rate next is marked, and those already rated show their rating. The
+ * statement is a note's Markdown, rendered and sanitised as the viewer renders
+ * a note.
  */
-function SpotFront({ spot, revealed }: { spot: SpotReview; revealed: boolean }): React.JSX.Element {
+function SpotFront({
+  spot,
+  revealed,
+  given,
+}: {
+  spot: SpotReview;
+  revealed: boolean;
+  given: ReadonlyArray<{ skill: string; rating: 1 | 2 | 3 | 4 }>;
+}): React.JSX.Element {
+  const order = ratingOrder(spot);
+  const which = rateSkillText(order[given.length] ?? "", given.length, order.length);
   const statement = useMemo(() => renderNote(spot.statement, null).html, [spot.statement]);
   return (
     <div className="front spot">
@@ -653,11 +672,19 @@ function SpotFront({ spot, revealed }: { spot: SpotReview; revealed: boolean }):
         dangerouslySetInnerHTML={{ __html: statement }}
       />
       <p className="card-line">
-        <span className="question">{SPOT_PROMPT}</span>
+        <span className="question">{spotPrompt(spot.skills.length)}</span>
         {revealed ? (
           <>
             <span className="arrow">{ANSWER_ARROW}</span>
-            <span className="answer">{spot.skills.join(" · ")}</span>
+            <span className="answer">
+              {order.map((skill, i) => (
+                <span key={skill} className={order.length > 1 && i === given.length ? "skill current" : "skill"}>
+                  {i > 0 && " · "}
+                  {skill}
+                  {given[i] && <span className="muted"> ({SPOT_RATING_KEYS[given[i]!.rating - 1]![1]})</span>}
+                </span>
+              ))}
+            </span>
           </>
         ) : (
           <span className="tail">
@@ -668,6 +695,7 @@ function SpotFront({ spot, revealed }: { spot: SpotReview; revealed: boolean }):
           </span>
         )}
       </p>
+      {revealed && which && <p className="rate-which">{which}</p>}
       {revealed && spot.repeat && (
         <p className="spot-repeat">{repeatText(spot.skill)}</p>
       )}

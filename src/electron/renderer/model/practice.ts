@@ -9,7 +9,7 @@
  */
 
 import type { SolveReview } from "../../../core/index.js";
-import { interpretPracticeKey } from "../../../host/present.js";
+import { interpretPracticeKey, ratingOrder } from "../../../host/present.js";
 
 /**
  * - `solving` — the problem is showing. The clock counts only while it runs:
@@ -29,7 +29,14 @@ import { interpretPracticeKey } from "../../../host/present.js";
  */
 export type Practice =
   | { at: "solving"; review: SolveReview; ranMs: number; since: number | null }
-  | { at: "solved"; review: SolveReview; took: number | null; note: string | null }
+  | {
+      at: "solved";
+      review: SolveReview;
+      took: number | null;
+      note: string | null;
+      /** Ratings so far, one per skill in `ratingOrder` (ADR 0040). Absent before the first. */
+      given?: ReadonlyArray<{ skill: string; rating: 1 | 2 | 3 | 4 }>;
+    }
   | { at: "saving"; review: SolveReview; took: number | null; note: string | null; rating: 1 | 2 | 3 | 4 }
   | { at: "done"; review: SolveReview; rating: 1 | 2 | 3 | 4; next: string | null }
   | { at: "left" };
@@ -38,7 +45,14 @@ export type PracticeEffect =
   /** Read the exercise's note, to show once the clock stops; report through `noteArrived`. */
   | { kind: "read-note"; review: SolveReview }
   /** Record the solve; report through `recorded`. */
-  | { kind: "rate"; review: SolveReview; rating: 1 | 2 | 3 | 4; took: number | null }
+  | {
+      kind: "rate";
+      review: SolveReview;
+      rating: 1 | 2 | 3 | 4;
+      took: number | null;
+      /** The exercise's other skills, each with its own rating (ADR 0040). */
+      others?: Array<{ skill: string; rating: 1 | 2 | 3 | 4 }>;
+    }
   | { kind: "open"; review: SolveReview }
   /** Hide or show the clock: a view setting, kept by the screen. */
   | { kind: "clock" };
@@ -100,9 +114,22 @@ export function press(p: Practice, key: string, now: Date): { next: Practice; ef
     if (action.kind === "leave") return { next: { at: "left" } };
     if (action.kind === "open") return { next: p, effect: { kind: "open", review: p.review } };
     if (action.kind !== "rate") return { next: p };
+    // Each skill the exercise names is rated in turn (ADR 0040); every key but
+    // the last only takes note, and nothing is sent until all are given.
+    const order = ratingOrder(p.review);
+    const given = [...(p.given ?? []), { skill: order[(p.given ?? []).length]!, rating: action.rating }];
+    if (given.length < order.length) return { next: { ...p, given } };
+    const others = given.slice(1);
+    const { given: _done, ...solved } = p;
     return {
-      next: { ...p, at: "saving", rating: action.rating },
-      effect: { kind: "rate", review: p.review, rating: action.rating, took: p.took },
+      next: { ...solved, at: "saving", rating: given[0]!.rating },
+      effect: {
+        kind: "rate",
+        review: p.review,
+        rating: given[0]!.rating,
+        took: p.took,
+        ...(others.length > 0 ? { others } : {}),
+      },
     };
   }
 

@@ -664,3 +664,8 @@ button.primary.danger { border-color: #d0605e; color: #e07a78; }
 .practice.done { display: block; text-align: center; padding-top: 4rem; }
 .related { margin: 1rem 0 0; padding: 0.75rem 0 0; border-top: 1px dashed var(--line); list-style: none; font-size: 0.875rem; }
 .related li + li { margin-top: 0.25rem; }
+
+/* The skill the rating keys rate next, when an exercise names several (ADR 0040). */
+.spot .answer .skill.current { text-decoration: underline; text-underline-offset: 0.2em; }
+.spot .rate-which { color: var(--muted); margin-top: 0.5rem; }
+.practice .rate-which { color: var(--muted); margin: 0.5rem 0; }

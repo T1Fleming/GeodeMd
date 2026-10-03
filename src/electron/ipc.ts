@@ -133,6 +133,8 @@ export interface SkillReviewRequest {
   repeat: boolean;
   /** A solve's length in seconds, from the Practice screen's clock. Absent for a spot review. */
   took?: number;
+  /** The exercise's other skills, each rated on its own (ADR 0040). */
+  others?: Array<{ skill: string; rating: 1 | 2 | 3 | 4 }>;
 }
 
 /**

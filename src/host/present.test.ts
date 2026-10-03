@@ -28,6 +28,9 @@ import {
   ratingKeysFor,
   repeatText,
   SPOT_PROMPT,
+  spotPrompt,
+  ratingOrder,
+  rateSkillText,
   startOfDay,
   clockStateText,
   startPauseLabel,
@@ -453,6 +456,12 @@ describe("how a spot review is worded and offered", () => {
     expect(ratingKeysFor(spot).map(([k]) => k)).toEqual(RATING_KEYS.map(([k]) => k));
     expect(ratingKeysFor(card)).toBe(RATING_KEYS);
     expect(SPOT_PROMPT).toBe("Which skill does this call for?");
+    expect(spotPrompt(1)).toBe(SPOT_PROMPT);
+    expect(spotPrompt(3)).toBe("Which skills does this call for?");
+    // ADR 0040: the skill that came due is rated first, then the note's order.
+    expect(ratingOrder({ skill: "cache", skills: ["queue", "cache", "lb"] })).toEqual(["cache", "queue", "lb"]);
+    expect(rateSkillText("queue", 1, 3)).toBe("Rate queue (2 of 3)");
+    expect(rateSkillText("cache", 0, 1)).toBeNull();
   });
 
   it("offers no annotation, having no stamp to name one by", () => {

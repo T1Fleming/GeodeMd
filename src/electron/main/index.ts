@@ -201,7 +201,7 @@ function register(): void {
     guard<Rated>(async () => {
       const { core } = await active.ensure();
       try {
-        const next = await core.reviewSkill(review, rating, new Date(), review.took);
+        const next = await core.reviewSkill(review, rating, new Date(), review.took, review.others ?? []);
         return { applied: "db", next: { due: next.due, state: next.state } };
       } catch (err) {
         // As for a card: the review is in the log, and the next ingest catches up.

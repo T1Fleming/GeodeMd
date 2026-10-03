@@ -62,6 +62,7 @@ Skill reviews go in the same shards as card reviews:
 {"skill":"greedy","kind":"spot","exercise":"leetcode/jump-game.md","at":"2026-11-02T08:09:40.551Z","rating":4,"repeat":true}
 ```
 
+- **One line per skill rated** (ADR 0040). A multi-skill review writes a line for each skill, all sharing the review's `at`, `exercise` and `took`. Each line's `repeat` is worked out for its own skill. Uniqueness is `(skill, kind, at)`, so the lines are distinct, and replay puts each into its own skill's schedule.
 - `repeat` is written only when true. `took` is a solve's length in seconds, and only solve reviews carry it. It is recorded for later analysis, and no rating depends on it: there is no time box.
 - Uniqueness is `(skill, kind, at)`.
 - Ingest tells the two kinds of line apart by `card` versus `skill`. A line that is neither is a skipped line, as before.
@@ -103,10 +104,11 @@ Skill reviews go in the same shards as card reviews:
 A `SpotReview` sits in the same session as a card, as `ReviewItem = DueCard | SpotReview`, keyed `spot:<skill>`. What differs:
 
 - **What is shown:** the title, the statement rendered as Markdown (sanitised like the note viewer), and `SPOT_PROMPT`. There is no path line, and `locatorFor` hides the note's path until the reveal, because a folder can name the skill.
-- **The reveal** puts every skill the exercise names where the `?` was. The rating words are `SPOT_RATING_KEYS`.
+- **The reveal** puts every skill the exercise names where the `?` was, in `host`'s `ratingOrder`: the skill that came due first, then the note's order. The rating words are `SPOT_RATING_KEYS`.
+- **Each skill is rated on its own** ([ADR 0040](../decisions/0040-rate-every-skill-and-let-new-skills-wait-in-line.md)). The session keeps the ratings given so far in `skillRatings`, and the reveal marks the skill the next key rates (`rateSkillText`) and shows the rest's rating words. Nothing is sent until the last skill is rated, so leaving partway records nothing. The prompt is plural for a multi-skill exercise (`spotPrompt`).
 - **No annotation:** an annotation is a file named by a card's stamp. `actionsAt(stage, spot)` drops `a`, the session ignores it, and the reveal fetches nothing.
 - **`o`** opens the exercise's note. The viewer shows it whole, with no line to find (`Viewer.whole`).
-- **Rating** goes over `skills/review`, not `cards/review`, and carries the exercise and the repeat flag. `Rated.next` is the skill's new schedule, which is never inside this sitting.
+- **Rating** goes over `skills/review`, not `cards/review`, and carries the exercise, the repeat flag, and `others`: the other skills' ratings. `Rated.next` is the due skill's new schedule, which is never inside this sitting. `host/queue.ts`'s `withoutSkills` then drops any spot review still to come in the sitting for a skill just rated, since its schedule has moved.
 - **A repeat** shows `repeatText(skill)` on the reveal.
 
 - **After the reveal**, `relatedLines` lists the rest of the pool and, for each of the exercise's other skills, the exercises that share it. Spot reviews and solves both carry these as `related`, worked out when the review is built.

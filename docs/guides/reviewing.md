@@ -195,11 +195,11 @@ Given daily temperatures, return for each day how many days until a warmer one.
 Which skill does this call for? → ?
 ```
 
-**Each time the skill comes due, it is asked with a different exercise**, the one it was asked with least recently. Remembering that *this* problem used a stack doesn't get you through the next review, because the next review is a different problem. Reveal, and every skill the exercise is tagged with replaces the `?`. **Naming any of them counts as right.** Then:
+**Each time the skill comes due, it is asked with a different exercise**, the one it was asked with least recently. Remembering that *this* problem used a stack doesn't get you through the next review, because the next review is a different problem. Reveal, and every skill the exercise is tagged with replaces the `?`. **Each one is rated on its own**, starting with the one that came due: did you name *this* skill? An exercise with three skills takes three keypresses, and the screen says which skill the next key rates. Then, for each:
 
 | | | |
 |---|---|---|
-| `1` | **wrong skill** | You named a skill it isn't tagged with, or none |
+| `1` | **wrong skill** | You didn't name this one |
 | `2` | **right, after hesitating** | You got there, but not straight away |
 | `3` | **right** | You named it |
 | `4` | **right, at once** | You knew before you finished reading |
@@ -210,7 +210,7 @@ What makes it work:
 - **The statement ends at `## Solution`, or sooner at a heading that would give the answer away:** `## Intuition`, `## Approach`, `## Hint` or `## Hints`, and `## Explanation`. A review shows the title and everything after it up to that heading, and nothing else: no path line, no tags. Sections that belong to the problem, like `## Examples`, stay in. A note with `geode-skills` but no `## Solution` heading is left out, and the sync summary names it. Otherwise a review would show your solution.
 - **Nothing is written into the note.** An exercise gets no id comment.
 - **Don't put the skill in the title.** "Daily Temperatures (monotonic stack)" answers the question before it is asked. The note's path is fine: it stays hidden until you reveal.
-- **Tag only the skills the note genuinely uses.** Since any tag counts as right, a note with two tags tests each of them less well.
+- **Tag every skill the problem genuinely needs, and no others.** Each tag is rated, so a skill you missed shows up in its own schedule. A tag the problem doesn't need is a rating that means nothing.
 - **A skill comes back in days, never minutes**, whatever you press. Re-asking a problem a minute later would test nothing but the minute.
 - **Spot reviews are mixed in among your due cards**, in an order that changes each day, so neither where one comes nor which comes first tells you the skill.
 - **One problem is not asked twice in a day** for two different skills, as long as either skill has another exercise.
@@ -232,7 +232,7 @@ Read the problem, then **press Space to start the clock** when you start solving
 | `3` | **solved on my own** | No help |
 | `4` | **solved on my own, easily** | No help, and it came without a struggle |
 
-`1` and `2` are facts: you finished or you didn't, and you peeked or you didn't. The difference between `3` and `4` is your judgement. There is no time limit deciding it, but the time each solve took is recorded beside its rating.
+When the exercise names several skills, rate each in turn, for how that part of your solution went. `1` and `2` are facts: you finished or you didn't, and you peeked or you didn't. The difference between `3` and `4` is your judgement. There is no time limit deciding it, but the time each solve took is recorded beside its rating.
 
 `q` leaves without rating, before or after the solution is showing, and records nothing: the solve is still due next time. A solve survives a visit to another tab: come back and it is where you left it, with the clock as you left it, running or paused. `h` hides the clock if watching it tick is a distraction. It still counts, the screen still says whether it is running, and the setting is remembered. Only `q` leaves; Escape does nothing here, so a reflex can't throw half an hour away. `o` opens the note in your editor once the solution is showing. After a rating, the tab says when the skill comes back and offers nothing more until your next visit. A solve takes half an hour, and a queue of them would make a sitting impossible to plan.
 

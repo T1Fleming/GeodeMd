@@ -409,6 +409,11 @@ async function runPracticeChecks(): Promise<void> {
   await shot("practice-02-solved");
 
   await click(".practice .legend .rating", "3 solved on my own");
+  // An exercise naming several skills asks for each in turn (ADR 0040).
+  for (let i = 0; i < 5 && exists(".practice .rate-which"); i++) {
+    check(`it asks for the next skill's rating — ${i + 2}`, /^.*Rate \S+ \(\d+ of \d+\)$/.test(text(".practice .rate-which")), text(".practice .rate-which"));
+    await click(".practice .legend .rating", "3 solved on my own");
+  }
   await until(".practice.done h2");
   check("a clicked rating is recorded", text(".practice.done h2").includes("solved on my own"), text(".practice.done h2"));
   check("and says when the skill comes back", text(".practice.done").includes("comes back for a solve on"), text(".practice.done"));

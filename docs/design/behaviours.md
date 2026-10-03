@@ -11,11 +11,11 @@ app do*, and *where is that proven*. What it deliberately cannot tell you is wha
 app does **untested** — an area that looks thin here is thinly covered, and that is
 worth reading as a finding rather than a gap in the document.
 
-906 behaviours in 13 areas, which follow [the guides](../guides/) rather than the source tree.
+912 behaviours in 13 areas, which follow [the guides](../guides/) rather than the source tree.
 
-- [Reviewing](#reviewing) — 235
+- [Reviewing](#reviewing) — 237
 - [Recognising a card](#recognising-a-card) — 129
-- [Exercises](#exercises) — 64
+- [Exercises](#exercises) — 67
 - [Syncing notes](#syncing-notes) — 89
 - [Recovery and the log](#recovery-and-the-log) — 59
 - [Moving between machines](#moving-between-machines) — 17
@@ -25,13 +25,13 @@ worth reading as a finding rather than a gap in the document.
 - [The database as a cache](#the-database-as-a-cache) — 7
 - [At scale](#at-scale) — 9
 - [Rules the project enforces on itself](#rules-the-project-enforces-on-itself) — 36
-- [The documentation tells the truth](#the-documentation-tells-the-truth) — 84
+- [The documentation tells the truth](#the-documentation-tells-the-truth) — 85
 
 ## Reviewing
 
 _A session: which card is next, what the keys mean, what a rating records, and what comes back before the sitting ends._
 
-**235 behaviours.**
+**237 behaviours.**
 
 ### the order cards are served in
 
@@ -407,9 +407,11 @@ _11 · `electron/renderer/model/session.test.ts`_
 
 ### a spot review in the session
 
-_5 · `electron/renderer/model/session.test.ts`_
+_7 · `electron/renderer/model/session.test.ts`_
 
 - is revealed and rated like a card, and the rating carries the spot review
+- rates each skill an exercise names, the one that came due first, and sends them together
+- drops a skill's spot review still to come once another exercise has rated it
 - asks for no annotation on the reveal, having no stamp to name one by
 - ignores `a`, because a spot review has no annotation
 - does not come back in the sitting: a skill has no short-term steps
@@ -747,7 +749,7 @@ _8 · `parser/parser.test.ts`_
 
 _Notes opted in by `geode-skills`: a skill scheduled in place of a card, and a different problem from its pool served each time it comes due (ADR 0038)._
 
-**64 behaviours.**
+**67 behaviours.**
 
 ### a note becomes an exercise only by naming its skills
 
@@ -822,7 +824,7 @@ _5 · `core/exercises.test.ts`_
 
 ### the Practice screen offers one solve at a time
 
-_8 · `core/exercises.test.ts`_
+_10 · `core/exercises.test.ts`_
 
 - offers the skill whose solve is most overdue, with an exercise picked by the same rules
 - is null when no skill is due for a solve
@@ -831,6 +833,8 @@ _8 · `core/exercises.test.ts`_
 - calls a solved problem a repeat when it is all a pool has left
 - lets a skill never solved wait in line from its first spot review, not behind every due one
 - puts a skill never spotted nor solved last, by name
+- rates every skill the exercise names, each in its own log line and schedule
+- rebuilds every skill's schedule exactly from a review that rated several
 - counts skills due for a solve in the stats
 
 ### spot reviews are mixed in, in an order that gives nothing away
@@ -850,13 +854,14 @@ _2 · `core/exercises.test.ts`_
 
 ### a solve on the Practice screen
 
-_12 · `electron/renderer/model/practice.test.ts`_
+_13 · `electron/renderer/model/practice.test.ts`_
 
 - waits for Space to start the clock, so reading the problem is not solving it
 - pauses and resumes on Space, counting only the time it ran
 - shows the solution only on d, never on Space, so the reflexive key cannot give it away
 - finishes from a clock that never started, and records no time rather than none spent
 - hides and shows the clock on h, which changes nothing about the solve
+- rates each skill a multi-skill exercise names, then sends them together
 - records the rating with the time taken, and offers no second solve
 - keeps the solve when a rating fails, so it can be given again
 - records nothing when you leave, before or after the reveal
@@ -1835,7 +1840,7 @@ _5 · `behaviours/areas.test.ts`_
 
 _Documents that make checkable claims, checked._
 
-**84 behaviours.**
+**85 behaviours.**
 
 ### the demo collection
 
@@ -1957,7 +1962,7 @@ _4 · `journeys/reviewing.test.ts`_
 
 ### an exercise is asked as the guide says
 
-_10 · `journeys/reviewing.test.ts`_
+_11 · `journeys/reviewing.test.ts`_
 
 - asks the guide's example as the guide draws it, and writes nothing into the note
 - names the same four ratings, in the same order, with the same words
@@ -1968,6 +1973,7 @@ _10 · `journeys/reviewing.test.ts`_
 - is right that a skill comes back in days, never minutes, whatever you press
 - is right that a problem you have solved is used up for every skill it is tagged with
 - is right that spot reviews are mixed in among the due cards
+- is right that each skill an exercise names is rated on its own
 - says what it says when a skill has run out of exercises, and offers no annotation
 
 ### a solve on the Practice tab goes as the guide says
