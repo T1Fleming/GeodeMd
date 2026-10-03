@@ -83,6 +83,12 @@ export async function runSelfTest(): Promise<void> {
 
     for (let i = 0; i < 100 && !exists(".question") && !exists(".done"); i++) await settle(50);
 
+    // Spot reviews come before new cards (ADR 0038), so a notes folder with an
+    // exercise in it opens on one. Checked and answered here, then the card
+    // checks below start from a fresh sitting that holds none.
+    if (exists(".spot")) await runSpotChecks();
+    else check("(no exercise in this folder — the spot review checks are skipped)", true);
+
     check("the review screen renders a card", exists(".question"), text(".question"));
     check("the answer starts hidden", !exists(".answer") && exists(".prompt"));
     // ADR 0037: the line being asked is marked, and the mark is on that line.
@@ -295,10 +301,61 @@ export async function runSelfTest(): Promise<void> {
  * as it was afterwards. A first-run harness's folder is a copy, and the
  * annotation is left there to be looked at.
  */
+/**
+ * A spot review, driven by real keys and a real click (ADR 0038): the
+ * exercise with nothing above it that could name the skill, the skills on the
+ * reveal, its own rating words, no annotation, and the skill gone from the
+ * queue once a rating button is clicked.
+ */
+async function runSpotChecks(): Promise<void> {
+  check("a spot review shows the exercise's title", text(".spot-title") !== "", text(".spot-title"));
+  check("and its statement", text(".spot-statement") !== "", text(".spot-statement").slice(0, 60));
+  check("and asks which skill it calls for", text(".spot .question") === "Which skill does this call for?", text(".spot .question"));
+  check("with no path line and no locator to give the skill away", !exists(".crumbs") && text(".meta .locator") === "", text(".meta .locator"));
+  const atQuestion = all(".legend .action");
+  check("the question offers later and quit", atQuestion.length === 2, atQuestion.join(" / "));
+  await shot("review-spot-01-question");
+
+  let rated = 0;
+  while (exists(".spot") && rated < 20) {
+    await key(" ");
+    const answer = text(".spot .answer");
+    const ratings = all(".legend .rating");
+    const actions = all(".legend .action");
+    if (rated === 0) {
+      check("the reveal names the exercise's skills", answer !== "", answer);
+      check(
+        "with a spot review's own rating words",
+        ratings.join(" / ") === "1 wrong skill / 2 right, after hesitating / 3 right / 4 right, at once",
+        ratings.join(" / "),
+      );
+      check("and no annotate, with open and quit", actions.join(" / ") === "o open / q quit", actions.join(" / "));
+      check("and nothing went wrong asking for an annotation", !exists(".toast"), text(".toast"));
+      check("and the path appears once the answer has", text(".meta .locator").includes(".md"), text(".meta .locator"));
+      await shot("review-spot-02-revealed");
+    }
+    await click(".legend .rating", "3 right");
+    rated++;
+  }
+  check("rating every spot review leaves the sitting on a card", exists(".question") && !exists(".spot"), text(".question"));
+
+  const left = await window.geode.cardsDue(200);
+  check(
+    "and a rated skill is not due again today",
+    left.ok && !left.value.some((i) => i.id.startsWith("spot:")),
+    left.ok ? left.value.filter((i) => i.id.startsWith("spot:")).map((i) => i.id).join(", ") : left.message,
+  );
+
+  // A new sitting, so the card checks start at `1 /` as they expect.
+  await click(".tabs .tab", "Sync");
+  await click(".tabs .tab", "Review");
+  await until(".question");
+}
+
 async function runAnnotationChecks(): Promise<void> {
   const question = text(".question");
   const due = await window.geode.cardsDue(200);
-  const id = due.ok ? due.value.find((c) => c.question === question)?.id : undefined;
+  const id = due.ok ? due.value.find((c) => "question" in c && c.question === question)?.id : undefined;
   const config = await window.geode.configRead();
   if (!id || !config.ok || !config.value) {
     check("the card on screen can be found for the annotation checks", false, question);
@@ -431,6 +488,8 @@ async function runStatsChecks(): Promise<void> {
   check("the vault screen opens", await until(".tiles"), text(".screen h2"));
 
   const labels = all(".tile .label");
+  // A fifth, "skills to spot", only while a skill is due for a spot review;
+  // the spot checks answer every one before this runs (ADR 0038).
   check("all four counts are shown", labels.length === 4, labels.join(" / "));
   // `due` is an instant, so "due today" is ambiguous — due now is the
   // actionable number and the forecast is a separate line.
@@ -821,7 +880,7 @@ async function runVaultChecks(): Promise<void> {
   }
   const question = text(".question");
   const due = await window.geode.cardsDue(200);
-  const id = due.ok ? due.value.find((c) => c.question === question)?.id : undefined;
+  const id = due.ok ? due.value.find((c) => "question" in c && c.question === question)?.id : undefined;
   await key(" ");
   for (let i = 0; i < 20 && !exists(".annotation textarea"); i++) await key("a");
   const box = document.querySelector(".annotation textarea") as HTMLTextAreaElement | null;

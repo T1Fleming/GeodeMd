@@ -122,7 +122,7 @@ describe("a busy database", () => {
     busy.code = "SQLITE_BUSY";
     const wedged = {
       ingestLogs: () => Promise.reject(busy),
-      getDueCards: () => [{ id: "sr-000000000001" }],
+      getReviewItems: () => [{ id: "sr-000000000001" }],
       stats: () => ({ total: 1, dueNow: 0, dueBeforeMidnight: 0, newCards: 1, capped: false }),
     } as unknown as Core;
 
@@ -135,5 +135,23 @@ describe("a busy database", () => {
       ingestLogs: () => Promise.reject(new Error("disk is on fire")),
     } as unknown as Core;
     await expect(dueCards(broken, T0, 10)).rejects.toThrow("disk is on fire");
+  });
+});
+
+describe("the queue holds spot reviews", () => {
+  it("serves a skill due for a spot review beside the cards, and drops it once answered elsewhere", async () => {
+    const abs = path.join(notes, "jump-game.md");
+    await fs.writeFile(abs, "---\ngeode-skills: [greedy]\n---\n# Jump Game\nReach the end.\n## Solution\n", "utf8");
+    await fs.utimes(abs, MTIME, MTIME);
+    await core.sync(T0);
+
+    const queue = await dueCards(core, T0, 10);
+    expect(queue.map((i) => i.id)).toEqual(["spot:greedy", "sr-000000000001", "sr-000000000002"]);
+
+    // A spot review recorded by another machine, as its log shard delivers it.
+    await appendLog(notes, "laptop", { skill: "greedy", kind: "spot", exercise: "jump-game.md", at: formatAt(T0), rating: 3 });
+    const later = new Date(T0.getTime() + 60_000);
+    expect((await dueCards(core, later, 10)).map((i) => i.id)).not.toContain("spot:greedy");
+    expect((await counts(core, later, 100)).spotsDue).toBe(0);
   });
 });

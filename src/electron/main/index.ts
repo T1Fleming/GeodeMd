@@ -44,6 +44,7 @@ import type {
   Result,
   RunKind,
   Stats,
+  SkillReviewRequest,
   SyncRequest,
   VaultList,
   VaultOpened,
@@ -186,6 +187,20 @@ function register(): void {
         // The rating is already fsynced to the log, so a busy database is not a
         // failure — the next ingest reconciles it. Reported as success with a
         // qualifier so the UI can say so quietly and move on.
+        if (isBusy(err)) return { applied: "log-only", next: null };
+        throw err;
+      }
+    }),
+  );
+
+  ipcMain.handle(CH.skillsReview, (_e, review: SkillReviewRequest, rating: 1 | 2 | 3 | 4) =>
+    guard<Rated>(async () => {
+      const { core } = await active.ensure();
+      try {
+        const next = await core.reviewSkill(review, rating, new Date());
+        return { applied: "db", next: { due: next.due, state: next.state } };
+      } catch (err) {
+        // As for a card: the review is in the log, and the next ingest catches up.
         if (isBusy(err)) return { applied: "log-only", next: null };
         throw err;
       }

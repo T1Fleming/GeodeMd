@@ -54,6 +54,10 @@ function dump(s: Store): Record<string, unknown[]> {
     files: q("SELECT path, mtime_ms, size FROM files ORDER BY path"),
     reviews: q("SELECT * FROM reviews ORDER BY card_id, rated_at"),
     card_state: q("SELECT * FROM card_state ORDER BY card_id"),
+    exercises: q("SELECT * FROM exercises ORDER BY path"),
+    exercise_skills: q("SELECT * FROM exercise_skills ORDER BY skill, path"),
+    skill_reviews: q("SELECT * FROM skill_reviews ORDER BY skill, kind, rated_at"),
+    skill_state: q("SELECT * FROM skill_state ORDER BY skill, kind"),
   };
 }
 
@@ -64,7 +68,7 @@ async function logLine(name: string, obj: unknown): Promise<void> {
 }
 
 describe("rebuilding from notes and logs", () => {
-  it("reproduces cards, files, reviews and card_state IDENTICALLY, in full", async () => {
+  it("reproduces cards, files, reviews, card_state and every skill table IDENTICALLY, in full", async () => {
     await write("a.md", "A >> 1\nB >> 2\n");
     // Under a heading and a parent bullet, so `context` is compared at a value
     // its default could not produce by accident.
@@ -81,6 +85,16 @@ describe("rebuilding from notes and logs", () => {
     // at a value its default could not produce by accident.
     await core.reviewCard("sr-000000000003", 3, new Date("2026-09-03T13:05:00.000Z"));
     expect(store.getState("sr-000000000003")!.learning_steps).toBe(1);
+
+    // An exercise in two pools, reviewed for both kinds, one of them a repeat
+    // (ADR 0038): every skill table is compared too.
+    await write("ex.md", "---\ngeode-skills: [two-pointers, greedy]\n---\n# Container\nS\n## Solution\nA\n");
+    await core.sync(T0);
+    const spot = { skill: "greedy", kind: "spot" as const, exercise: "ex.md", repeat: false };
+    await core.reviewSkill(spot, 3, new Date("2026-09-03T14:00:00.000Z"));
+    await core.reviewSkill({ ...spot, repeat: true }, 4, new Date("2026-09-09T14:00:00.000Z"));
+    await core.reviewSkill({ ...spot, skill: "two-pointers", kind: "solve" }, 2, new Date("2026-09-03T15:00:00.000Z"), 1840.24);
+    expect(store.countSkillReviews()).toBe(3);
 
     const before = dump(store);
 

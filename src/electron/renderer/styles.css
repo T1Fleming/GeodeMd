@@ -199,6 +199,14 @@ body {
 
 .card-line .arrow { color: var(--muted); }
 
+/* A spot review (ADR 0038): the exercise's title and statement, then the
+   question. The statement is a note's Markdown, so it borrows the viewer's
+   type; capped in height so a long one cannot push the question off screen. */
+.spot-title { margin: 0; font-size: 1.25rem; }
+.spot .spot-statement { max-height: 45vh; padding-bottom: 0; }
+.spot .card-line { font-size: 1.125rem; }
+.spot-repeat { margin: 0; font-size: 0.875rem; color: #b45309; }
+
 .card-line .tail { white-space: nowrap; }
 
 .blank,

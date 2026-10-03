@@ -33,6 +33,8 @@ The second query is why `cards.reviewed` exists. As an anti-join against `card_s
 
 Ordering is deterministic and testable. No randomization, no burying, no sibling logic, no daily limits.
 
+**What the app actually draws a sitting from is `getReviewItems(now, dayStart, limit)`**: the due cards above, then skills due for a spot review, each with the exercise chosen to ask it, then the new cards. `limit` covers all three ([exercises.md](exercises.md#serving)).
+
 `countDue` joins `card_state` to `cards` rather than counting state rows alone. `card_state` deliberately outlives the card it belongs to, so counting state alone reports cards that no longer exist and `stats` could print due + new greater than total.
 
 **That join is also why the count is capped.** It probes `cards` once per due row, so the cost is proportional to the size of the *due set* — a number the user's habits set, not the collection's size. Measured at a million cards with 389,000 due, it was 205 ms, and `stats` asks for two of these plus a count of the new cards: 632 ms of frozen main process for four numbers ([ADR 0024](../decisions/0024-remeasure-the-main-process-stall.md)). Every count that can grow without bound now stops at a limit and reports a floor, which `host`'s `countText` renders as `10000+`. The limit is `host`'s `COUNT_CAP` and `stats(now, limit)` takes it as an argument — the same rule as `now`: `core` reads no policy of its own. `countCards` is the exception: a total is a fact about the collection rather than about a backlog.

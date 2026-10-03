@@ -24,9 +24,9 @@
  */
 
 import type { ErrorKind } from "../host/errors.js";
-import type { SyncPhase, SyncSummary, DueCard } from "../core/index.js";
+import type { SyncPhase, SyncSummary, DueCard, ReviewItem, SpotReview } from "../core/index.js";
 
-export type { ErrorKind, SyncPhase, SyncSummary, DueCard };
+export type { ErrorKind, SyncPhase, SyncSummary, DueCard, ReviewItem, SpotReview };
 
 export type Result<T> =
   | { ok: true; value: T }
@@ -111,8 +111,22 @@ export interface Stats {
   dueNow: number;
   dueBeforeMidnight: number;
   newCards: number;
+  /** Skills due for a spot review (ADR 0038). */
+  spotsDue: number;
   /** A due count stopped at `COUNT_CAP`, so the due figures are floors (ADR 0024). */
   capped: boolean;
+}
+
+/**
+ * A skill review as it crosses: which skill, which kind, and the exercise it
+ * was asked with — what the log line records (ADR 0038). The session already
+ * holds all of it, on the `SpotReview` it showed.
+ */
+export interface SkillReviewRequest {
+  skill: string;
+  kind: "spot";
+  exercise: string;
+  repeat: boolean;
 }
 
 /**
@@ -284,6 +298,7 @@ export const CH = {
   statsRead: "geode:stats/read",
   cardsDue: "geode:cards/due",
   cardsReview: "geode:cards/review",
+  skillsReview: "geode:skills/review",
   runStart: "geode:run/start",
   runStatus: "geode:run/status",
   noteOpen: "geode:note/open",
@@ -317,8 +332,14 @@ export const CH = {
 export interface GeodeApi {
   configRead(): Promise<Result<AppConfig | null>>;
   statsRead(): Promise<Result<Stats>>;
-  cardsDue(limit: number): Promise<Result<DueCard[]>>;
+  /** The sitting: cards and spot reviews, in the order `getReviewItems` serves them. */
+  cardsDue(limit: number): Promise<Result<ReviewItem[]>>;
   cardsReview(cardId: string, rating: 1 | 2 | 3 | 4): Promise<Result<Rated>>;
+  /**
+   * Record a spot review. `Rated.next` is the skill's new schedule, which is
+   * never inside this sitting: a skill has no short-term steps (ADR 0038).
+   */
+  skillsReview(review: SkillReviewRequest, rating: 1 | 2 | 3 | 4): Promise<Result<Rated>>;
   runStart(kind: RunKind, req: SyncRequest): Promise<Result<RunStarted>>;
   runStatus(): Promise<Result<RunStatus>>;
   /** Open a card's note. `filePath` is relative to notesPath, as stored. */

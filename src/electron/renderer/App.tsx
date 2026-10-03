@@ -8,7 +8,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { DueCard } from "../../core/index.js";
+import type { ReviewItem } from "../../core/index.js";
 import type { AppConfig, GeodeApi, VaultList } from "../ipc.js";
 import { Help } from "./Help.js";
 import { Review } from "./Review.js";
@@ -19,7 +19,7 @@ import type { OpenIn, Session } from "./model/session.js";
 import { choose, leftNote, switcherOptions } from "./model/vaults.js";
 import type { Scheduled } from "../../host/queue.js";
 import { IdleCheck } from "./IdleCheck.js";
-import { backlogCapped, rescheduledText, syntaxChangedText } from "../../host/present.js";
+import { backlogCapped, isSpot, rescheduledText, syntaxChangedText } from "../../host/present.js";
 
 declare global {
   interface Window {
@@ -278,7 +278,7 @@ type Screen =
   | { at: "loading" }
   | { at: "error"; message: string }
   | { at: "empty"; total: number }
-  | { at: "review"; queue: DueCard[]; backlog: number; capped: boolean; openIn: OpenIn };
+  | { at: "review"; queue: ReviewItem[]; backlog: number; capped: boolean; openIn: OpenIn };
 
 /**
  * How many cards one sitting materialises.
@@ -330,7 +330,7 @@ function ReviewScreen({
     if (!stats.ok) return setScreen({ at: "error", message: stats.message });
 
     // A floor when the due count stopped at the cap (ADR 0024); the chip says so.
-    const backlog = stats.value.dueNow + stats.value.newCards;
+    const backlog = stats.value.dueNow + stats.value.newCards + stats.value.spotsDue;
     if (due.value.length === 0) return setScreen({ at: "empty", total: stats.value.total });
     // A config that cannot be read now was readable a moment ago, when the
     // app opened; falling back to the editor is what `o` did before #51.
@@ -352,8 +352,15 @@ function ReviewScreen({
    * return today. The rating itself is safe in the log either way.
    */
   const onRate = useCallback(
-    async (cardId: string, rating: 1 | 2 | 3 | 4): Promise<Scheduled | null> => {
-      const r = await window.geode.cardsReview(cardId, rating);
+    async (item: ReviewItem, rating: 1 | 2 | 3 | 4): Promise<Scheduled | null> => {
+      // A spot review is a skill's, recorded with the exercise it was asked
+      // with (ADR 0038); a card is recorded by its stamp.
+      const r = isSpot(item)
+        ? await window.geode.skillsReview(
+            { skill: item.skill, kind: "spot", exercise: item.filePath, repeat: item.repeat },
+            rating,
+          )
+        : await window.geode.cardsReview(item.id, rating);
       if (!r.ok) {
         onNote(r.message);
         return null;
@@ -369,7 +376,7 @@ function ReviewScreen({
   );
 
   const onOpen = useCallback(
-    async (card: DueCard) => {
+    async (card: ReviewItem) => {
       // Main does the spawn — detached, so the app is not held open by an
       // editor the user leaves running. Nothing here waits for it to close.
       const r = await window.geode.noteOpen(card.filePath, card.lineNo);
@@ -382,7 +389,7 @@ function ReviewScreen({
 
   /** The note for the viewer, from the vault the review was drawn from. */
   const onNoteRead = useCallback(
-    (card: DueCard) => window.geode.noteRead(vault, card.filePath, card.id),
+    (card: ReviewItem) => window.geode.noteRead(vault, card.filePath, card.id),
     [vault],
   );
 

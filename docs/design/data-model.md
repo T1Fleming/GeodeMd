@@ -5,6 +5,7 @@ Four stores, only three of which are durable.
 | Store | Location | Durable? |
 |---|---|---|
 | Card content | the user's notes, as the lines they wrote | yes |
+| Exercises | the user's notes, as a `geode-skills` property and the text up to `## Solution` ([ADR 0038](../decisions/0038-exercises.md)) | yes |
 | Review history | `<notes>/.sr/log/<device>-YYYY-MM.jsonl` | yes |
 | Annotations | `<notes>/.sr/annotations/<card-id>.md`, one per annotated card — never read into the database ([ADR 0029](../decisions/0029-annotations.md)) | yes |
 | Everything else | the vault's `dbPath` — `~/.local/share/geodemd/db.sqlite` for the first vault | no — a cache |
@@ -19,7 +20,7 @@ flowchart LR
     end
 
     subgraph derived["DERIVABLE — outside the notes directory, delete freely"]
-        db["db.sqlite<br/>cards · files · reviews · log_files · card_state · meta"]
+        db["db.sqlite<br/>cards · files · reviews · log_files · card_state · meta<br/>exercises · exercise_skills · skill_reviews · skill_state"]
     end
 
     notes -->|"sync steps 1-6: walk, stamp, reconcile"| db
@@ -45,6 +46,7 @@ Two things the arrows are saying.
 - `at` is **always** ISO-8601 UTC with exactly three fractional digits and a trailing `Z`. Fixed-width UTC sorts lexicographically, so ordering is free in SQL and JS — but mixing precisions breaks it silently, since `Z` sorts after `.`.
 - `elapsed` and `scheduled` exist for a future FSRS optimizer. **No code path reads them back**, and they are mirrored into no table. Both are *omitted* on a card's first review rather than written as `0`, so readers must treat them as optional.
 - Writes are `O_APPEND`, one `write()` per review, `fsync` before SQLite is touched.
+- **A skill review** shares the shards, as `{"skill":…,"kind":"spot","exercise":…,"at":…,"rating":…}`, with `repeat: true` only when it was one ([exercises.md](exercises.md#the-log)). Ingest tells the two apart by `card` versus `skill`.
 - Uniqueness is `(card_id, rated_at)`. `device` names the file and appears in the line but is **never part of identity**.
 
 **A fresh start** writes `.sr/reset.json` (`{ "at": "<ISO>" }`) and moves every shard whole to `.sr/archive/<at>/log/`, which nothing reads. Ingest skips reviews dated before the marker, and a database whose `meta.reset` differs from it is derived again ([ADR 0034](../decisions/0034-start-a-vault-fresh.md)). The marker is durable state like the log; the archive is kept only so the start can be undone.
@@ -102,9 +104,40 @@ CREATE TABLE card_state (         -- replay reviews through the scheduler
 CREATE INDEX idx_state_due ON card_state(due);
 
 CREATE TABLE meta (               -- facts about the cache, derived from the code
-  key   TEXT PRIMARY KEY,         -- 'scheduler', 'syntax' and 'context'
-  value TEXT NOT NULL
+  key   TEXT PRIMARY KEY,         -- 'scheduler', 'syntax', 'context', 'exercise',
+  value TEXT NOT NULL             -- 'skill-scheduler' and 'log-reader'
 );
+
+-- Exercises (ADR 0038; see exercises.md). From the notes:
+CREATE TABLE exercises (
+  path       TEXT PRIMARY KEY,
+  title      TEXT NOT NULL,
+  statement  TEXT NOT NULL
+);
+CREATE TABLE exercise_skills (    -- the pools
+  skill  TEXT NOT NULL,
+  path   TEXT NOT NULL,
+  PRIMARY KEY (skill, path)
+) WITHOUT ROWID;
+CREATE INDEX idx_exercise_skills_path ON exercise_skills(path);
+
+-- From the log:
+CREATE TABLE skill_state (        -- card_state's columns, one row per (skill, kind)
+  skill TEXT NOT NULL, kind TEXT NOT NULL,   -- kind: 'spot' | 'solve'
+  due TEXT NOT NULL, stability REAL, difficulty REAL,
+  reps INTEGER NOT NULL DEFAULT 0, lapses INTEGER NOT NULL DEFAULT 0,
+  state INTEGER NOT NULL, last_review TEXT,
+  learning_steps INTEGER NOT NULL DEFAULT 0, -- always 0: no short-term steps
+  PRIMARY KEY (skill, kind)
+);
+CREATE INDEX idx_skill_state_due ON skill_state(kind, due);
+CREATE TABLE skill_reviews (      -- no FK, like reviews
+  skill TEXT NOT NULL, kind TEXT NOT NULL, rated_at TEXT NOT NULL,
+  rating INTEGER NOT NULL, exercise TEXT NOT NULL,
+  repeat INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (skill, kind, rated_at)
+) WITHOUT ROWID;
+CREATE INDEX idx_skill_reviews_exercise ON skill_reviews(exercise, rated_at);
 ```
 
 ### Why the tables are shaped this way

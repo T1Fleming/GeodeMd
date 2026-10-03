@@ -11,7 +11,7 @@
  * the module stays shareable.
  */
 
-import type { DueCard, Rescheduled, SyncPhase, SyncSummary } from "../core/index.js";
+import type { DueCard, ReviewItem, Rescheduled, SpotReview, SyncPhase, SyncSummary } from "../core/index.js";
 
 /**
  * The four FSRS ratings, and what they are called. Spec section 9: the numbers
@@ -27,6 +27,68 @@ export const RATING_KEYS: ReadonlyArray<readonly [key: string, label: string]> =
   ["3", "good"],
   ["4", "easy"],
 ];
+
+/**
+ * The same four ratings for a **spot review**, worded as what happened rather
+ * than how it felt ([ADR 0038](../../docs/decisions/0038-exercises.md)). The
+ * numbers mean the same to FSRS; the words are what keep `1` from reading as
+ * "forgot" when what happened is naming the wrong skill.
+ */
+export const SPOT_RATING_KEYS: ReadonlyArray<readonly [key: string, label: string]> = [
+  ["1", "wrong skill"],
+  ["2", "right, after hesitating"],
+  ["3", "right"],
+  ["4", "right, at once"],
+];
+
+/** What a spot review asks, under the exercise's statement. */
+export const SPOT_PROMPT = "Which skill does this call for?";
+
+/**
+ * What a spot review says when its skill had nothing fresh to serve: every
+ * exercise in the pool has been asked for this skill, so this one is a repeat
+ * and a weaker test (ADR 0038). The fix is the user's — another exercise.
+ */
+export function repeatText(skill: string): string {
+  return `You have seen every exercise for ${skill}. Add one to its pool.`;
+}
+
+/**
+ * True for a spot review. Here as well as in `core`, because this module is
+ * in the renderer bundle and a value import from `core` would bring SQLite
+ * with it; the type import above is free.
+ */
+export function isSpot(item: ReviewItem): item is SpotReview {
+  return (item as SpotReview).kind === "spot";
+}
+
+/** The rating words for what is on screen. */
+export function ratingKeysFor(item: ReviewItem): ReadonlyArray<readonly [key: string, label: string]> {
+  return isSpot(item) ? SPOT_RATING_KEYS : RATING_KEYS;
+}
+
+/**
+ * The line above the card naming where it lives, or null when nothing is to
+ * be shown there yet.
+ *
+ * A spot review's is hidden until the answer is: the note's path can be the
+ * answer — `monotonic-stack/daily-temperatures.md` — and a spot review shows
+ * the title and the statement and nothing else (ADR 0038).
+ */
+export function locatorFor(item: ReviewItem, revealed: boolean): string | null {
+  return isSpot(item) && !revealed ? null : item.locator;
+}
+
+/**
+ * The start of the local day `now` falls in — what "served today" in the
+ * serving rule is measured from (ADR 0038). Here and not in `core`, which
+ * reads no timezone; `core` is handed the instant.
+ */
+export function startOfDay(now: Date): Date {
+  const d = new Date(now);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
 
 /**
  * Where in a card a key is offered.
@@ -48,6 +110,11 @@ export interface ActionKey {
   key: string;
   label: string;
   stage: KeyStage;
+  /**
+   * Offered for cards only. An annotation is a file named by the card's
+   * stamp, and a spot review has none to name it by (ADR 0038).
+   */
+  cardsOnly?: true;
 }
 
 /** Everything at the prompt that is not a rating. */
@@ -59,7 +126,7 @@ export const ACTION_KEYS: readonly ActionKey[] = [
   // `annotate` is offered ONLY at the answer: an annotation is free to restate
   // the answer, so showing one at the question would make the review a sham —
   // the mirror image of `later` (ADR 0029).
-  { key: "a", label: "annotate", stage: "answer" },
+  { key: "a", label: "annotate", stage: "answer", cardsOnly: true },
   { key: "q", label: "quit", stage: "both" },
   // The note viewer's own keys (#51). The key that opened the note closes it,
   // and `e` is the one way on to an editor.
@@ -67,10 +134,13 @@ export const ACTION_KEYS: readonly ActionKey[] = [
   { key: "e", label: "open in editor", stage: "note" },
 ];
 
-/** The actions to advertise at one stage of a card, in table order. */
-export function actionsAt(stage: "question" | "answer" | "note"): ActionKey[] {
+/**
+ * The actions to advertise at one stage of a card, in table order. `spot` is
+ * whether what is on screen is a spot review, which offers no annotation.
+ */
+export function actionsAt(stage: "question" | "answer" | "note", spot = false): ActionKey[] {
   return ACTION_KEYS.filter(
-    (a) => a.stage === stage || (a.stage === "both" && stage !== "note"),
+    (a) => (a.stage === stage || (a.stage === "both" && stage !== "note")) && !(spot && a.cardsOnly),
   );
 }
 
@@ -214,8 +284,8 @@ export function countText(n: number, capped: boolean = n >= COUNT_CAP): string {
  * a thousand cards over the cap on `dueBeforeMidnight` alone must not turn an
  * exact `dueNow + newCards` into a floor it never was.
  */
-export function backlogCapped(counts: { dueNow: number; newCards: number }): boolean {
-  return counts.dueNow >= COUNT_CAP || counts.newCards >= COUNT_CAP;
+export function backlogCapped(counts: { dueNow: number; newCards: number; spotsDue?: number }): boolean {
+  return counts.dueNow >= COUNT_CAP || counts.newCards >= COUNT_CAP || (counts.spotsDue ?? 0) >= COUNT_CAP;
 }
 
 /** Ratings given in a session, by rating. */
@@ -299,6 +369,11 @@ export function summaryFields(s: SyncSummary): SummaryField[] {
     ["filesSkippedOnError", "files skipped on error"],
     ["logLinesSkipped", "bad log lines skipped"],
     ["cardLinesUnnested", "card lines not nested"],
+    // Only when there are any: a vault with no exercises should not be told so
+    // on every sync (ADR 0038).
+    ["exercisesFound", "exercises found"],
+    ["exercisesUnreadable", "exercises with unreadable properties"],
+    ["exercisesWithoutSolution", "exercises with no ## Solution"],
   ];
 
   for (const [key, label] of incidental) {
@@ -351,6 +426,25 @@ export function unnestedReason(s: Pick<SyncSummary, "cardLinesUnnested" | "unnes
     : `${s.cardLinesUnnested} lines look like cards but are indented without a list marker, ` +
         `so Markdown reads them as text, not as an outline: ${where}. ` +
         `Start them and their parents with "- " to nest them.`;
+}
+
+/**
+ * Why an exercise was left out of every pool, or null when none was
+ * (ADR 0038). Said with the fix, as `unnestedReason` is: a note that names its
+ * skills and never comes up looks like a bug in the reader's notes.
+ */
+export function exerciseReason(
+  s: Pick<SyncSummary, "exercisesUnreadable" | "exercisesWithoutSolution" | "exerciseProblemsAt">,
+): string | null {
+  const n = s.exercisesUnreadable + s.exercisesWithoutSolution;
+  if (n === 0) return null;
+  const more = n - s.exerciseProblemsAt.length;
+  const where = s.exerciseProblemsAt.join(", ") + (more > 0 ? `, and ${more} more` : "");
+  const subject = n === 1 ? "1 note names its skills but is not served" : `${n} notes name their skills but are not served`;
+  return (
+    `${subject}: ${where}. An exercise needs geode-skills to be a list, ` +
+    `like [two-pointers, greedy], and a "## Solution" heading where its statement ends.`
+  );
 }
 
 /**

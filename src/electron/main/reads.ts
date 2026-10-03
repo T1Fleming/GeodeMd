@@ -22,8 +22,9 @@
  * plain vitest against a real `Core` and a real temp collection.
  */
 
-import type { Core, Counts, DueCard } from "../../core/index.js";
+import type { Core, Counts, ReviewItem } from "../../core/index.js";
 import { isBusy } from "../../host/errors.js";
+import { startOfDay } from "../../host/present.js";
 
 /**
  * Ingest, unless the database is busy.
@@ -71,10 +72,14 @@ async function catchUp(core: Core, now: Date): Promise<void> {
   return promise;
 }
 
-/** The queue for a session, after catching up on anything already answered. */
-export async function dueCards(core: Core, now: Date, limit: number): Promise<DueCard[]> {
+/**
+ * The queue for a session, after catching up on anything already answered:
+ * cards, and skills due for a spot review (ADR 0038). The start of the day is
+ * this machine's, which is why it is worked out here and handed to `core`.
+ */
+export async function dueCards(core: Core, now: Date, limit: number): Promise<ReviewItem[]> {
   await catchUp(core, now);
-  return core.getDueCards(now, limit);
+  return core.getReviewItems(now, startOfDay(now), limit);
 }
 
 /** The collection's counts, after the same catch-up. */

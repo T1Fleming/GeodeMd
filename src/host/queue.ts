@@ -15,7 +15,7 @@
  * and the renderer's state machine drive the same rules.
  */
 
-import type { DueCard } from "../core/index.js";
+import type { ReviewItem } from "../core/index.js";
 import { inShortTermSteps } from "../scheduler/index.js";
 
 /**
@@ -32,14 +32,14 @@ export interface Scheduled {
 
 /** A card that has been answered and is owed again later in this sitting. */
 interface Waiting {
-  card: DueCard;
+  card: ReviewItem;
   /** Epoch ms, from the scheduler's `due`. */
   dueAt: number;
 }
 
 export interface ReviewQueue {
-  /** Not answered yet, in the order `getDueCards` returned them. */
-  readonly fresh: readonly DueCard[];
+  /** Not answered yet, in the order `getReviewItems` returned them. */
+  readonly fresh: readonly ReviewItem[];
   /** Answered, and due again inside this sitting. Earliest first. */
   readonly waiting: readonly Waiting[];
   /**
@@ -52,10 +52,10 @@ export interface ReviewQueue {
    * show. The CLI awaits `reviewCard` and passes through here in one step, but
    * it passes through the same states.
    */
-  readonly inFlight: readonly DueCard[];
+  readonly inFlight: readonly ReviewItem[];
 }
 
-export function openQueue(cards: readonly DueCard[]): ReviewQueue {
+export function openQueue(cards: readonly ReviewItem[]): ReviewQueue {
   return { fresh: [...cards], waiting: [], inFlight: [] };
 }
 
@@ -97,7 +97,7 @@ export function isEmpty(q: ReviewQueue): boolean {
  * Also null while every remaining card is in flight. Ask `isEmpty` whether
  * anything is owed at all, and `nextDueAt` when the next one is due.
  */
-export function serve(q: ReviewQueue, now: Date): DueCard | null {
+export function serve(q: ReviewQueue, now: Date): ReviewItem | null {
   const soonest = q.waiting[0];
   if (soonest && soonest.dueAt <= now.getTime()) return soonest.card;
   if (q.fresh.length > 0) return q.fresh[0]!;
@@ -133,7 +133,7 @@ export const IDLE_RECHECK_MS = 60_000;
  * learning step would keep ripening ahead of it, and a deferred card could be
  * starved for the rest of the session. `q` always works.
  */
-export function setAside(q: ReviewQueue, card: DueCard): ReviewQueue {
+export function setAside(q: ReviewQueue, card: ReviewItem): ReviewQueue {
   return {
     fresh: [...without(q.fresh, card.id), card],
     waiting: q.waiting.filter((w) => w.card.id !== card.id),
@@ -148,7 +148,7 @@ export function setAside(q: ReviewQueue, card: DueCard): ReviewQueue {
  * again, and the session must not be able to declare itself over in the gap
  * before the scheduler's answer arrives.
  */
-export function rated(q: ReviewQueue, card: DueCard): ReviewQueue {
+export function rated(q: ReviewQueue, card: ReviewItem): ReviewQueue {
   return {
     fresh: without(q.fresh, card.id),
     waiting: q.waiting.filter((w) => w.card.id !== card.id),
@@ -189,6 +189,6 @@ export function scheduled(
   return { fresh: q.fresh, waiting, inFlight };
 }
 
-function without(cards: readonly DueCard[], id: string): DueCard[] {
+function without(cards: readonly ReviewItem[], id: string): ReviewItem[] {
   return cards.filter((c) => c.id !== id);
 }

@@ -27,6 +27,12 @@ import {
   interpretAnnotatingKey,
   interpretKey,
   interpretViewingKey,
+  exerciseReason,
+  isSpot,
+  repeatText,
+  SPOT_PROMPT,
+  SPOT_RATING_KEYS,
+  startOfDay,
 } from "../host/present.js";
 import { detectEditors, editorCommand, launchCommand, resolveEditor } from "../host/editor.js";
 import { cardLineNote, noteMarkdown } from "../host/note.js";
@@ -513,5 +519,102 @@ describe("a problem taken apart into cards works as the guide says", () => {
     );
     await open.core.sync(T0);
     expect(open.core.getDueCards(T0, 10).map((c) => c.question)).toEqual(["Why it is linear"]);
+  });
+});
+
+describe("an exercise is asked as the guide says", () => {
+  const HEADING = "### Exercises: a different problem each time";
+
+  async function section(): Promise<string> {
+    const text = await reviewing();
+    const start = text.indexOf(HEADING);
+    return text.slice(start, text.indexOf("### Cards for what gives the method away", start));
+  }
+
+  async function exampleNote(): Promise<string> {
+    const [note] = fences(await section(), "markdown").filter((b) => b.includes("geode-skills"));
+    expect(note, "the guide no longer shows an exercise note").toBeDefined();
+    return note!;
+  }
+
+  it("asks the guide's example as the guide draws it, and writes nothing into the note", async () => {
+    const [drawn] = fences(await section(), "text");
+    open = await newCollection();
+    await open.write("leetcode/daily-temperatures.md", await exampleNote());
+    await open.core.sync(T0);
+
+    const [spot] = open.core.getReviewItems(T0, startOfDay(T0), 10).filter(isSpot);
+    expect(spot, "the example is not asked as a spot review").toBeDefined();
+    const screen = `${spot!.title}\n\n${spot!.statement}\n\n${SPOT_PROMPT}${ANSWER_ARROW}${ANSWER_BLANK}`;
+    expect(screen).toBe(drawn!.trimEnd());
+    expect(await open.read("leetcode/daily-temperatures.md")).toBe(await exampleNote());
+  });
+
+  it("names the same four ratings, in the same order, with the same words", async () => {
+    const rows = tableAfter(await section(), HEADING).map((cells) => [plain(cells[0]!), plain(cells[1]!)]);
+    expect(rows).toEqual(SPOT_RATING_KEYS.map(([key, label]) => [key, label]));
+  });
+
+  it("asks a skill with a different exercise each time it comes due", async () => {
+    expect(plain(await section())).toContain(
+      "Each time the skill comes due, it is asked with a different exercise, the one it was asked with least recently.",
+    );
+    open = await newCollection();
+    const note = await exampleNote();
+    await open.write("a.md", note);
+    await open.write("b.md", note.replace("Daily Temperatures", "Next Greater Element"));
+    await open.core.sync(T0);
+
+    const asked: string[] = [];
+    let now = T0;
+    for (let i = 0; i < 3; i++) {
+      const [spot] = open.core.getSpotReviews(now, startOfDay(now), 10);
+      asked.push(spot!.title);
+      const next = await open.core.reviewSkill(
+        { skill: spot!.skill, kind: "spot", exercise: spot!.filePath, repeat: spot!.repeat },
+        3,
+        now,
+      );
+      now = new Date(next.due);
+    }
+    expect(asked).toEqual(["Daily Temperatures", "Next Greater Element", "Daily Temperatures"]);
+  });
+
+  it("is right that only geode-skills makes an exercise, and form: exercise does not", async () => {
+    expect(plain(await section())).toContain("a form: exercise you filter by, mean nothing to GeodeMD");
+    open = await newCollection();
+    await open.write("a.md", (await exampleNote()).replace("geode-skills: [monotonic-stack]", "form: exercise"));
+    await open.core.sync(T0);
+    expect(open.core.getSpotReviews(T0, startOfDay(T0), 10)).toEqual([]);
+  });
+
+  it("leaves out a note with no ## Solution, and the summary names it", async () => {
+    expect(plain(await section())).toContain(
+      "A note with geode-skills but no ## Solution heading is left out, and the sync summary names it.",
+    );
+    open = await newCollection();
+    await open.write("a.md", (await exampleNote()).replace("## Solution", "The answer:"));
+    const summary = await open.core.sync(T0);
+    expect(open.core.getSpotReviews(T0, startOfDay(T0), 10)).toEqual([]);
+    expect(exerciseReason(summary)).toContain("a.md");
+  });
+
+  it("is right that a skill comes back in days, never minutes, whatever you press", async () => {
+    expect(plain(await section())).toContain("A skill comes back in days, never minutes, whatever you press.");
+    open = await newCollection();
+    await open.write("a.md", await exampleNote());
+    await open.core.sync(T0);
+    const next = await open.core.reviewSkill(
+      { skill: "monotonic-stack", kind: "spot", exercise: "a.md", repeat: false },
+      1,
+      T0,
+    );
+    expect(new Date(next.due).getTime() - T0.getTime()).toBeGreaterThanOrEqual(86_400_000);
+  });
+
+  it("says what it says when a skill has run out of exercises, and offers no annotation", async () => {
+    expect(await section()).toContain(`\`${repeatText("greedy")}\``);
+    expect(plain(await section())).toContain("a is not offered: annotations are for cards.");
+    expect(actionsAt("answer", true).map((a) => a.key)).not.toContain("a");
   });
 });

@@ -69,10 +69,13 @@ export function Stats({
         <Tile value={countText(data.newCards)} label="new" strong />
         <Tile value={countText(data.dueBeforeMidnight)} label="due before midnight" />
         <Tile value={String(data.total)} label="cards in total" />
+        {/* Only in a vault with exercises due: everyone else would see a zero
+            for a feature they never asked for (ADR 0038). */}
+        {data.spotsDue > 0 && <Tile value={countText(data.spotsDue)} label="skills to spot" strong />}
       </div>
       <p className="muted lead">
-        {data.dueNow + data.newCards > 0
-          ? `${countText(data.dueNow + data.newCards, backlogCapped(data))} waiting for you.`
+        {data.dueNow + data.newCards + data.spotsDue > 0
+          ? `${countText(data.dueNow + data.newCards + data.spotsDue, backlogCapped(data))} waiting for you.`
           : "Nothing waiting. New cards appear here after a sync."}
       </p>
       <div className="folder">

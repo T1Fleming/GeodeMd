@@ -165,7 +165,57 @@ Some things worth practising are not facts: a LeetCode problem, a system design 
 - **Rating it measures familiarity.** You read the answer, it looks familiar, and you press `3`. Familiar is not the same as able to do it.
 - **The answer doesn't fit on a line.** A solution is a page, and a card is one line.
 
-What works today is to take a problem apart into cards about the **method**, and keep solving new problems yourself. The cards keep the method fresh between problems. They don't replace practising on problems.
+Two things work instead, and they work together. Make each problem an **exercise**, and GeodeMD asks you which skill it calls for, on a different problem each time. And take a problem apart into cards about the **method**, so the method stays fresh between problems. Neither replaces solving new problems yourself.
+
+### Exercises: a different problem each time
+
+Give each problem its own note, and add a `geode-skills` property at the top listing the skills it practises:
+
+```markdown
+---
+geode-skills: [monotonic-stack]
+source: https://leetcode.com/problems/daily-temperatures/
+---
+# Daily Temperatures
+
+Given daily temperatures, return for each day how many days until a warmer one.
+
+## Solution
+
+Keep a stack of indices still waiting for a warmer day, and pop them as warmer days arrive.
+```
+
+That makes the note an **exercise**, and `monotonic-stack` a **skill**. GeodeMD schedules the skill, not the note. When `monotonic-stack` comes due, your session shows one of the exercises tagged with it and asks:
+
+```text
+Daily Temperatures
+
+Given daily temperatures, return for each day how many days until a warmer one.
+
+Which skill does this call for? → ?
+```
+
+**Each time the skill comes due, it is asked with a different exercise**, the one it was asked with least recently. Remembering that *this* problem used a stack doesn't get you through the next review, because the next review is a different problem. Reveal, and every skill the exercise is tagged with replaces the `?`. **Naming any of them counts as right.** Then:
+
+| | | |
+|---|---|---|
+| `1` | **wrong skill** | You named a skill it isn't tagged with, or none |
+| `2` | **right, after hesitating** | You got there, but not straight away |
+| `3` | **right** | You named it |
+| `4` | **right, at once** | You knew before you finished reading |
+
+What makes it work:
+
+- **Only `geode-skills` makes a note an exercise**, and it has to be a list, like `[two-pointers, greedy]`. Every other property is yours: `tags`, or a `form: exercise` you filter by, mean nothing to GeodeMD. In Obsidian, `geode-skills` is a list property you edit in the Properties panel.
+- **The statement ends at `## Solution`.** A review shows the title and everything after it up to that heading, and nothing else: no path line, no tags. A note with `geode-skills` but no `## Solution` heading is left out, and the sync summary names it. Otherwise a review would show your solution.
+- **Nothing is written into the note.** An exercise gets no id comment.
+- **Don't put the skill in the title.** "Daily Temperatures (monotonic stack)" answers the question before it is asked. The note's path is fine: it stays hidden until you reveal.
+- **Tag only the skills the note genuinely uses.** Since any tag counts as right, a note with two tags tests each of them less well.
+- **A skill comes back in days, never minutes**, whatever you press. Re-asking a problem a minute later would test nothing but the minute.
+- **One problem is not asked twice in a day** for two different skills, as long as either skill has another exercise.
+- **When every exercise for a skill has been asked**, the least recent is asked again, and the reveal says `You have seen every exercise for greedy. Add one to its pool.` Add a note, and the next review asks it.
+
+`o` opens the exercise's note once the answer is showing. `a` is not offered: annotations are for cards.
 
 ### Cards for what gives the method away
 

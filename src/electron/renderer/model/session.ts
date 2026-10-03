@@ -16,12 +16,13 @@
  * the card's annotation is open for writing.
  */
 
-import type { DueCard } from "../../../core/index.js";
+import type { ReviewItem } from "../../../core/index.js";
 import {
   emptyCounts,
   interpretAnnotatingKey,
   interpretKey,
   interpretViewingKey,
+  isSpot,
 } from "../../../host/present.js";
 import type { KeyAction, RatingCounts } from "../../../host/present.js";
 import * as queue from "../../../host/queue.js";
@@ -65,7 +66,18 @@ const UNKNOWN: Annotation = { at: "unknown" };
 export type Viewer =
   | { at: "closed" }
   | { at: "loading"; cardId: string }
-  | { at: "open"; cardId: string; text: string; line: number | null; stored: number | null };
+  | {
+      at: "open";
+      cardId: string;
+      text: string;
+      line: number | null;
+      stored: number | null;
+      /**
+       * The note is shown whole, with no line to look for: a spot review's
+       * exercise is the note itself, not a line in it (ADR 0038).
+       */
+      whole: boolean;
+    };
 
 const CLOSED: Viewer = { at: "closed" };
 
@@ -93,7 +105,7 @@ export interface Session {
    * the scheduler's answer has not come back: see `ReviewQueue.inFlight`. Not
    * the same as the session being over — ask `isOver`.
    */
-  card: DueCard | null;
+  card: ReviewItem | null;
   /** The answer is hidden until asked for. */
   revealed: boolean;
   counts: RatingCounts;
@@ -115,8 +127,9 @@ export interface Session {
 
 /** Effects the caller performs. The session itself touches nothing. */
 export type Effect =
-  | { kind: "rate"; cardId: string; rating: 1 | 2 | 3 | 4 }
-  | { kind: "open"; card: DueCard }
+  /** `item` too, so a spot review is recorded as one, with its exercise (ADR 0038). */
+  | { kind: "rate"; cardId: string; rating: 1 | 2 | 3 | 4; item: ReviewItem }
+  | { kind: "open"; card: ReviewItem }
   /**
    * Find out whether the card just revealed has an annotation. A fetch on
    * reveal rather than a field on `DueCard`, so building the queue does not
@@ -131,13 +144,13 @@ export type Effect =
    * `noteRead`. Nothing is spawned and nothing is recorded as opened —
    * reading a note cannot change it.
    */
-  | { kind: "read-note"; card: DueCard };
+  | { kind: "read-note"; card: ReviewItem };
 
 /**
  * No clock needed: every card in a fresh snapshot is due now by construction —
  * `getDueCards` returns what is due and what is new, and nothing else.
  */
-export function begin(cards: readonly DueCard[], openIn: OpenIn = "editor"): Session {
+export function begin(cards: readonly ReviewItem[], openIn: OpenIn = "editor"): Session {
   const q = queue.openQueue(cards);
   return {
     queue: q,
@@ -193,7 +206,7 @@ export function keyIsText(s: Session, key: string, command: boolean): boolean {
   return annotating(s) && interpretAnnotatingKey(key, command).kind === "type";
 }
 
-export function current(s: Session): DueCard | null {
+export function current(s: Session): ReviewItem | null {
   return s.card;
 }
 
@@ -308,6 +321,9 @@ export function press(
   if (action.kind === "annotate") {
     // Ignored at the question rather than treated as a reveal — see above.
     if (!s.revealed) return { next: s };
+    // A spot review has no stamp to name an annotation by (ADR 0038), and
+    // `actionsAt` does not offer the key for one.
+    if (isSpot(card)) return { next: s };
     // Ignored until the annotation is known, so a box can never open empty
     // over text that has not arrived yet.
     if (s.annotation.at !== "closed") return { next: s };
@@ -331,6 +347,9 @@ export function press(
   }
 
   if (!s.revealed) {
+    // A spot review has no annotation to ask about: there is no stamp to name
+    // one by (ADR 0038). Known to be none, so nothing is fetched.
+    if (isSpot(card)) return { next: { ...s, revealed: true, annotation: { at: "closed", text: null } } };
     // Any other key reveals, including a digit — which is why rating is only
     // honoured below, once `revealed` is already true. Revealing is also when
     // the card's annotation is asked about, for the marker.
@@ -352,7 +371,7 @@ export function press(
         counts,
         annotation: UNKNOWN,
       },
-      effect: { kind: "rate", cardId: card.id, rating: action.rating },
+      effect: { kind: "rate", cardId: card.id, rating: action.rating, item: card },
     };
   }
 
@@ -370,7 +389,7 @@ export function press(
 }
 
 /** Hand the card's note to an editor, and remember it for the end-of-session check. */
-function openInEditor(s: Session, card: DueCard): { next: Session; effect: Effect } {
+function openInEditor(s: Session, card: ReviewItem): { next: Session; effect: Effect } {
   const opened = s.opened.includes(card.filePath) ? s.opened : [...s.opened, card.filePath];
   return { next: { ...s, opened }, effect: { kind: "open", card } };
 }
@@ -392,9 +411,17 @@ export function noteRead(
   const v = s.viewer;
   if (v.at !== "loading" || v.cardId !== cardId) return s;
   if (note === null) return { ...s, viewer: CLOSED };
+  const whole = s.card !== null && isSpot(s.card);
   return {
     ...s,
-    viewer: { at: "open", cardId, text: note.text, line: note.line, stored: s.card?.lineNo ?? null },
+    viewer: {
+      at: "open",
+      cardId,
+      text: note.text,
+      line: whole ? null : note.line,
+      stored: s.card?.lineNo ?? null,
+      whole,
+    },
   };
 }
 

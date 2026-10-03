@@ -10,9 +10,10 @@ For *why* a decision went the way it did, and what it beat, see [`docs/decisions
 |---|---|
 | [module-map.md](module-map.md) | The eight modules, what each owns, and how the boundaries are enforced |
 | [parser.md](parser.md) | Card syntax, skipped contexts, stamps, line terminators, identity |
-| [data-model.md](data-model.md) | The review log, the five tables, connection settings, rebuild |
+| [data-model.md](data-model.md) | The review log, the tables, connection settings, rebuild |
 | [sync.md](sync.md) | The seven sync steps, invariants, failure handling, `--dry-run` / `--full` |
 | [review-flow.md](review-flow.md) | Queue construction, recording a review, the loop, stats |
+| [exercises.md](exercises.md) | Exercises and skills: reading `geode-skills`, the pools, the serving rule, spot reviews ([ADR 0038](../decisions/0038-exercises.md)) |
 | [app.md](app.md) | The Electron app — the only interface: the IPC contract, long runs, what it takes from `host` |
 | [testing.md](testing.md) | The five expensive places, the boundaries test, the scale harness |
 | [behaviours.md](behaviours.md) | **Generated** — every behaviour the suite checks, by area. What this app does, and where that is proven |
