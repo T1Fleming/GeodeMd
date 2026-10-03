@@ -1754,8 +1754,9 @@ _4 · `boundaries.test.ts`_
 
 ### electron, the interface
 
-_2 · `boundaries.test.ts`_
+_3 · `boundaries.test.ts`_
 
+- shows every sentence host writes about a sync
 - nothing below the interfaces imports electron
 - keeps onProgress out of the wire types
 
