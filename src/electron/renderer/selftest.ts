@@ -12,6 +12,7 @@
  */
 
 import { renderNote } from "./note.js";
+import { isSpot } from "../../host/present.js";
 
 const results: string[] = [];
 
@@ -126,16 +127,28 @@ export async function runSelfTest(): Promise<void> {
     // A card nested under a bullet is drawn under its parents, as RemNote
     // draws it (ADR 0032): the note on the path line, the parent as a bullet,
     // and the question as the last bullet. The demo nests two cards in
-    // aws/lambda.md for this.
-    let nested = false;
-    for (let i = 0; i < 60 && !nested; i++) {
-      if (exists(".parents .parent")) nested = true;
-      else await key("0");
+    // aws/lambda.md for this. Asked of the queue first, so a folder with no
+    // nested card reports these as skipped rather than failed: a failure here
+    // should only ever mean drawing broke.
+    const queued = await window.geode.cardsDue(200);
+    const nestedCard = queued.ok
+      ? queued.value.find((c) => !isSpot(c) && c.context.some((e) => e.kind === "item"))
+      : undefined;
+    if (nestedCard && !isSpot(nestedCard)) {
+      let nested = false;
+      for (let i = 0; i < 60 && !nested; i++) {
+        if (exists(".parents .parent")) nested = true;
+        else await key("0");
+      }
+      check("a nested card is drawn under its parent bullets", nested, text(".parents"));
+      // The note of the card now on screen, from its locator (`path:line`).
+      const note = text(".locator").split(":")[0]!.split("/").pop()!.replace(/\.md$/, "");
+      check("with the note's name on the path line", text(".crumbs").startsWith(note), text(".crumbs"));
+      check("and the question as the last bullet", exists(".card-line.bulleted .question"), text(".question"));
+      await shot("review-04-parents");
+    } else {
+      check("(no nested card in this folder — the parent-bullet checks are skipped)", true);
     }
-    check("a nested card is drawn under its parent bullets", nested, text(".parents"));
-    check("with the note's name on the path line", text(".crumbs").startsWith("lambda"), text(".crumbs"));
-    check("and the question as the last bullet", exists(".card-line.bulleted .question"), text(".question"));
-    await shot("review-04-parents");
 
     const first = text(".question");
     await key(" ");
