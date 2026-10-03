@@ -11,7 +11,7 @@ app do*, and *where is that proven*. What it deliberately cannot tell you is wha
 app does **untested** — an area that looks thin here is thinly covered, and that is
 worth reading as a finding rather than a gap in the document.
 
-877 behaviours in 13 areas, which follow [the guides](../guides/) rather than the source tree.
+879 behaviours in 13 areas, which follow [the guides](../guides/) rather than the source tree.
 
 - [Reviewing](#reviewing) — 234
 - [Recognising a card](#recognising-a-card) — 129
@@ -24,7 +24,7 @@ worth reading as a finding rather than a gap in the document.
 - [The app's long runs](#the-apps-long-runs) — 32
 - [The database as a cache](#the-database-as-a-cache) — 7
 - [At scale](#at-scale) — 9
-- [Rules the project enforces on itself](#rules-the-project-enforces-on-itself) — 34
+- [Rules the project enforces on itself](#rules-the-project-enforces-on-itself) — 36
 - [The documentation tells the truth](#the-documentation-tells-the-truth) — 81
 
 ## Reviewing
@@ -1709,7 +1709,7 @@ _2 · `files/enumerate.bench.test.ts`_
 
 _Module boundaries, and the completeness of this document — both checked by scanning source text rather than trusted._
 
-**34 behaviours.**
+**36 behaviours.**
 
 ### section 6 hard rules
 
@@ -1757,10 +1757,17 @@ _4 · `boundaries.test.ts`_
 
 ### electron, the interface
 
-_2 · `boundaries.test.ts`_
+_3 · `boundaries.test.ts`_
 
+- shows every sentence host writes about a sync
 - nothing below the interfaces imports electron
 - keeps onProgress out of the wire types
+
+### the packaged app carries what the main process imports
+
+_1 · `boundaries.test.ts`_
+
+- lists every root dependency in desktop/package.json, at the same version
 
 ### every behaviour has a home
 
