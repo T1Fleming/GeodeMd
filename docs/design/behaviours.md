@@ -11,11 +11,11 @@ app do*, and *where is that proven*. What it deliberately cannot tell you is wha
 app does **untested** — an area that looks thin here is thinly covered, and that is
 worth reading as a finding rather than a gap in the document.
 
-878 behaviours in 13 areas, which follow [the guides](../guides/) rather than the source tree.
+893 behaviours in 13 areas, which follow [the guides](../guides/) rather than the source tree.
 
 - [Reviewing](#reviewing) — 234
 - [Recognising a card](#recognising-a-card) — 129
-- [Exercises](#exercises) — 46
+- [Exercises](#exercises) — 56
 - [Syncing notes](#syncing-notes) — 89
 - [Recovery and the log](#recovery-and-the-log) — 59
 - [Moving between machines](#moving-between-machines) — 17
@@ -24,8 +24,8 @@ worth reading as a finding rather than a gap in the document.
 - [The app's long runs](#the-apps-long-runs) — 32
 - [The database as a cache](#the-database-as-a-cache) — 7
 - [At scale](#at-scale) — 9
-- [Rules the project enforces on itself](#rules-the-project-enforces-on-itself) — 34
-- [The documentation tells the truth](#the-documentation-tells-the-truth) — 80
+- [Rules the project enforces on itself](#rules-the-project-enforces-on-itself) — 36
+- [The documentation tells the truth](#the-documentation-tells-the-truth) — 83
 
 ## Reviewing
 
@@ -746,7 +746,7 @@ _8 · `parser/parser.test.ts`_
 
 _Notes opted in by `geode-skills`: a skill scheduled in place of a card, and a different problem from its pool served each time it comes due (ADR 0038)._
 
-**46 behaviours.**
+**56 behaviours.**
 
 ### a note becomes an exercise only by naming its skills
 
@@ -769,9 +769,12 @@ _3 · `parser/exercise.test.ts`_
 
 ### where an exercise's statement ends
 
-_4 · `parser/exercise.test.ts`_
+_7 · `parser/exercise.test.ts`_
 
 - matches ## Solution in any case, with trailing spaces or closing hashes
+- ends at a heading that gives the answer away, above ## Solution
+- keeps the problem's own sections, like ## Examples, in the statement
+- still needs ## Solution when a spoiler heading ends the statement
 - does not end at a ## Solution inside a fenced block
 - starts straight after the properties when the note has no title
 - leaves ordinary cards in an exercise note to the card parser
@@ -799,7 +802,7 @@ _3 · `core/exercises.test.ts`_
 
 _6 · `core/exercises.test.ts`_
 
-- serves due cards, then skills due for a spot review, then new cards
+- mixes spot reviews in among the due cards, and serves new cards after both
 - carries the title, the statement and every skill, and nothing that names the skill asked
 - never puts one exercise in a sitting twice for two skills that share it
 - never makes a skill with an empty pool due, and keeps its schedule for when it fills
@@ -818,12 +821,22 @@ _5 · `core/exercises.test.ts`_
 
 ### the Practice screen offers one solve at a time
 
-_4 · `core/exercises.test.ts`_
+_6 · `core/exercises.test.ts`_
 
 - offers the skill whose solve is most overdue, with an exercise picked by the same rules
 - is null when no skill is due for a solve
 - does not count a spot review against a solve: a spot shows no solution
+- counts a solve against every skill: a solved problem is not new to any of them
+- calls a solved problem a repeat when it is all a pool has left
 - counts skills due for a solve in the stats
+
+### spot reviews are mixed in, in an order that gives nothing away
+
+_3 · `core/exercises.test.ts`_
+
+- orders them by skill and day, not by name: the same all day, different tomorrow
+- spreads them evenly through the due cards, keeping the cards' own order
+- serves them on their own when no card is due
 
 ### the exercises shown beside one once it is answered
 
@@ -834,13 +847,15 @@ _2 · `core/exercises.test.ts`_
 
 ### a solve on the Practice screen
 
-_7 · `electron/renderer/model/practice.test.ts`_
+_9 · `electron/renderer/model/practice.test.ts`_
 
 - times the attempt from the moment the problem is shown to the moment you say you are done
 - stops only on Space or Enter, so a stray key half an hour in shows nothing
 - records the rating with the time taken, and offers no second solve
 - keeps the solve when a rating fails, so it can be given again
 - records nothing when you leave, before or after the reveal
+- ignores Escape, which would throw away a solve by reflex
+- picks a solve under way back up on return to the tab, and nothing finished
 - opens the note in an editor once the solution is showing, and not before
 - drops a note that arrives after the rating
 
@@ -1716,7 +1731,7 @@ _2 · `files/enumerate.bench.test.ts`_
 
 _Module boundaries, and the completeness of this document — both checked by scanning source text rather than trusted._
 
-**34 behaviours.**
+**36 behaviours.**
 
 ### section 6 hard rules
 
@@ -1764,10 +1779,17 @@ _4 · `boundaries.test.ts`_
 
 ### electron, the interface
 
-_2 · `boundaries.test.ts`_
+_3 · `boundaries.test.ts`_
 
+- shows every sentence host writes about a sync
 - nothing below the interfaces imports electron
 - keeps onProgress out of the wire types
+
+### the packaged app carries what the main process imports
+
+_1 · `boundaries.test.ts`_
+
+- lists every root dependency in desktop/package.json, at the same version
 
 ### every behaviour has a home
 
@@ -1791,7 +1813,7 @@ _5 · `behaviours/areas.test.ts`_
 
 _Documents that make checkable claims, checked._
 
-**80 behaviours.**
+**83 behaviours.**
 
 ### the demo collection
 
@@ -1913,14 +1935,17 @@ _4 · `journeys/reviewing.test.ts`_
 
 ### an exercise is asked as the guide says
 
-_7 · `journeys/reviewing.test.ts`_
+_10 · `journeys/reviewing.test.ts`_
 
 - asks the guide's example as the guide draws it, and writes nothing into the note
 - names the same four ratings, in the same order, with the same words
 - asks a skill with a different exercise each time it comes due
 - is right that only geode-skills makes an exercise, and form: exercise does not
 - leaves out a note with no ## Solution, and the summary names it
+- is right that the statement ends sooner at a heading that would give the answer away
 - is right that a skill comes back in days, never minutes, whatever you press
+- is right that a problem you have solved is used up for every skill it is tagged with
+- is right that spot reviews are mixed in among the due cards
 - says what it says when a skill has run out of exercises, and offers no annotation
 
 ### a solve on the Practice tab goes as the guide says
