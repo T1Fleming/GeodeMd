@@ -26,6 +26,7 @@ import {
   actionsAt,
   interpretAnnotatingKey,
   interpretKey,
+  interpretPracticeKey,
   interpretViewingKey,
   exerciseReason,
   isSpot,
@@ -121,8 +122,11 @@ describe("the guide's four ratings are the four the app honours", () => {
     expect(keys.size).toBeGreaterThan(4);
     for (const key of keys) {
       // A key the review ignores may still be one the note viewer honours —
-      // `e` is only ever pressed over a note.
-      const honoured = interpretKey(key).kind !== "ignore" || interpretViewingKey(key).kind !== "ignore";
+      // `e` is only ever pressed over a note — or one Practice does, like `d`.
+      const honoured =
+        interpretKey(key).kind !== "ignore" ||
+        interpretViewingKey(key).kind !== "ignore" ||
+        interpretPracticeKey(key).kind !== "ignore";
       expect(honoured, `the guide advertises \`${key}\``).toBe(true);
     }
   });
@@ -691,10 +695,10 @@ describe("a solve on the Practice tab goes as the guide says", () => {
     const offered = open.core.getSolveReview(T0, startOfDay(T0))!;
     expect(offered.title).toBe("Jump Game");
 
-    // The screen's own clock: started on the offer, stopped by Space.
-    let p = startPractice(offered, T0);
+    // The screen's own clock: started by Space, stopped by d.
+    let p = practicePress(startPractice(offered), " ", T0).next;
     const done = new Date(T0.getTime() + 22 * 60_000);
-    const solved = practicePress(p, " ", done);
+    const solved = practicePress(p, "d", done);
     p = solved.next;
     expect(solved.effect?.kind).toBe("read-note");
     const rated = practicePress(p, "3", done);
@@ -713,18 +717,22 @@ describe("a solve on the Practice tab goes as the guide says", () => {
     expect(open.core.getSolveReview(done, startOfDay(done))).toBeNull();
   });
 
-  it("is right that only Space or Enter stops the clock, and q leaves having recorded nothing", async () => {
+  it("is right that Space starts and pauses, only d stops the clock, and q leaves having recorded nothing", async () => {
     const text = plain(await section());
-    expect(text).toContain("Press Space when you are done, or Enter. No other key stops the clock");
+    expect(text).toContain("press Space to start the clock when you start solving. Space pauses it and starts it again");
+    expect(text).toContain("Press d when you are done. No other key stops the clock");
     expect(text).toContain("q leaves without rating, before or after the solution is showing, and records nothing");
+    expect(text).toContain("h hides the clock if watching it tick is a distraction. It still counts");
     const review = {
       kind: "solve" as const, id: "solve:g", skill: "g", title: "T", statement: "S", skills: ["g"],
       filePath: "t.md", lineNo: null, locator: "t.md", repeat: false, related: { pool: [], others: [] },
     };
-    const solving = startPractice(review, T0);
-    for (const key of ["1", "o", "a", "x"]) expect(practicePress(solving, key, T0).next, key).toBe(solving);
-    expect(practicePress(solving, "Enter", T0).next.at).toBe("solved");
+    const solving = startPractice(review);
+    for (const key of ["1", "o", "a", "x", "Enter"]) expect(practicePress(solving, key, T0).next, key).toBe(solving);
+    expect(practicePress(solving, " ", T0).next.at).toBe("solving");
+    expect(practicePress(solving, "d", T0).next.at).toBe("solved");
+    expect(practicePress(solving, "h", T0).effect).toEqual({ kind: "clock" });
     expect(practicePress(solving, "q", T0)).toEqual({ next: { at: "left" } });
-    expect(practiceKeysAt("solving").map((k) => k.key)).toEqual([" ", "q"]);
+    expect(practiceKeysAt("solving").map((k) => k.key)).toEqual([" ", "d", "h", "q"]);
   });
 });

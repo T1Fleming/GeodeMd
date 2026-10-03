@@ -77,9 +77,14 @@ export interface PracticeKey {
 }
 
 export const PRACTICE_KEYS: readonly PracticeKey[] = [
-  // Space or Enter, never any key: half an hour in, a stray keypress must not
-  // stop the clock and show the solution.
-  { key: " ", shown: "space", label: "done — show the solution", stage: "solving" },
+  // Space starts and pauses: the key a hand reaches for first, so it must
+  // never show the solution. In testing it did, as "done", and solves were
+  // logged at one second (#81).
+  { key: " ", shown: "space", label: "start / pause", stage: "solving" },
+  // Finishing is its own key, never Space or Enter: half an hour in, a stray
+  // keypress must not stop the clock and show the solution.
+  { key: "d", shown: "d", label: "done — show the solution", stage: "solving" },
+  { key: "h", shown: "h", label: "hide / show the clock", stage: "solving" },
   { key: "o", shown: "o", label: "open in editor", stage: "solved" },
   // Leaving records nothing: the solve stays due, like `0 later` on a card.
   { key: "q", shown: "q", label: "leave", stage: "both" },
@@ -91,7 +96,9 @@ export function practiceKeysAt(stage: "solving" | "solved"): PracticeKey[] {
 }
 
 export type PracticeAction =
+  | { kind: "toggle" }
   | { kind: "done" }
+  | { kind: "clock" }
   | { kind: "rate"; rating: 1 | 2 | 3 | 4 }
   | { kind: "open" }
   | { kind: "leave" }
@@ -99,13 +106,32 @@ export type PracticeAction =
 
 /** What a keypress means on the Practice screen. Which stage honours it is the model's. */
 export function interpretPracticeKey(key: string): PracticeAction {
-  if (key === " " || key === "Enter") return { kind: "done" };
+  if (key === " ") return { kind: "toggle" };
+  if (key === "d" || key === "D") return { kind: "done" };
+  if (key === "h" || key === "H") return { kind: "clock" };
   if (key >= "1" && key <= "4") return { kind: "rate", rating: Number(key) as 1 | 2 | 3 | 4 };
   if (key === "o" || key === "O") return { kind: "open" };
   // Not Escape: it is the key a hand reaches for without thinking, and here it
   // would throw away half an hour (#81). Leaving takes the `q` the legend shows.
   if (key === "q" || key === "Q") return { kind: "leave" };
   return { kind: "ignore" };
+}
+
+/**
+ * What the Practice clock says beside its time, or in place of it when it is
+ * hidden: whether it has started, and whether it is running. The time counts
+ * only while it runs, so `took` is time spent solving (#81).
+ */
+export function clockStateText(state: "not-started" | "running" | "paused"): string {
+  if (state === "not-started") return "not started — space to start";
+  if (state === "paused") return "paused — space to resume";
+  return "running";
+}
+
+/** What Space does next, as its button says it: one button that turns from start to pause and back (#81). */
+export function startPauseLabel(state: "not-started" | "running" | "paused"): string {
+  if (state === "running") return "pause";
+  return state === "paused" ? "resume" : "start";
 }
 
 /** A solve's time on the clock, `m:ss`, or `h:mm:ss` past the hour. */

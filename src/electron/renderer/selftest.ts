@@ -365,11 +365,28 @@ async function runPracticeChecks(): Promise<void> {
     return;
   }
   check("the Practice tab offers a solve, with the exercise's title", text(".practice .spot-title") !== "", text(".practice .spot-title"));
-  check("and a running clock", /^\d+:\d\d$/.test(text(".practice .clock")), text(".practice .clock"));
+  // The clock waits for Space, so reading is not solving (#81).
+  check("and a clock that has not started", text(".practice .clock").includes("not started"), text(".practice .clock"));
   const legend = all(".practice .legend .action");
-  check("offering done and leave", legend.join(" / ") === "space done — show the solution / q leave", legend.join(" / "));
+  check(
+    "offering start, done, the clock and leave",
+    legend.join(" / ") === "space start / d done — show the solution / h hide / show the clock / q leave",
+    legend.join(" / "),
+  );
   await shot("practice-01-solving");
 
+  await key(" ");
+  check("space starts the clock, and shows no solution", /^\d+:\d\d$/.test(text(".practice .clock .time")) && !text(".practice .clock").includes("not started") && !exists(".practice .viewer .note"), text(".practice .clock"));
+  check("and its button turns to pause", all(".practice .legend .action")[0] === "space pause", all(".practice .legend .action")[0] ?? "");
+  await key(" ");
+  check("and pauses it", text(".practice .clock").includes("paused"), text(".practice .clock"));
+  check("and its button to resume", all(".practice .legend .action")[0] === "space resume", all(".practice .legend .action")[0] ?? "");
+  await key("h");
+  check("h hides the time but still says whether it runs", !exists(".practice .clock .time") && text(".practice .clock").includes("paused"), text(".practice .clock"));
+  await key("h");
+  // Back as it was: a plain run's config is the user's own.
+  check("and h shows it again", exists(".practice .clock .time"), text(".practice .clock"));
+  await key(" ");
   await key("3");
   check("a stray key does not stop the clock", exists(".practice .spot-title") && !exists(".practice .rating"), text(".practice .legend"));
   await key("Escape");
@@ -380,9 +397,9 @@ async function runPracticeChecks(): Promise<void> {
   await click(".tabs .tab", "Practice");
   await until(".practice .clock");
   check("a solve survives a visit to another tab", text(".practice .spot-title") === solving && !exists(".practice .rating"), text(".practice .spot-title"));
-  await key(" ");
+  await key("d");
   await until(".practice .viewer .note");
-  check("space shows the note", exists(".practice .viewer .note"), text(".practice .viewer").slice(0, 60));
+  check("d shows the note", exists(".practice .viewer .note"), text(".practice .viewer").slice(0, 60));
   const ratings = all(".practice .legend .rating");
   check(
     "with the solve's own rating words",

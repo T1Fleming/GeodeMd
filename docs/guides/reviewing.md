@@ -223,7 +223,7 @@ What makes it work:
 
 Recognising the skill is half of it. The other half is carrying it out, and that is the **Practice** tab. It offers **one solve per visit**: the skill whose solve is most overdue, with an exercise picked the same way a spot review's is. Spotting a skill and solving it have separate schedules, and a skill you have spotted with one exercise can still be solved with it, since spotting it showed you no solution.
 
-A clock starts when the problem appears. Solve it wherever you solve things, in an editor or on LeetCode, and come back. **Press Space when you are done**, or Enter. No other key stops the clock, so a stray keypress half an hour in shows you nothing. The clock stops, and your note opens in full, solution and all, with the related exercises under it. Then:
+Read the problem, then **press Space to start the clock** when you start solving. Space pauses it and starts it again, so a phone call doesn't count: only the time it runs is recorded, and none at all if you never start it. Solve it wherever you solve things, in an editor or on LeetCode, and come back. **Press `d` when you are done.** No other key stops the clock, so a stray keypress half an hour in shows you nothing. The clock stops, and your note opens in full, solution and all, with the related exercises under it. Then:
 
 | | | |
 |---|---|---|
@@ -234,7 +234,7 @@ A clock starts when the problem appears. Solve it wherever you solve things, in 
 
 `1` and `2` are facts: you finished or you didn't, and you peeked or you didn't. The difference between `3` and `4` is your judgement. There is no time limit deciding it, but the time each solve took is recorded beside its rating.
 
-`q` leaves without rating, before or after the solution is showing, and records nothing: the solve is still due next time. A solve survives a visit to another tab: come back and it is where you left it, with the clock still running. Only `q` leaves; Escape does nothing here, so a reflex can't throw half an hour away. `o` opens the note in your editor once the solution is showing. After a rating, the tab says when the skill comes back and offers nothing more until your next visit. A solve takes half an hour, and a queue of them would make a sitting impossible to plan.
+`q` leaves without rating, before or after the solution is showing, and records nothing: the solve is still due next time. A solve survives a visit to another tab: come back and it is where you left it, with the clock as you left it, running or paused. `h` hides the clock if watching it tick is a distraction. It still counts, the screen still says whether it is running, and the setting is remembered. Only `q` leaves; Escape does nothing here, so a reflex can't throw half an hour away. `o` opens the note in your editor once the solution is showing. After a rating, the tab says when the skill comes back and offers nothing more until your next visit. A solve takes half an hour, and a queue of them would make a sitting impossible to plan.
 
 ### Cards for what gives the method away
 

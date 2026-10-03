@@ -115,16 +115,20 @@ A `SpotReview` sits in the same session as a card, as `ReviewItem = DueCard | Sp
 `Core.getSolveReview(now, dayStart)` returns one `SolveReview`: the skill whose solve is most overdue (never-solved skills after those, by name), asked with the exercise `chooseExercise` picks for `solve`. It returns null when no skill is due for a solve. Spot and solve schedules are separate. A spot review shows no solution, so having spotted an exercise doesn't use it up for a solve; having solved it uses it up for everything.
 
 The screen's decisions are in `renderer/model/practice.ts`, a pure state machine:
-- **`solving`**: the clock runs from the offer.
-- **`solved`**: Space or Enter stopped the clock, and the note was read with `note/read`.
+- **`solving`**: the problem is showing. The clock is **not started**, **running** or **paused** (`clockState`). It counts in `ranMs`, plus the time since `since` while it runs. Space starts and pauses it; `d` finishes from any of the three.
+- **`solved`**: `d` stopped the clock, and the note was read with `note/read`.
 - **`saving`**, then **`done`**: a rating was sent over `skills/review` with `kind: "solve"` and `took`. After that, nothing more is offered until the next visit.
 - **`left`**: `q` was pressed, and nothing was recorded.
 
-**A solve outlives the screen.** Each screen is mounted only while it shows, so the model is held by `App` (`heldSolve`), tagged with its vault, and `resumable` decides whether returning to the tab picks it up: yes while `solving`, `solved` or `saving`, no once `done` or `left`. The clock runs from the offer, so time spent on another tab counts, which is right: it measures the solve, not the screen. A note or a rating that arrives after the tab changed lands in the held model. One that arrives after a vault switch finds nothing held for it and is dropped (#81).
+**A solve outlives the screen.** Each screen is mounted only while it shows, so the model is held by `App` (`heldSolve`), tagged with its vault, and `resumable` decides whether returning to the tab picks it up: yes while `solving`, `solved` or `saving`, no once `done` or `left`. A running clock keeps running on another tab, which is right: it measures the solve, not the screen. Pausing is how to stop it. A note or a rating that arrives after the tab changed lands in the held model. One that arrives after a vault switch finds nothing held for it and is dropped (#81).
+
+**The clock waits to be started** (#81). It used to start on the offer, which counted reading time as solving and logged a solve left open overnight, or across a leap of the test clock, as a day. And Space, the key pressed to start things, meant done: in testing it showed the solution at once, and solves were logged at one second. Now Space starts, pauses and resumes, its button says which it will do (`startPauseLabel`), and only `d` shows the solution. `took` is the time the clock ran, and is left out of the log line when the clock never started: "not timed" rather than an instant solve.
+
+**The clock can be hidden** with `h`, for anyone the ticking number stresses. It still counts, the screen still says whether it runs (`clockStateText`), and the choice is the machine-wide `hideClock` key in the config, written over `practice/hide-clock`.
 
 **Escape does nothing on Practice.** It is the key a hand reaches for without thinking, and here it would discard the solve. Leaving takes `q`.
 
-A failed rating goes back to `solved`, so it can be given again. The keys and their stages are `host`'s `PRACTICE_KEYS` and `interpretPracticeKey`, and the words are `SOLVE_RATING_KEYS`, `clockText` and `nextSolveText`.
+A failed rating goes back to `solved`, so it can be given again. The keys and their stages are `host`'s `PRACTICE_KEYS` and `interpretPracticeKey`, and the words are `SOLVE_RATING_KEYS`, `clockText`, `clockStateText`, `startPauseLabel` and `nextSolveText`.
 
 **The clock redraws every second**, which is the one exception to the app's no-timer habit. It is safe for the reason `IdleCheck`'s is: nothing it draws changes what is on screen, and `took` is read on the keypress, not from the drawing.
 

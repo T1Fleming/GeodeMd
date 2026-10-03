@@ -58,6 +58,12 @@ export interface Settings {
    * absent means the editor, which is what `o` did before the viewer.
    */
   viewNotesInside?: boolean;
+  /**
+   * Whether the Practice clock is hidden (#81). It still counts and `took` is
+   * still recorded; only the ticking number is gone, for anyone it stresses.
+   * Written only when true.
+   */
+  hideClock?: boolean;
   /** The id of the vault the app has open. Always one of `vaults`. */
   active: string;
   /** Never empty: a config with no vault in it is no config at all. */
@@ -73,6 +79,7 @@ export interface VaultConfig extends Vault {
   device: string;
   editor?: string;
   viewNotesInside?: boolean;
+  hideClock?: boolean;
 }
 
 const ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
@@ -313,6 +320,7 @@ async function readRaw(
   // Only a literal `true` turns it on: a hand-edited `"yes"` is not a
   // reason to stop opening the editor the user chose.
   if (parsed["viewNotesInside"] === true) settings.viewNotesInside = true;
+  if (parsed["hideClock"] === true) settings.hideClock = true;
   return { settings, changed, minted };
 }
 
@@ -333,6 +341,7 @@ export function activeVault(settings: Settings): VaultConfig {
   };
   if (settings.editor !== undefined) config.editor = settings.editor;
   if (settings.viewNotesInside) config.viewNotesInside = true;
+  if (settings.hideClock) config.hideClock = true;
   return config;
 }
 
@@ -430,6 +439,7 @@ export async function writeConfig(file: string, settings: Settings): Promise<voi
   const ordered: Settings = { device: settings.device, active: settings.active, vaults: settings.vaults };
   if (settings.editor !== undefined) ordered.editor = settings.editor;
   if (settings.viewNotesInside) ordered.viewNotesInside = true;
+  if (settings.hideClock) ordered.hideClock = true;
   await fs.writeFile(tmp, `${JSON.stringify(ordered, null, 2)}\n`, "utf8");
   await fs.rename(tmp, file);
 }
@@ -503,6 +513,27 @@ export async function setEditor(
       delete s.editor;
       const value = editor?.trim() ?? "";
       if (value !== "") s.editor = value;
+    });
+    return settings;
+  } catch (err) {
+    if (err instanceof NoConfig) return null;
+    throw err;
+  }
+}
+
+/**
+ * Hide or show the Practice clock (#81), keeping every other key. Off removes
+ * the key rather than writing `false`. Null when there is no config.
+ */
+export async function setHideClock(
+  file: string,
+  on: boolean,
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<Settings | null> {
+  try {
+    const { settings } = await update(file, env, (s) => {
+      delete s.hideClock;
+      if (on) s.hideClock = true;
     });
     return settings;
   } catch (err) {
@@ -636,13 +667,14 @@ export async function removeVault(
  */
 async function leftoverMachineKeys(
   file: string,
-): Promise<Pick<Settings, "device" | "editor" | "viewNotesInside"> | null> {
+): Promise<Pick<Settings, "device" | "editor" | "viewNotesInside" | "hideClock"> | null> {
   try {
     const parsed = JSON.parse(await fs.readFile(file, "utf8")) as Record<string, unknown>;
     if (typeof parsed["device"] !== "string") return null;
-    const keys: Pick<Settings, "device" | "editor" | "viewNotesInside"> = { device: parsed["device"] };
+    const keys: Pick<Settings, "device" | "editor" | "viewNotesInside" | "hideClock"> = { device: parsed["device"] };
     if (typeof parsed["editor"] === "string" && parsed["editor"].trim() !== "") keys.editor = parsed["editor"];
     if (parsed["viewNotesInside"] === true) keys.viewNotesInside = true;
+    if (parsed["hideClock"] === true) keys.hideClock = true;
     return keys;
   } catch {
     return null;

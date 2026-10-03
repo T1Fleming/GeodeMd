@@ -12,16 +12,18 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ANSWER_ARROW,
+  clockStateText,
   clockText,
   interpretPracticeKey,
   nextSolveText,
   practiceKeysAt,
   relatedLines,
   repeatText,
+  startPauseLabel,
   SOLVE_RATING_KEYS,
 } from "../../host/present.js";
 import type { SolveReview } from "../../core/index.js";
-import { elapsed, noteArrived, press, recorded, resumable, start } from "./model/practice.js";
+import { clockState, elapsed, noteArrived, press, recorded, resumable, start } from "./model/practice.js";
 import type { Practice as Model, PracticeEffect } from "./model/practice.js";
 import { renderNote } from "./note.js";
 
@@ -45,6 +47,13 @@ export function Practice({
 }): React.JSX.Element {
   const [offer, setOffer] = useState<"loading" | "none" | { error: string } | null>("loading");
   const [model, setModel] = useState<Model | null>(null);
+  // A view setting, remembered in the config (#81): the clock still counts.
+  const [clockHidden, setClockHidden] = useState(false);
+  useEffect(() => {
+    void window.geode.configRead().then((r) => {
+      if (r.ok && r.value?.hideClock === true) setClockHidden(true);
+    });
+  }, []);
   // The app's, not this screen's: a note read or a rating still in flight when
   // the tab changes lands here, and is waiting on return.
   const live = useMemo(
@@ -74,13 +83,22 @@ export function Practice({
       if (!r.ok) return setOffer({ error: r.message });
       if (r.value === null) return setOffer("none");
       setOffer(null);
-      commit(start(r.value, new Date()));
+      commit(start(r.value));
     });
   }, [commit, live]);
 
   const perform = useCallback(
     (effect: PracticeEffect | undefined) => {
       if (!effect) return;
+      if (effect.kind === "clock") {
+        setClockHidden((was) => {
+          void window.geode.practiceHideClock(!was).then((r) => {
+            if (!r.ok) onNote(`could not remember the clock setting: ${r.message}`);
+          });
+          return !was;
+        });
+        return;
+      }
       const { review } = effect;
       if (effect.kind === "read-note") {
         void window.geode.noteRead(vault, review.filePath, review.id).then((r) => {
@@ -97,7 +115,7 @@ export function Practice({
         });
         return;
       }
-      const request = { skill: review.skill, kind: "solve" as const, exercise: review.filePath, repeat: review.repeat, took: effect.took };
+      const request = { skill: review.skill, kind: "solve" as const, exercise: review.filePath, repeat: review.repeat, ...(effect.took === null ? {} : { took: effect.took }) };
       void window.geode.skillsReview(request, effect.rating).then((r) => {
         if (!r.ok) {
           onNote(r.message);
@@ -128,7 +146,7 @@ export function Practice({
       // Over the solution, a key the screen does not use is the page's: the
       // arrows, Space and Page Down scroll it.
       const kind = interpretPracticeKey(e.key).kind;
-      if (live.current?.at === "solved" && (kind === "ignore" || kind === "done")) return;
+      if (live.current?.at === "solved" && (kind === "ignore" || kind === "toggle")) return;
       e.preventDefault();
       handle(e.key);
     };
@@ -170,13 +188,28 @@ export function Practice({
   }
 
   return model.at === "solving" ? (
-    <Solving model={model} onKey={handle} />
+    <Solving model={model} clockHidden={clockHidden} onKey={handle} />
   ) : (
-    <Solved review={model.review} took={model.took} note={model.note} saving={model.at === "saving"} onKey={handle} />
+    <Solved
+      review={model.review}
+      took={model.took}
+      note={model.note}
+      saving={model.at === "saving"}
+      clockHidden={clockHidden}
+      onKey={handle}
+    />
   );
 }
 
-function Solving({ model, onKey }: { model: Model & { at: "solving" }; onKey: (k: string) => void }): React.JSX.Element {
+function Solving({
+  model,
+  clockHidden,
+  onKey,
+}: {
+  model: Model & { at: "solving" };
+  clockHidden: boolean;
+  onKey: (k: string) => void;
+}): React.JSX.Element {
   const [, tick] = useState(0);
   useEffect(() => {
     const t = setInterval(() => tick((n) => n + 1), 1000);
@@ -188,17 +221,28 @@ function Solving({ model, onKey }: { model: Model & { at: "solving" }; onKey: (k
     <main className="practice">
       <header className="meta">
         <span>Practice · one solve</span>
-        <span className="clock">{clockText(elapsed(model, new Date()) * 1000)}</span>
+        <span className="clock">
+          {/* Hidden means the number, not the state: whether it is running
+              is what a hidden clock still has to say. */}
+          {!clockHidden && <span className="time">{clockText(elapsed(model, new Date()) * 1000)}</span>}
+          {(clockHidden || clockState(model) !== "running") && (
+            <span className="state muted">{clockStateText(clockState(model)!)}</span>
+          )}
+        </span>
       </header>
       <section className="card">
         <div className="front spot">
           <h3 className="spot-title">{model.review.title}</h3>
           {/* Sanitised in `renderNote`, like the viewer's note. */}
           <article className="note doc spot-statement" dangerouslySetInnerHTML={{ __html: statement }} />
-          <p className="prompt">Solve it wherever you solve things, then come back.</p>
+          <p className="prompt">
+            {clockState(model) === "not-started"
+              ? "Read it, then start the clock when you start solving."
+              : "Solve it wherever you solve things, then come back."}
+          </p>
         </div>
       </section>
-      <Legend stage="solving" onKey={onKey} />
+      <Legend stage="solving" clock={clockState(model)} onKey={onKey} />
     </main>
   );
 }
@@ -208,12 +252,14 @@ function Solved({
   took,
   note,
   saving,
+  clockHidden,
   onKey,
 }: {
   review: SolveReview;
-  took: number;
+  took: number | null;
   note: string | null;
   saving: boolean;
+  clockHidden: boolean;
   onKey: (k: string) => void;
 }): React.JSX.Element {
   const rendered = useMemo(() => (note === null ? null : renderNote(note, null).html), [note]);
@@ -227,7 +273,7 @@ function Solved({
           {ANSWER_ARROW}
           {review.title}
         </span>
-        <span className="clock">{clockText(took * 1000)}</span>
+        {!clockHidden && took !== null && <span className="clock">{clockText(took * 1000)}</span>}
       </header>
       <section className="viewer">
         {review.repeat && <p className="spot-repeat">{repeatText(review.skill)}</p>}
@@ -266,13 +312,22 @@ function Solved({
   );
 }
 
-function Legend({ stage, onKey }: { stage: "solving" | "solved"; onKey: (k: string) => void }): React.JSX.Element {
+function Legend({
+  stage,
+  clock = null,
+  onKey,
+}: {
+  stage: "solving" | "solved";
+  clock?: "not-started" | "running" | "paused" | null;
+  onKey: (k: string) => void;
+}): React.JSX.Element {
   return (
     <footer className="legend">
       <div className="actions">
         {practiceKeysAt(stage).map((k) => (
           <button key={k.key} className="action" onClick={() => onKey(k.key)}>
-            <kbd>{k.shown}</kbd> {k.label}
+            {/* Space's button says what it will do: start, pause or resume. */}
+            <kbd>{k.shown}</kbd> {k.key === " " && clock ? startPauseLabel(clock) : k.label}
           </button>
         ))}
       </div>
