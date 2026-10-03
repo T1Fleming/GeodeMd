@@ -9,7 +9,7 @@
  * number beside it, and the time recorded is read on the keypress.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ANSWER_ARROW,
   clockText,
@@ -21,28 +21,62 @@ import {
   SOLVE_RATING_KEYS,
 } from "../../host/present.js";
 import type { SolveReview } from "../../core/index.js";
-import { elapsed, noteArrived, press, recorded, start } from "./model/practice.js";
+import { elapsed, noteArrived, press, recorded, resumable, start } from "./model/practice.js";
 import type { Practice as Model, PracticeEffect } from "./model/practice.js";
 import { renderNote } from "./note.js";
 
-export function Practice({ vault, onNote }: { vault: string; onNote: (m: string) => void }): React.JSX.Element {
+/**
+ * A solve held by the app rather than the screen, so that it outlives a visit
+ * to another tab (#81). Tagged with its vault: a solve never follows a switch.
+ */
+export interface HeldSolve {
+  vault: string;
+  model: Model;
+}
+
+export function Practice({
+  vault,
+  held,
+  onNote,
+}: {
+  vault: string;
+  held: { current: HeldSolve | null };
+  onNote: (m: string) => void;
+}): React.JSX.Element {
   const [offer, setOffer] = useState<"loading" | "none" | { error: string } | null>("loading");
   const [model, setModel] = useState<Model | null>(null);
-  const live = useRef<Model | null>(null);
+  // The app's, not this screen's: a note read or a rating still in flight when
+  // the tab changes lands here, and is waiting on return.
+  const live = useMemo(
+    () => ({
+      get current(): Model | null {
+        return held.current?.vault === vault ? held.current.model : null;
+      },
+    }),
+    [held, vault],
+  );
 
-  const commit = useCallback((next: Model) => {
-    live.current = next;
-    setModel(next);
-  }, []);
+  const commit = useCallback(
+    (next: Model) => {
+      held.current = { vault, model: next };
+      setModel(next);
+    },
+    [held, vault],
+  );
 
   useEffect(() => {
+    const kept = live.current;
+    if (resumable(kept)) {
+      setOffer(null);
+      return commit(kept);
+    }
     void window.geode.practiceNext().then((r) => {
       if (!r.ok) return setOffer({ error: r.message });
       if (r.value === null) return setOffer("none");
       setOffer(null);
       commit(start(r.value, new Date()));
     });
-  }, [commit]);
+  }, [commit, live]);
 
   const perform = useCallback(
     (effect: PracticeEffect | undefined) => {
@@ -51,7 +85,9 @@ export function Practice({ vault, onNote }: { vault: string; onNote: (m: string)
       if (effect.kind === "read-note") {
         void window.geode.noteRead(vault, review.filePath, review.id).then((r) => {
           if (!r.ok) onNote(`could not show the note: ${r.message}`);
-          commit(noteArrived(live.current!, r.ok ? r.value.text : null));
+          // Gone when the vault was switched meanwhile: the note is for a solve that is not held.
+          const p = live.current;
+          if (p) commit(noteArrived(p, r.ok ? r.value.text : null));
         });
         return;
       }
@@ -65,13 +101,15 @@ export function Practice({ vault, onNote }: { vault: string; onNote: (m: string)
       void window.geode.skillsReview(request, effect.rating).then((r) => {
         if (!r.ok) {
           onNote(r.message);
-          return commit(recorded(live.current!, null, true));
+          const p = live.current;
+          return p && commit(recorded(p, null, true));
         }
         if (r.value.applied === "log-only") onNote("saved — the database was busy and will catch up");
-        commit(recorded(live.current!, r.value.next?.due ?? null));
+        const p = live.current;
+        if (p) commit(recorded(p, r.value.next?.due ?? null));
       });
     },
-    [commit, onNote, vault],
+    [commit, live, onNote, vault],
   );
 
   const handle = useCallback(
@@ -81,7 +119,7 @@ export function Practice({ vault, onNote }: { vault: string; onNote: (m: string)
       commit(next);
       perform(effect);
     },
-    [commit, perform],
+    [commit, live, perform],
   );
 
   useEffect(() => {
@@ -96,7 +134,7 @@ export function Practice({ vault, onNote }: { vault: string; onNote: (m: string)
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [handle]);
+  }, [handle, live]);
 
   if (offer === "loading") return <p className="muted">loading…</p>;
   if (offer === "none") {

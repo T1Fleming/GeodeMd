@@ -38,6 +38,16 @@ export type PracticeEffect =
   | { kind: "rate"; review: SolveReview; rating: 1 | 2 | 3 | 4; took: number }
   | { kind: "open"; review: SolveReview };
 
+/**
+ * Whether coming back to the tab picks this solve up again rather than
+ * offering a new one. A solve under way survives a visit to another tab, with
+ * its clock still running from the offer (#81); a finished or abandoned one
+ * does not, which is what "one solve per visit" means.
+ */
+export function resumable(p: Practice | null): p is Practice & { at: "solving" | "solved" | "saving" } {
+  return p !== null && (p.at === "solving" || p.at === "solved" || p.at === "saving");
+}
+
 /** The clock starts the moment the problem is on screen. */
 export function start(review: SolveReview, now: Date): Practice {
   return { at: "solving", review, startedAt: now.getTime() };

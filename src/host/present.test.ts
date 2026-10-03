@@ -529,6 +529,8 @@ describe("how the Practice screen is worded and keyed", () => {
     expect(interpretPracticeKey(" ")).toEqual({ kind: "done" });
     expect(interpretPracticeKey("Enter")).toEqual({ kind: "done" });
     expect(interpretPracticeKey("x")).toEqual({ kind: "ignore" });
+    // Escape would discard half an hour by reflex; leaving takes `q` (#81).
+    expect(interpretPracticeKey("Escape")).toEqual({ kind: "ignore" });
     expect(practiceKeysAt("solving").map((k) => k.shown)).toEqual(["space", "q"]);
     expect(practiceKeysAt("solved").map((k) => k.shown)).toEqual(["o", "q"]);
   });

@@ -372,6 +372,14 @@ async function runPracticeChecks(): Promise<void> {
 
   await key("3");
   check("a stray key does not stop the clock", exists(".practice .spot-title") && !exists(".practice .rating"), text(".practice .legend"));
+  await key("Escape");
+  check("Escape does not leave the solve", exists(".practice .spot-title") && !exists(".practice.done"), text("main").slice(0, 60));
+  // Half an hour of work must survive a glance at another tab (#81).
+  const solving = text(".practice .spot-title");
+  await click(".tabs .tab", "Review");
+  await click(".tabs .tab", "Practice");
+  await until(".practice .clock");
+  check("a solve survives a visit to another tab", text(".practice .spot-title") === solving && !exists(".practice .rating"), text(".practice .spot-title"));
   await key(" ");
   await until(".practice .viewer .note");
   check("space shows the note", exists(".practice .viewer .note"), text(".practice .viewer").slice(0, 60));

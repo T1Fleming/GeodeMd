@@ -11,11 +11,11 @@ app do*, and *where is that proven*. What it deliberately cannot tell you is wha
 app does **untested** — an area that looks thin here is thinly covered, and that is
 worth reading as a finding rather than a gap in the document.
 
-879 behaviours in 13 areas, which follow [the guides](../guides/) rather than the source tree.
+881 behaviours in 13 areas, which follow [the guides](../guides/) rather than the source tree.
 
 - [Reviewing](#reviewing) — 234
 - [Recognising a card](#recognising-a-card) — 129
-- [Exercises](#exercises) — 49
+- [Exercises](#exercises) — 51
 - [Syncing notes](#syncing-notes) — 89
 - [Recovery and the log](#recovery-and-the-log) — 54
 - [Moving between machines](#moving-between-machines) — 17
@@ -746,7 +746,7 @@ _8 · `parser/parser.test.ts`_
 
 _Notes opted in by `geode-skills`: a skill scheduled in place of a card, and a different problem from its pool served each time it comes due (ADR 0038)._
 
-**49 behaviours.**
+**51 behaviours.**
 
 ### a note becomes an exercise only by naming its skills
 
@@ -837,13 +837,15 @@ _2 · `core/exercises.test.ts`_
 
 ### a solve on the Practice screen
 
-_7 · `electron/renderer/model/practice.test.ts`_
+_9 · `electron/renderer/model/practice.test.ts`_
 
 - times the attempt from the moment the problem is shown to the moment you say you are done
 - stops only on Space or Enter, so a stray key half an hour in shows nothing
 - records the rating with the time taken, and offers no second solve
 - keeps the solve when a rating fails, so it can be given again
 - records nothing when you leave, before or after the reveal
+- ignores Escape, which would throw away a solve by reflex
+- picks a solve under way back up on return to the tab, and nothing finished
 - opens the note in an editor once the solution is showing, and not before
 - drops a note that arrives after the rating
 
