@@ -12,7 +12,7 @@ import * as path from "node:path";
 import * as files from "../files/index.js";
 import { CONTEXT_VERSION, parse, parseNote, splitLines, stampLine, SYNTAX_VERSION, unstamp } from "../parser/index.js";
 import type { ContextEntry, ParsedCard } from "../parser/index.js";
-import { EXERCISE_VERSION, parseExercise } from "../parser/exercise.js";
+import { EXERCISE_VERSION, parseExercise, stampExerciseId } from "../parser/exercise.js";
 import { Store } from "../store/index.js";
 import type { CardState, DueRow, PoolEntry } from "../store/index.js";
 import { fold, FsrsScheduler, SKILL_FSRS_PARAMS } from "../scheduler/index.js";
@@ -171,9 +171,14 @@ export interface SkillReview {
   skill: string;
   title: string;
   statement: string;
-  /** Every skill the exercise names. Any of them is a right answer to a spot review. */
+  /** Every skill the exercise names, each rated on its own (ADR 0040). */
   skills: string[];
   filePath: string;
+  /**
+   * What a review of it is logged under: its `geode-id`, or its path until
+   * sync has written one (ADR 0041).
+   */
+  exerciseId: string;
   lineNo: null;
   locator: string;
   /**
@@ -441,6 +446,8 @@ export class Core {
     // Ids seen anywhere in this pass, so a copy inside one file is caught even
     // when the second occurrence is in a file walked later.
     const idsSeenThisPass = new Set<string>();
+    /** Exercise ids met this pass, so a copy read after its original is re-minted (ADR 0041). */
+    const exerciseIdsSeen = new Set<string>();
 
     let done = 0;
     for (const cand of candidates) {
@@ -489,7 +496,6 @@ export class Core {
       for (const i of unnested) {
         if (summary.unnestedAt.length < UNNESTED_SHOWN) summary.unnestedAt.push(`${cand.relPath}:${i + 1}`);
       }
-      this.readExercise(cand.relPath, text, dryRun, summary);
 
       // Step 4: defer, mint, write.
       // "within 2 seconds of" is symmetric. A signed comparison would defer a
@@ -509,6 +515,22 @@ export class Core {
         summary,
       });
       if (outcome === null) continue; // write guard fired; retry next pass
+
+      // The note as an exercise, after the cards: it may need its id written,
+      // into the text the card stamps just produced (ADR 0041).
+      const exercise = await this.stampExercise({
+        relPath: cand.relPath,
+        text: outcome.text,
+        stat: outcome.stat,
+        deferred,
+        dryRun,
+        alreadyEdited: outcome.stamped,
+        exerciseIdsSeen,
+        summary,
+      });
+      if (exercise === null) continue; // write guard fired; retry next pass
+      outcome.stat = exercise.stat;
+      outcome.pending = outcome.pending || exercise.pending;
 
       // Step 5: reconcile.
       if (!dryRun) {
@@ -590,14 +612,32 @@ export class Core {
   }
 
   /**
-   * Read a note as an exercise, and put what it is into the database (ADR 0038).
+   * Read a note as an exercise, write its id if it has none (ADR 0041), and
+   * put what it is into the database (ADR 0038). Null when the write guard
+   * fired, as for cards: the file changed under us, and the next pass retries.
    *
-   * Beside step 3 rather than inside steps 4-5: nothing is stamped, so there
-   * is nothing to defer and no write guard to wait for. A note that is not an
-   * exercise this time loses any row it had, which is what removing the
-   * property or a `## Solution` heading means.
+   * An id is minted for a servable exercise with no valid `geode-id`, or one
+   * whose id belongs to another note: met earlier this pass, or stored at a
+   * path whose note still carries it. That is a copy, and the copy is the
+   * one re-minted. Nothing is written within the deferral window; the note
+   * is left for the next pass, as a card would be.
+   *
+   * A note that stops being an exercise this time loses any row it had,
+   * which is what removing the `geode-skills` property means.
    */
-  private readExercise(relPath: string, text: string, dryRun: boolean, summary: SyncSummary): void {
+  private async stampExercise(a: {
+    relPath: string;
+    text: string;
+    stat: files.StatInfo;
+    deferred: boolean;
+    dryRun: boolean;
+    /** The card stamps already edited this note, so it is not counted twice. */
+    alreadyEdited: boolean;
+    exerciseIdsSeen: Set<string>;
+    summary: SyncSummary;
+  }): Promise<{ stat: files.StatInfo; pending: boolean } | null> {
+    const { relPath, text, deferred, dryRun, summary } = a;
+    let stat = a.stat;
     const ex = parseExercise(text);
     if (ex.kind === "exercise") summary.exercisesFound++;
     if (ex.kind === "unreadable") summary.exercisesUnreadable++;
@@ -605,19 +645,44 @@ export class Core {
     if ((ex.kind === "unreadable" || ex.kind === "no-solution") && summary.exerciseProblemsAt.length < UNNESTED_SHOWN) {
       summary.exerciseProblemsAt.push(relPath);
     }
-    if (dryRun) return;
-    // Almost every note is not an exercise and never was. One indexed read
-    // keeps those to no write at all, which is what a sync of a large vault
-    // is measured on (ADR 0008).
-    if (ex.kind !== "exercise" && !this.store.getExercise(relPath)) return;
-    this.store.transaction(() =>
-      this.store.putExercise(
-        relPath,
-        ex.kind === "exercise"
-          ? { title: ex.title ?? noteName(relPath), statement: ex.statement, skills: ex.skills }
-          : null,
-      ),
-    );
+
+    if (ex.kind !== "exercise") {
+      // Almost every note is not an exercise and never was. One indexed read
+      // keeps those to no write at all, which is what a sync of a large vault
+      // is measured on (ADR 0008).
+      if (!dryRun && this.store.getExercise(relPath)) this.store.transaction(() => this.store.putExercise(relPath, null));
+      return { stat, pending: false };
+    }
+
+    let id = ex.id;
+    let copy = false;
+    if (id !== null) {
+      if (a.exerciseIdsSeen.has(id)) copy = true;
+      else {
+        const was = this.store.exercisePathOf(id);
+        if (was !== undefined && was !== relPath) copy = await exerciseIdIsIn(this.config.notesPath, was, id);
+      }
+    }
+    if (id === null || copy) {
+      if (deferred) return { stat, pending: true };
+      if (copy) summary.duplicatesReminted++;
+      id = this.config.newId();
+      if (!a.alreadyEdited) summary.filesStamped++;
+      if (!dryRun) {
+        const after = await files.writeIfUnchanged(this.config.notesPath, relPath, stampExerciseId(text, id), stat);
+        if (!after) {
+          if (!a.alreadyEdited) summary.filesStamped--;
+          return null;
+        }
+        stat = after;
+      }
+    }
+    a.exerciseIdsSeen.add(id);
+    if (!dryRun) {
+      const row = { id, title: ex.title ?? noteName(relPath), statement: ex.statement, skills: ex.skills };
+      this.store.transaction(() => this.store.putExercise(relPath, row));
+    }
+    return { stat, pending: false };
   }
 
   /**
@@ -638,7 +703,7 @@ export class Core {
     dryRun: boolean;
     idsSeenThisPass: Set<string>;
     summary: SyncSummary;
-  }): Promise<{ confirmed: ParsedCard[]; stat: files.StatInfo; pending: boolean } | null> {
+  }): Promise<{ confirmed: ParsedCard[]; stat: files.StatInfo; pending: boolean; text: string; stamped: boolean } | null> {
     const { relPath, text, parsed, stat, deferred, dryRun, idsSeenThisPass, summary } = args;
 
     const lines = splitLines(text);
@@ -698,7 +763,7 @@ export class Core {
       toStamp.push({ card, id: fresh });
     }
 
-    if (toStamp.length === 0) return { confirmed, stat, pending };
+    if (toStamp.length === 0) return { confirmed, stat, pending, text, stamped: false };
 
     // Reconstruct from lines, rejoining by concatenation so a CRLF file — or one
     // with no trailing newline — comes back byte-identical apart from the
@@ -716,7 +781,7 @@ export class Core {
       // and "how many files would you edit" is the question a first run asks.
       summary.filesStamped++;
       for (const { card, id } of toStamp) confirmed.push({ ...card, id });
-      return { confirmed, stat, pending };
+      return { confirmed, stat, pending, text: out.join(""), stamped: true };
     }
 
     const after = await files.writeIfUnchanged(this.config.notesPath, relPath, out.join(""), stat);
@@ -726,7 +791,7 @@ export class Core {
     summary.filesStamped++;
 
     for (const { card, id } of toStamp) confirmed.push({ ...card, id });
-    return { confirmed, stat: after, pending };
+    return { confirmed, stat: after, pending, text: out.join(""), stamped: true };
   }
 
   /** Step 5. */
@@ -1027,6 +1092,7 @@ export class Core {
       statement: exercise.statement,
       skills,
       filePath: pick.path,
+      exerciseId: pick.id ?? pick.path,
       lineNo: null,
       locator: pick.path,
       repeat: pick.seen === 1,
@@ -1083,7 +1149,7 @@ export class Core {
         .filter((o) => o.skill !== skill)
         .map((o) => ({
           ...o,
-          repeat: this.store.poolOf(o.skill, kind).find((e) => e.path === exercise)?.seen === 1,
+          repeat: this.store.poolOf(o.skill, kind).find((e) => e.id === exercise || e.path === exercise)?.seen === 1,
         })),
     ];
     const at = files.formatAt(now);
@@ -1241,6 +1307,15 @@ export class Core {
    * (ADR 0031). False for a database that has never synced: its first sync
    * reads everything anyway, behind a preview of its own.
    */
+  /**
+   * Whether the vault's exercises have yet to get their ids: it has some, and
+   * they were read by rules from before ADR 0041. The next sync writes a
+   * `geode-id` line into each, so the app says so first, as for a syntax change.
+   */
+  exercisesNeedIds(): boolean {
+    return this.store.countExercises() > 0 && Number(this.store.getMeta(EXERCISE_KEY) ?? "0") < 3;
+  }
+
   syntaxChanged(): boolean {
     return this.store.countFiles() > 0 && this.store.getMeta(SYNTAX_KEY) !== SYNTAX_VERSION;
   }
@@ -1410,6 +1485,16 @@ async function idIsInFile(root: string, relPath: string, id: string): Promise<bo
   try {
     const text = await readFileAsync(path.join(root, relPath), "utf8");
     return text.includes(`<!-- ${id} -->`);
+  } catch {
+    return false;
+  }
+}
+
+/** Whether the note at `relPath` still carries exercise id `id`: false for a move, true for a copy (ADR 0041). */
+async function exerciseIdIsIn(root: string, relPath: string, id: string): Promise<boolean> {
+  try {
+    const ex = parseExercise(await readFileAsync(path.join(root, relPath), "utf8"));
+    return ex.kind === "exercise" && ex.id === id;
   } catch {
     return false;
   }

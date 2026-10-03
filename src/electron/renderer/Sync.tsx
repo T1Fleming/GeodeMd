@@ -54,7 +54,7 @@ export function Sync(): React.JSX.Element {
     <main className="screen">
       <h2>Sync</h2>
       <p className="muted lead">
-        Reads your notes, writes an id into any card that has none, and picks up reviews
+        Reads your notes, writes an id into any card or exercise that has none, and picks up reviews
         recorded on other machines.
       </p>
 

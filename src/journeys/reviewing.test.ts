@@ -12,6 +12,7 @@
  * actually performs, and the sentences we printed for them.
  */
 
+import { stampExerciseId } from "../parser/exercise.js";
 import { afterEach, describe, expect, it } from "vitest";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
@@ -553,7 +554,7 @@ describe("an exercise is asked as the guide says", () => {
     return note!;
   }
 
-  it("asks the guide's example as the guide draws it, and writes nothing into the note", async () => {
+  it("asks the guide's example as the guide draws it, and writes only its id into the note", async () => {
     const [drawn] = fences(await section(), "text");
     open = await newCollection();
     await open.write("leetcode/daily-temperatures.md", await exampleNote());
@@ -563,7 +564,11 @@ describe("an exercise is asked as the guide says", () => {
     expect(spot, "the example is not asked as a spot review").toBeDefined();
     const screen = `${spot!.title}\n\n${spot!.statement}\n\n${SPOT_PROMPT}${ANSWER_ARROW}${ANSWER_BLANK}`;
     expect(screen).toBe(drawn!.trimEnd());
-    expect(await open.read("leetcode/daily-temperatures.md")).toBe(await exampleNote());
+    const written = await open.read("leetcode/daily-temperatures.md");
+    const id = /^geode-id: (sr-[A-Za-z0-9]{12})$/m.exec(written)?.[1];
+    expect(id, "no geode-id was written").toBeDefined();
+    expect(written).toBe(stampExerciseId(await exampleNote(), id!));
+    expect(plain(await section())).toContain("Sync adds one line to the note's properties, geode-id");
   });
 
   it("names the same four ratings, in the same order, with the same words", async () => {
@@ -760,7 +765,7 @@ describe("a solve on the Practice tab goes as the guide says", () => {
     expect(text).toContain("h hides the clock if watching it tick is a distraction. It still counts");
     const review = {
       kind: "solve" as const, id: "solve:g", skill: "g", title: "T", statement: "S", skills: ["g"],
-      filePath: "t.md", lineNo: null, locator: "t.md", repeat: false, related: { pool: [], others: [] },
+      filePath: "t.md", exerciseId: "t.md", lineNo: null, locator: "t.md", repeat: false, related: { pool: [], others: [] },
     };
     const solving = startPractice(review);
     for (const key of ["1", "o", "a", "x", "Enter"]) expect(practicePress(solving, key, T0).next, key).toBe(solving);

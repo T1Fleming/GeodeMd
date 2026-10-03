@@ -21,7 +21,7 @@ import type { OpenIn, Session } from "./model/session.js";
 import { choose, leftNote, switcherOptions } from "./model/vaults.js";
 import type { Scheduled } from "../../host/queue.js";
 import { IdleCheck } from "./IdleCheck.js";
-import { backlogCapped, isSpot, rescheduledText, syntaxChangedText } from "../../host/present.js";
+import { backlogCapped, exerciseIdsText, isSpot, rescheduledText, syntaxChangedText } from "../../host/present.js";
 
 declare global {
   interface Window {
@@ -97,16 +97,17 @@ export function App(): React.JSX.Element {
     const opened = await window.geode.vaultsOpen();
     if (!opened.ok) setNote(opened.message);
     else {
-      const { rescheduled, syntaxChanged } = opened.value;
+      const { rescheduled, syntaxChanged, exerciseIds } = opened.value;
       const said = [
         syntaxChanged ? syntaxChangedText() : null,
+        exerciseIds ? exerciseIdsText() : null,
         rescheduled ? rescheduledText(rescheduled) : null,
       ].filter((t) => t !== null);
       if (said.length > 0) setNote(said.join(" "));
       // The next sync reads every note and may stamp lines that were never
       // cards, so the user is taken to the preview rather than the queue
       // (ADR 0031).
-      if (syntaxChanged) setTab("sync");
+      if (syntaxChanged || exerciseIds) setTab("sync");
     }
     setBoot({ at: "ready", config: c.value });
   }, []);
@@ -370,7 +371,7 @@ function ReviewScreen({
       // card is recorded by its stamp.
       const r = isSpot(item)
         ? await window.geode.skillsReview(
-            { skill: item.skill, kind: "spot", exercise: item.filePath, repeat: item.repeat, ...(others ? { others } : {}) },
+            { skill: item.skill, kind: "spot", exercise: item.exerciseId, repeat: item.repeat, ...(others ? { others } : {}) },
             rating,
           )
         : await window.geode.cardsReview(item.id, rating);

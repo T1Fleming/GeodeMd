@@ -24,13 +24,26 @@ Details worth knowing:
 - **The YAML library is `yaml`** (eemeli), pinned exactly. It has no dependencies, is safe in the renderer bundle, and doesn't execute custom tags.
 - **The title** is the first `# ` heading, or the file name when there is none.
 - **The statement** is everything after the title up to the first **spoiler heading**: `## Solution`, `## Intuition`, `## Approach`, `## Hint`, `## Hints` or `## Explanation` ([ADR 0039](../decisions/0039-exercises-after-first-use.md)). Headings are matched case-insensitively, with optional closing `#`s. Headings inside a fenced block don't count. A note still needs `## Solution` itself; a spoiler heading alone is `no-solution`.
-- **Nothing is ever written into an exercise note.** No stamp is minted, which is why the card parser's skip list has nothing to guard here.
+- **The id** is the `geode-id` property ([ADR 0041](../decisions/0041-an-exercise-has-an-id.md)), in the cards' `sr-` format, and null when absent or invalid.
+- **`stampExerciseId(text, id)`** writes it as one line, and is the only write GeodeMD makes to an exercise note. It replaces an existing top-level `geode-id:` line, or adds one just before the closing `---`, with the block's own line ending. The YAML is never re-serialised. An exercise is opted in by an explicit property, so the card parser's skip-list worry, writing into a note that never asked, doesn't arise.
 
-`EXERCISE_VERSION` works like `CONTEXT_VERSION`. A database recorded under another version makes the next sync read every note once, with no warning, because nothing can be stamped.
+## Ids
+
+An exercise is identified by its **id**, so its history survives a move or a rename. Sync writes the id ([ADR 0041](../decisions/0041-an-exercise-has-an-id.md)):
+
+- **`Core.stampExercise`** runs after the card stamps, on the text they produced, so a note gaining both is written twice, each time through `writeIfUnchanged`.
+- **An id is minted** for a servable exercise with no valid id, or a **copy**: one whose id was met earlier this pass, or is stored at another path whose note still carries it (`exerciseIdIsIn`). A stored path whose note no longer carries the id is a **move**, and the id stays.
+- **The card stamps' rules apply:** nothing is written within the deferral window, where the note is left `pending` and read again next time. A preview counts the note in `filesStamped` and writes nothing.
+- **Reviews are logged under the id** (`SkillReview.exerciseId`, which is the path until an id is written). **Old lines name a path,** and `store.poolOf` matches either, when ranking. A path is never resolved to an id at ingest: done after a move, a rebuild would resolve it differently from the database it rebuilt.
+- **The first sync after upgrading** writes every existing exercise's id. `Core.exercisesNeedIds` is true for a vault with exercises read under `EXERCISE_VERSION` below `3`, and the app says so (`exerciseIdsText`) and opens the Sync tab, as for a change of card syntax.
+
+**Skills are still identified by their tag.** Renaming one starts a new skill; the old schedule is kept and is never due ([ADR 0010](../decisions/0010-absence-is-not-deletion.md)).
+
+`EXERCISE_VERSION` works like `CONTEXT_VERSION`: a database recorded under another version makes the next sync read every note once. Moving to `3` also writes ids, which is why that one move is announced (above).
 
 ## Sync
 
-Each note that sync reads in step 3 is also read as an exercise (`Core.readExercise`). This sits beside steps 4–5, not inside them: there is nothing to defer and no write guard. The note's `exercises` row and its `exercise_skills` rows are replaced whole.
+Each note that sync reads in step 3 is also read as an exercise (`Core.stampExercise`), after step 4 has stamped its cards. Writing its id follows step 4's rules: the deferral window and the write guard. The note's `exercises` row and its `exercise_skills` rows are replaced whole.
 
 **Most notes cost no write.** If a note isn't an exercise and has no row from before, there's no write and no transaction. One indexed read decides that.
 

@@ -11,6 +11,7 @@ const review: SolveReview = {
   statement: "Reach the end.",
   skills: ["greedy"],
   filePath: "jump-game.md",
+  exerciseId: "jump-game.md",
   lineNo: null,
   locator: "jump-game.md",
   repeat: false,

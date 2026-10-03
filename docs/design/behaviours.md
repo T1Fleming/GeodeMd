@@ -11,11 +11,11 @@ app do*, and *where is that proven*. What it deliberately cannot tell you is wha
 app does **untested** — an area that looks thin here is thinly covered, and that is
 worth reading as a finding rather than a gap in the document.
 
-912 behaviours in 13 areas, which follow [the guides](../guides/) rather than the source tree.
+925 behaviours in 13 areas, which follow [the guides](../guides/) rather than the source tree.
 
-- [Reviewing](#reviewing) — 237
+- [Reviewing](#reviewing) — 238
 - [Recognising a card](#recognising-a-card) — 129
-- [Exercises](#exercises) — 67
+- [Exercises](#exercises) — 79
 - [Syncing notes](#syncing-notes) — 89
 - [Recovery and the log](#recovery-and-the-log) — 59
 - [Moving between machines](#moving-between-machines) — 17
@@ -31,7 +31,7 @@ worth reading as a finding rather than a gap in the document.
 
 _A session: which card is next, what the keys mean, what a rating records, and what comes back before the sitting ends._
 
-**237 behaviours.**
+**238 behaviours.**
 
 ### the order cards are served in
 
@@ -175,6 +175,12 @@ _8 · `host/present.test.ts`_
 _1 · `host/present.test.ts`_
 
 - names both separators, the one that stopped, and the preview
+
+### what the app says when exercises are about to get their ids
+
+_1 · `host/present.test.ts`_
+
+- names the property, why, and the preview, and says nothing else changes
 
 ### what the app says about card lines that are not nested
 
@@ -749,7 +755,7 @@ _8 · `parser/parser.test.ts`_
 
 _Notes opted in by `geode-skills`: a skill scheduled in place of a card, and a different problem from its pool served each time it comes due (ADR 0038)._
 
-**67 behaviours.**
+**79 behaviours.**
 
 ### a note becomes an exercise only by naming its skills
 
@@ -782,11 +788,28 @@ _7 · `parser/exercise.test.ts`_
 - starts straight after the properties when the note has no title
 - leaves ordinary cards in an exercise note to the card parser
 
+### an exercise's id in its properties
+
+_4 · `parser/exercise.test.ts`_
+
+- is read when valid, and ignored when not
+- is added as one line before the closing ---, leaving every other byte alone
+- replaces an existing geode-id line rather than adding a second key
+- keeps a CRLF note CRLF
+
 ### sync reads a note's skills into pools
 
-_6 · `core/exercises.test.ts`_
+_14 · `core/exercises.test.ts`_
 
-- puts an exercise in every pool it names, and writes nothing into the note
+- puts an exercise in every pool it names, and writes only its id into the note
+- keeps an exercise's history when its note is moved
+- gives a copied note an id of its own
+- writes no id within the deferral window, and reads the note again next time
+- writes nothing on a preview, but counts the note as one it would edit
+- still matches a review logged by path, before ids, while the note stays put
+- rebuilds exactly after a note has moved
+- says a vault's exercises need ids when they were read before ids, and not after the sync
+- never says so for a vault with no exercises
 - titles an exercise with no heading by its file name
 - reports an exercise it cannot serve, and leaves it out of every pool
 - takes a note out of its pools when the property or the heading goes, or the note does
@@ -1964,7 +1987,7 @@ _4 · `journeys/reviewing.test.ts`_
 
 _11 · `journeys/reviewing.test.ts`_
 
-- asks the guide's example as the guide draws it, and writes nothing into the note
+- asks the guide's example as the guide draws it, and writes only its id into the note
 - names the same four ratings, in the same order, with the same words
 - asks a skill with a different exercise each time it comes due
 - is right that only geode-skills makes an exercise, and form: exercise does not

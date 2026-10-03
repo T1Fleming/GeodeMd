@@ -8,6 +8,7 @@ import {
   cardContext,
   CRUMB_MAX,
   syntaxChangedText,
+  exerciseIdsText,
   ACTION_KEYS,
   actionsAt,
   deferralReason,
@@ -374,6 +375,14 @@ describe("what the app says when the card syntax changed", () => {
   it("names both separators, the one that stopped, and the preview", () => {
     const text = syntaxChangedText();
     for (const part of [">>", "==", "::", "preview"]) expect(text).toContain(part);
+  });
+});
+
+describe("what the app says when exercises are about to get their ids", () => {
+  it("names the property, why, and the preview, and says nothing else changes", () => {
+    // ADR 0041: the first sync after upgrading writes into every exercise note.
+    const text = exerciseIdsText();
+    for (const part of ["geode-id", "move or a rename", "Preview", "Nothing else"]) expect(text).toContain(part);
   });
 });
 
