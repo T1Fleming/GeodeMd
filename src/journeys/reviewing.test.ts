@@ -252,7 +252,9 @@ describe("reading the note inside the app does what the guide says", () => {
 
 describe("the intervals the guide quotes are the ones FSRS produces", () => {
   it("matches every row of the table, against the real scheduler", async () => {
-    // The row that matters most is `3` — ten minutes is why a card comes back
+    // Short steps are exact: fuzz never touches them, so a row stated in
+    // minutes must match to the minute, and only a row stated as "about" may
+    // move. The row that matters most is `3` — ten minutes is why a card comes back
     // before the sitting ends, and the whole "A card usually comes back" section
     // is built on it. A ts-fsrs bump that changed these would fail here rather
         // than quietly making the guide wrong.
@@ -263,13 +265,19 @@ describe("the intervals the guide quotes are the ones FSRS produces", () => {
     for (const [keyCell, dueCell] of rows) {
       const key = plain(keyCell!).split(" ")[0]! as "1" | "2" | "3" | "4";
       const stated = plain(dueCell!);
-      const next = scheduler.next(scheduler.initial(T0), Number(key) as 1 | 2 | 3 | 4, T0);
+      const next = scheduler.next(scheduler.initial(T0), Number(key) as 1 | 2 | 3 | 4, T0, "sr-000000000001");
       const minutes = (new Date(next.due).getTime() - T0.getTime()) / 60_000;
 
-      const [, n, unit] = /^(\d+)\s+(minute|minutes|day|days)/.exec(stated) ?? [];
+      const [, about, n, unit] = /^(about )?(\d+)\s+(minute|minutes|day|days)/.exec(stated) ?? [];
       expect(n, `cannot read "${stated}" as an interval`).toBeDefined();
       const expected = unit!.startsWith("day") ? Number(n) * 1440 : Number(n);
-      expect(minutes, `the guide says \`${key}\` gives ${stated}`).toBe(expected);
+      if (about) {
+        // Fuzzed (ADR 0039): ts-fsrs moves an interval of 2.5–7 days by up to
+        // 15%, and more by less, so "about 8 days" is 6 to 10.
+        expect(Math.abs(minutes - expected), `the guide says \`${key}\` gives ${stated}`).toBeLessThanOrEqual(2 * 1440);
+      } else {
+        expect(minutes, `the guide says \`${key}\` gives ${stated}`).toBe(expected);
+      }
     }
   });
 
@@ -283,7 +291,7 @@ describe("the intervals the guide quotes are the ones FSRS produces", () => {
     // nothing else left is not served until its time comes.
     const scheduler = new FsrsScheduler();
     const card = { id: "sr-000000000001", question: "Q", answer: "A", filePath: "a.md", lineNo: 1, locator: "a.md:1", context: [] };
-    const next = scheduler.next(scheduler.initial(T0), 2, T0);
+    const next = scheduler.next(scheduler.initial(T0), 2, T0, "sr-000000000001");
     let q = rated(openQueue([card]), card);
     q = scheduled(q, card.id, { due: next.due, state: next.state }, T0);
     const dueAt = nextDueAt(q)!;
@@ -295,9 +303,9 @@ describe("the intervals the guide quotes are the ones FSRS produces", () => {
   it("is right that a long-standing card rated `1` comes back in ten minutes", async () => {
     expect(await reviewing()).toContain("rated `1`, comes back in 10 minutes");
     const scheduler = new FsrsScheduler();
-    const graduated = scheduler.next(scheduler.initial(T0), 4, T0);
+    const graduated = scheduler.next(scheduler.initial(T0), 4, T0, "sr-000000000001");
     const reviewedAt = new Date(graduated.due);
-    const lapsed = scheduler.next(graduated, 1, reviewedAt);
+    const lapsed = scheduler.next(graduated, 1, reviewedAt, "sr-000000000001");
     expect((new Date(lapsed.due).getTime() - reviewedAt.getTime()) / 60_000).toBe(10);
   });
 });

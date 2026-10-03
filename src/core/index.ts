@@ -932,11 +932,11 @@ export class Core {
           // Every new review is strictly newer than the folded-in state, so the
           // fold can start from that state instead of from zero. Exact, not an
           // approximation — the scheduler is a pure fold.
-          state = fold(this.scheduler, existing, this.store.historyAfter(id, existing.last_review), now);
+          state = fold(this.scheduler, id, existing, this.store.historyAfter(id, existing.last_review), now);
         } else {
           // Something arrived out of order. Replay the full history from zero,
           // in rated_at order, which is a primary-key range scan.
-          state = fold(this.scheduler, null, this.store.historyOf(id), now);
+          state = fold(this.scheduler, id, null, this.store.historyOf(id), now);
         }
         this.store.putState(id, state);
       }
@@ -955,8 +955,8 @@ export class Core {
         const existing = this.store.getSkillState(skill, kind);
         const state =
           existing?.last_review && earliestInserted > existing.last_review
-            ? fold(this.skillScheduler, existing, this.store.skillHistory(skill, kind, existing.last_review), now)
-            : fold(this.skillScheduler, null, this.store.skillHistory(skill, kind), now);
+            ? fold(this.skillScheduler, skillKey(skill, kind), existing, this.store.skillHistory(skill, kind, existing.last_review), now)
+            : fold(this.skillScheduler, skillKey(skill, kind), null, this.store.skillHistory(skill, kind), now);
         this.store.putSkillState(skill, kind, state);
       }
     });
@@ -1076,7 +1076,7 @@ export class Core {
     if (repeat) line.repeat = true;
     await files.appendLog(this.config.notesPath, this.config.device, line);
 
-    const next = fold(this.skillScheduler, previous, [{ rated_at: at, rating }], now);
+    const next = fold(this.skillScheduler, skillKey(skill, kind), previous, [{ rated_at: at, rating }], now);
     this.store.transaction(() => {
       this.store.insertSkillReview(skill, kind, at, rating, exercise, repeat);
       this.store.putSkillState(skill, kind, next);
@@ -1121,7 +1121,7 @@ export class Core {
 
     await files.appendLog(this.config.notesPath, this.config.device, line);
 
-    const next = fold(this.scheduler, previous, [{ rated_at: at, rating }], now);
+    const next = fold(this.scheduler, cardId, previous, [{ rated_at: at, rating }], now);
     this.store.transaction(() => {
       this.store.insertReview(cardId, at, rating);
       this.store.putState(cardId, next);
@@ -1284,7 +1284,7 @@ export class Core {
           // A schedule is only ever written from a history, so none left means
           // the log that justified it is gone. A rebuild would not recreate it.
           if (history.length === 0) this.store.deleteState(id);
-          else this.store.putState(id, fold(this.scheduler, null, history, now));
+          else this.store.putState(id, fold(this.scheduler, id, null, history, now));
         }
         if (last) this.store.setMeta(SCHEDULER_KEY, to);
       });
@@ -1305,7 +1305,7 @@ export class Core {
       for (const { skill, kind } of this.store.scheduledSkills()) {
         const history = this.store.skillHistory(skill, kind);
         if (history.length === 0) this.store.deleteSkillState(skill, kind);
-        else this.store.putSkillState(skill, kind, fold(this.skillScheduler, null, history, now));
+        else this.store.putSkillState(skill, kind, fold(this.skillScheduler, skillKey(skill, kind as SkillKind), null, history, now));
       }
       this.store.setMeta(SKILL_SCHEDULER_KEY, to);
     });

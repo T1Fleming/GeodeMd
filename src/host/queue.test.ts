@@ -234,7 +234,7 @@ describe("the pinned parameters", () => {
   it("keeps every short-term step inside the same sitting", () => {
     const steps: number[] = [];
     for (const rating of [1, 2, 3, 4] as const) {
-      const next = scheduler.next(scheduler.initial(T0), rating, T0);
+      const next = scheduler.next(scheduler.initial(T0), rating, T0, "sr-000000000001");
       if (inShortTermSteps(next)) steps.push(minutesOut(next.due, T0));
       else expect(minutesOut(next.due, T0)).toBeGreaterThan(1440);
     }
@@ -245,9 +245,9 @@ describe("the pinned parameters", () => {
   });
 
   it("puts a lapsed review card back on one", () => {
-    let state = scheduler.next(scheduler.initial(T0), 4, T0);
+    let state = scheduler.next(scheduler.initial(T0), 4, T0, "sr-000000000001");
     const reviewedAt = new Date(state.due);
-    state = scheduler.next(state, 1, reviewedAt);
+    state = scheduler.next(state, 1, reviewedAt, "sr-000000000001");
     expect(inShortTermSteps(state)).toBe(true);
     // `relearning_steps: ["10m"]` (ADR 0028); FSRS-5 said 5.
     expect(minutesOut(state.due, reviewedAt)).toBe(10);

@@ -342,8 +342,8 @@ describe("a database scheduled by a different scheduler", () => {
     initial(now: Date): CardState {
       return this.real.initial(now);
     }
-    next(state: CardState, rating: 1 | 2 | 3 | 4, now: Date): CardState {
-      const n = this.real.next(state, rating, now);
+    next(state: CardState, rating: 1 | 2 | 3 | 4, now: Date, key: string): CardState {
+      const n = this.real.next(state, rating, now, key);
       const later = new Date(new Date(n.due).getTime() + 86_400_000).toISOString();
       return { ...n, due: later, stability: n.stability * 2 };
     }
@@ -386,7 +386,7 @@ describe("a database scheduled by a different scheduler", () => {
     expect(store.getCard("sr-000000000001")).toBeUndefined();
 
     await core.adoptScheduler(T0);
-    const fresh = fold(new FsrsScheduler(), null, store.historyOf("sr-000000000001"), T0);
+    const fresh = fold(new FsrsScheduler(), "sr-000000000001", null, store.historyOf("sr-000000000001"), T0);
     expect(store.getState("sr-000000000001")).toEqual(fresh);
   });
 
@@ -461,7 +461,7 @@ describe("a database from before FSRS-6", () => {
         expect(s.learning_steps).toBe(1);
         expect(s.stability).not.toBe(3.173);
         expect(s).toEqual(
-          fold(new FsrsScheduler(), null, upgraded.historyOf("sr-000000000001"), T0),
+          fold(new FsrsScheduler(), "sr-000000000001", null, upgraded.historyOf("sr-000000000001"), T0),
         );
       } finally {
         upgraded.close();

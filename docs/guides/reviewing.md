@@ -71,9 +71,9 @@ A **new** card rated anything but `4 easy` is due again in **minutes**, not days
 | `1` forgot | 1 minute |
 | `2` hard | 6 minutes |
 | `3` good | 10 minutes |
-| `4` easy | 8 days — graduated, and gone for the session |
+| `4` easy | about 8 days — graduated, and gone for the session |
 
-A card you have been reviewing for months, rated `1`, comes back in 10 minutes. So a session is not one pass through a list — a card returns when its time comes, and you answer it again, and only then does it move on to days.
+Gaps of a few days or more are moved by a few percent either way, so that cards you rated alike on the same day don't all come due together again. Short steps are never moved. A card you have been reviewing for months, rated `1`, comes back in 10 minutes. So a session is not one pass through a list — a card returns when its time comes, and you answer it again, and only then does it move on to days.
 
 Two things follow that you will see on screen:
 

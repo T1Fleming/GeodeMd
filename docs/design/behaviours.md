@@ -11,13 +11,13 @@ app do*, and *where is that proven*. What it deliberately cannot tell you is wha
 app does **untested** — an area that looks thin here is thinly covered, and that is
 worth reading as a finding rather than a gap in the document.
 
-888 behaviours in 13 areas, which follow [the guides](../guides/) rather than the source tree.
+893 behaviours in 13 areas, which follow [the guides](../guides/) rather than the source tree.
 
 - [Reviewing](#reviewing) — 234
 - [Recognising a card](#recognising-a-card) — 129
 - [Exercises](#exercises) — 56
 - [Syncing notes](#syncing-notes) — 89
-- [Recovery and the log](#recovery-and-the-log) — 54
+- [Recovery and the log](#recovery-and-the-log) — 59
 - [Moving between machines](#moving-between-machines) — 17
 - [Keeping several vaults](#keeping-several-vaults) — 60
 - [Setting up this machine](#setting-up-this-machine) — 82
@@ -1068,7 +1068,7 @@ _4 · `files/files.test.ts`_
 
 _The append-only review log, and rebuilding the database from nothing but notes and logs._
 
-**54 behaviours.**
+**59 behaviours.**
 
 ### what the app says when due dates were worked out again
 
@@ -1170,6 +1170,16 @@ _5 · `scheduler/scheduler.test.ts`_
 - leaves ts-fsrs nothing to fill in, and so nothing to log
 - pins the short-term steps ADR 0023's same-sitting re-show is built on
 - calls itself by the library and every parameter, so changing either is noticed
+
+### fuzz spreads due dates, and every replay draws the same fuzz
+
+_5 · `scheduler/scheduler.test.ts`_
+
+- draws the same schedule from the same history, every time
+- draws the same schedule replaying from a midpoint as from the start
+- parts cards rated alike at the same moments onto different days
+- never moves a short-term step
+- draws exactly these dates, so a change in the library's fuzz is noticed
 
 ### opening a vault another scheduler scheduled
 

@@ -185,7 +185,9 @@ interface Scheduler {
 }
 ```
 
-It is FSRS-6, from `ts-fsrs` 5.4.2. Its parameters — all 21 weights, `request_retention`, `maximum_interval`, `enable_fuzz: false`, `enable_short_term`, `learning_steps` and `relearning_steps` — are written out literally in source rather than inherited from `ts-fsrs`, and the dependency is pinned to an exact version. This is what makes replay deterministic, and therefore what makes the rebuild test possible. See [ADR 0007](../decisions/0007-pin-fsrs-parameters-in-source.md) for the rule and [ADR 0028](../decisions/0028-move-to-fsrs-6.md) for the version and the weights.
+It is FSRS-6, from `ts-fsrs` 5.4.2. Its parameters — all 21 weights, `request_retention`, `maximum_interval`, `enable_fuzz: true`, `enable_short_term`, `learning_steps` and `relearning_steps` — are written out literally in source rather than inherited from `ts-fsrs`, and the dependency is pinned to an exact version. This is what makes replay deterministic, and therefore what makes the rebuild test possible. See [ADR 0007](../decisions/0007-pin-fsrs-parameters-in-source.md) for the rule and [ADR 0028](../decisions/0028-move-to-fsrs-6.md) for the version and the weights.
+
+**Fuzz is on, and its seed is ours** ([ADR 0039](../decisions/0039-exercises-after-first-use.md)). An interval of three days or more moves by a few percent, so things rated alike on the same day stop coming due together. The fuzz is drawn from `seedFrom`, which is built from the card's id (or the skill and kind), the review's time in milliseconds, and the review count. It never uses a float, so two machines whose maths differ in the last digit still draw the same fuzz. The recipe's name is part of `SCHEDULER_VERSION`, so changing it re-derives every schedule. `scheduler.test.ts` pins two fuzzed due dates, so a library change to its generator or its ranges fails there.
 
 The weight vector is 21 long on purpose. Given 19, `ts-fsrs` 5 does not fail: it pads the vector to 21 itself, which would be FSRS-5's weights on FSRS-6's engine.
 
