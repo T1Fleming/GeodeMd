@@ -236,6 +236,43 @@ export function chooseExercise(
 }
 
 /**
+ * Spot reviews mixed in among the due cards (ADR 0039): spread evenly through
+ * them, in an order worked out from each skill and the day.
+ *
+ * Their order used to be the skills' names, so a reader soon knew the first
+ * spot review was probably `binary-search`, and the last was whatever had not
+ * been asked yet (#81). Hashing the skill with the day changes the order daily
+ * while keeping it the same on every machine and every rebuild, and reading no
+ * randomness keeps the sitting testable at a given `now`. Pure, and exported
+ * so the rule can be tested without a database.
+ */
+export function mixIn<T>(cards: readonly T[], spots: readonly SpotReview[], dayStart: Date): Array<T | SpotReview> {
+  const day = dayStart.toISOString();
+  const keyed = spots.map((s) => ({ s, k: fnv1a(`${s.skill}\u0000${day}`) }));
+  keyed.sort((a, b) => a.k - b.k || a.s.skill.localeCompare(b.s.skill));
+  const out: Array<T | SpotReview> = [];
+  let next = 0;
+  keyed.forEach(({ s }, i) => {
+    // The ith of n spot reviews goes after (i + 1) / (n + 1) of the cards.
+    const at = Math.floor(((i + 1) * cards.length) / (keyed.length + 1));
+    while (next < at) out.push(cards[next++]!);
+    out.push(s);
+  });
+  while (next < cards.length) out.push(cards[next++]!);
+  return out;
+}
+
+/** 32-bit FNV-1a: a small, stable hash, so an order derived from it is the same everywhere. */
+function fnv1a(text: string): number {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < text.length; i++) {
+    h ^= text.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return h >>> 0;
+}
+
+/**
  * What `adoptScheduler` did when it had to do something: every schedule in
  * the database was worked out again, because a different scheduler had
  * derived them (ADR 0028).
@@ -1002,15 +1039,17 @@ export class Core {
   }
 
   /**
-   * A sitting: cards that are due, then skills due for a spot review, then
-   * cards never reviewed — `limit` in all. Spot reviews sit between the two
-   * halves of `getDueCards` because they are due, like the first half, and
-   * an exercise is something the user opted into, unlike a backlog of new
-   * cards (ADR 0038).
+   * A sitting: cards that are due with skills due for a spot review mixed in
+   * among them, then cards never reviewed — `limit` in all. Spot reviews come
+   * before new cards because they are due, and an exercise is something the
+   * user opted into, unlike a backlog of new cards (ADR 0038). They are mixed
+   * in, not queued after the due cards, so that neither their order nor their
+   * place gives the skill away (ADR 0039).
    */
   getReviewItems(now: Date, dayStart: Date, limit = 50): ReviewItem[] {
-    const out: ReviewItem[] = this.store.dueCards(now.toISOString(), limit).map(toDueCard);
-    if (out.length < limit) out.push(...this.getSpotReviews(now, dayStart, limit - out.length));
+    const due = this.store.dueCards(now.toISOString(), limit).map(toDueCard);
+    const spots = due.length < limit ? this.getSpotReviews(now, dayStart, limit - due.length) : [];
+    const out = mixIn(due, spots, dayStart);
     if (out.length < limit) {
       for (const row of this.store.newCards(limit - out.length)) out.push(toDueCard(row));
     }

@@ -89,9 +89,10 @@ Skill reviews go in the same shards as card reviews:
 `dayStart` is `host`'s `startOfDay(now)`, the start of the local day. `core` reads no timezone.
 
 `Core.getReviewItems` builds a sitting:
-1. due cards;
-2. spot reviews;
-3. new cards.
+1. due cards, with spot reviews mixed in among them;
+2. new cards.
+
+**`mixIn`** places them ([ADR 0039](../decisions/0039-exercises-after-first-use.md)). Spot reviews are ordered by a hash of the skill and `dayStart`, and spread evenly through the due cards. In name order, the first spot review of a sitting was always the alphabetically first skill, and the last could be answered by elimination. The hash is FNV-1a, so the order is the same on every machine and every rebuild, and different each day. It reads no randomness, so a sitting is still testable at a given `now`. Which skills are in the sitting, and which exercise each gets, is decided first, exactly as before. Only the order changes.
 
 `limit` applies to the three together. Spot reviews are due, like the first group, and exercises are something the user opted into, unlike a backlog of new cards.
 
