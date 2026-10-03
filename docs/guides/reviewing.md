@@ -212,6 +212,7 @@ What makes it work:
 - **Don't put the skill in the title.** "Daily Temperatures (monotonic stack)" answers the question before it is asked. The note's path is fine: it stays hidden until you reveal.
 - **Tag only the skills the note genuinely uses.** Since any tag counts as right, a note with two tags tests each of them less well.
 - **A skill comes back in days, never minutes**, whatever you press. Re-asking a problem a minute later would test nothing but the minute.
+- **Spot reviews are mixed in among your due cards**, in an order that changes each day, so neither where one comes nor which comes first tells you the skill.
 - **One problem is not asked twice in a day** for two different skills, as long as either skill has another exercise.
 - **A problem you have solved is used up** for every skill it is tagged with, for spotting and solving alike: you have read its solution, so it is no longer new to any of them. Spotting a problem doesn't use it up for solving, since a spot review shows no solution.
 - **When every exercise for a skill has been asked or solved**, the least recent is asked again, and the reveal says `You have seen every exercise for greedy. Add one to its pool.` Add a note, and the next review asks it.

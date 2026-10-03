@@ -2,8 +2,8 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
-import { chooseExercise, Core, isSpot } from "./index.js";
-import type { SkillKind } from "./index.js";
+import { chooseExercise, Core, isSpot, mixIn } from "./index.js";
+import type { SkillKind, SpotReview } from "./index.js";
 import { Store } from "../store/index.js";
 import type { PoolEntry } from "../store/index.js";
 
@@ -201,15 +201,15 @@ describe("which exercise a skill is served with", () => {
 });
 
 describe("a spot review is in the sitting, asked with an exercise from the pool", () => {
-  it("serves due cards, then skills due for a spot review, then new cards", async () => {
-    await write("cards.md", "Q1 >> A1\nQ2 >> A2\n");
+  it("mixes spot reviews in among the due cards, and serves new cards after both", async () => {
+    await write("cards.md", "Q1 >> A1\nQ2 >> A2\nQ3 >> A3\nQ4 >> A4\n");
     await write("ex.md", exercise(["greedy"], "Jump Game"));
     await core.sync(T0);
-    await core.reviewCard("sr-000000000001", 1, T0);
+    for (const id of ["sr-000000000001", "sr-000000000002", "sr-000000000003"]) await core.reviewCard(id, 1, T0);
 
     const later = new Date(T0.getTime() + 15 * 60_000);
     const items = core.getReviewItems(later, dayOf(later.toISOString()), 10);
-    expect(items.map((i) => (isSpot(i) ? `spot ${i.skill}` : i.question))).toEqual(["Q1", "spot greedy", "Q2"]);
+    expect(items.map((i) => (isSpot(i) ? `spot ${i.skill}` : i.question))).toEqual(["Q1", "spot greedy", "Q2", "Q3", "Q4"]);
   });
 
   it("carries the title, the statement and every skill, and nothing that names the skill asked", async () => {
@@ -408,6 +408,35 @@ describe("the Practice screen offers one solve at a time", () => {
     await write("a.md", exercise(["greedy", "dp"]));
     await core.sync(T0);
     expect(core.stats(T0, 100).solvesDue).toBe(2);
+  });
+});
+
+describe("spot reviews are mixed in, in an order that gives nothing away", () => {
+  const spot = (skill: string): SpotReview => ({ kind: "spot", skill } as SpotReview);
+  const SKILLS = ["binary-search", "dp-1d", "greedy", "hashing", "heap", "monotonic-stack", "sliding-window", "two-pointers"];
+  const order = (day: string): string[] =>
+    mixIn<string>([], SKILLS.map(spot), new Date(day)).map((i) => (i as SpotReview).skill);
+
+  it("orders them by skill and day, not by name: the same all day, different tomorrow", () => {
+    // Seen in use (#81): in name order, the first was always binary-search.
+    const monday = order("2026-10-05T07:00:00.000Z");
+    expect(monday).not.toEqual(SKILLS);
+    expect(order("2026-10-05T07:00:00.000Z")).toEqual(monday);
+    expect(order("2026-10-06T07:00:00.000Z")).not.toEqual(monday);
+    expect([...monday].sort()).toEqual(SKILLS);
+  });
+
+  it("spreads them evenly through the due cards, keeping the cards' own order", () => {
+    const cards = ["c1", "c2", "c3", "c4", "c5", "c6"];
+    const mixed = mixIn(cards, [spot("a"), spot("b")], new Date("2026-10-05T07:00:00.000Z"));
+    expect(mixed.filter((i): i is string => typeof i === "string")).toEqual(cards);
+    expect(mixed.map((i) => (typeof i === "string" ? "card" : "spot"))).toEqual(
+      ["card", "card", "spot", "card", "card", "spot", "card", "card"],
+    );
+  });
+
+  it("serves them on their own when no card is due", () => {
+    expect(mixIn([], [spot("a")], new Date("2026-10-05T07:00:00.000Z"))).toHaveLength(1);
   });
 });
 

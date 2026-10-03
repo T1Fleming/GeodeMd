@@ -11,11 +11,11 @@ app do*, and *where is that proven*. What it deliberately cannot tell you is wha
 app does **untested** — an area that looks thin here is thinly covered, and that is
 worth reading as a finding rather than a gap in the document.
 
-884 behaviours in 13 areas, which follow [the guides](../guides/) rather than the source tree.
+888 behaviours in 13 areas, which follow [the guides](../guides/) rather than the source tree.
 
 - [Reviewing](#reviewing) — 234
 - [Recognising a card](#recognising-a-card) — 129
-- [Exercises](#exercises) — 53
+- [Exercises](#exercises) — 56
 - [Syncing notes](#syncing-notes) — 89
 - [Recovery and the log](#recovery-and-the-log) — 54
 - [Moving between machines](#moving-between-machines) — 17
@@ -25,7 +25,7 @@ worth reading as a finding rather than a gap in the document.
 - [The database as a cache](#the-database-as-a-cache) — 7
 - [At scale](#at-scale) — 9
 - [Rules the project enforces on itself](#rules-the-project-enforces-on-itself) — 36
-- [The documentation tells the truth](#the-documentation-tells-the-truth) — 82
+- [The documentation tells the truth](#the-documentation-tells-the-truth) — 83
 
 ## Reviewing
 
@@ -746,7 +746,7 @@ _8 · `parser/parser.test.ts`_
 
 _Notes opted in by `geode-skills`: a skill scheduled in place of a card, and a different problem from its pool served each time it comes due (ADR 0038)._
 
-**53 behaviours.**
+**56 behaviours.**
 
 ### a note becomes an exercise only by naming its skills
 
@@ -802,7 +802,7 @@ _3 · `core/exercises.test.ts`_
 
 _6 · `core/exercises.test.ts`_
 
-- serves due cards, then skills due for a spot review, then new cards
+- mixes spot reviews in among the due cards, and serves new cards after both
 - carries the title, the statement and every skill, and nothing that names the skill asked
 - never puts one exercise in a sitting twice for two skills that share it
 - never makes a skill with an empty pool due, and keeps its schedule for when it fills
@@ -829,6 +829,14 @@ _6 · `core/exercises.test.ts`_
 - counts a solve against every skill: a solved problem is not new to any of them
 - calls a solved problem a repeat when it is all a pool has left
 - counts skills due for a solve in the stats
+
+### spot reviews are mixed in, in an order that gives nothing away
+
+_3 · `core/exercises.test.ts`_
+
+- orders them by skill and day, not by name: the same all day, different tomorrow
+- spreads them evenly through the due cards, keeping the cards' own order
+- serves them on their own when no card is due
 
 ### the exercises shown beside one once it is answered
 
@@ -1795,7 +1803,7 @@ _5 · `behaviours/areas.test.ts`_
 
 _Documents that make checkable claims, checked._
 
-**82 behaviours.**
+**83 behaviours.**
 
 ### the demo collection
 
@@ -1917,7 +1925,7 @@ _4 · `journeys/reviewing.test.ts`_
 
 ### an exercise is asked as the guide says
 
-_9 · `journeys/reviewing.test.ts`_
+_10 · `journeys/reviewing.test.ts`_
 
 - asks the guide's example as the guide draws it, and writes nothing into the note
 - names the same four ratings, in the same order, with the same words
@@ -1927,6 +1935,7 @@ _9 · `journeys/reviewing.test.ts`_
 - is right that the statement ends sooner at a heading that would give the answer away
 - is right that a skill comes back in days, never minutes, whatever you press
 - is right that a problem you have solved is used up for every skill it is tagged with
+- is right that spot reviews are mixed in among the due cards
 - says what it says when a skill has run out of exercises, and offers no annotation
 
 ### a solve on the Practice tab goes as the guide says

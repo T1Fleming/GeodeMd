@@ -637,6 +637,18 @@ describe("an exercise is asked as the guide says", () => {
     expect(spot!.repeat).toBe(true);
   });
 
+  it("is right that spot reviews are mixed in among the due cards", async () => {
+    expect(plain(await section())).toContain("Spot reviews are mixed in among your due cards, in an order that changes each day");
+    open = await newCollection();
+    await open.write("cards.md", "Q1 >> A1\nQ2 >> A2\n");
+    await open.write("a.md", await exampleNote());
+    await open.core.sync(T0);
+    for (const c of open.core.getDueCards(T0, 10)) await open.core.reviewCard(c.id, 1, T0);
+    const later = new Date(T0.getTime() + 15 * 60_000);
+    const kinds = open.core.getReviewItems(later, startOfDay(later), 10).map((i) => (isSpot(i) ? "spot" : "card"));
+    expect(kinds).toEqual(["card", "spot", "card"]);
+  });
+
   it("says what it says when a skill has run out of exercises, and offers no annotation", async () => {
     expect(await section()).toContain(`\`${repeatText("greedy")}\``);
     expect(plain(await section())).toContain("a is not offered: annotations are for cards.");
