@@ -16,7 +16,7 @@ import { frontmatterEndOf, splitLines } from "./index.js";
  * would yield a different exercise, so every vault re-reads every note once —
  * as `CONTEXT_VERSION` does, and with no warning, because nothing is stamped.
  */
-export const EXERCISE_VERSION = "1";
+export const EXERCISE_VERSION = "2";
 
 /** The property that makes a note an exercise, and the only one read. */
 export const SKILLS_KEY = "geode-skills";
@@ -41,6 +41,15 @@ export type ParsedExercise =
 
 /** `## Solution`, any case, with optional closing `#`s. */
 const SOLUTION = /^##[ \t]+solution(?:[ \t]+#+)?[ \t]*$/i;
+
+/**
+ * Headings that give the answer away as surely as the solution does, and so
+ * end the statement too (ADR 0039). Notes clipped from LeetCode, or written
+ * after one, put "Intuition" or "Approach" above the code; shown on the
+ * question screen, they name the skill before it is asked. A short list on
+ * purpose: "## Examples" or "## Constraints" are part of the problem.
+ */
+const SPOILER = /^##[ \t]+(?:solution|intuition|approach|hints?|explanation)(?:[ \t]+#+)?[ \t]*$/i;
 
 /** A level-1 ATX heading, and its text. */
 const TITLE = /^#[ \t]+(.*?)(?:[ \t]+#+)?[ \t]*$/;
@@ -91,7 +100,8 @@ function skillsOf(value: unknown): string[] | null {
 
 /**
  * The title and the statement: the first `# ` heading, and the text after it up
- * to `## Solution`. Null when there is no `## Solution`.
+ * to the first spoiler heading (`## Solution`, `## Approach`, …). Null when
+ * there is no `## Solution`: a note must still say where its answer is.
  *
  * Headings inside a fenced block are code, not structure, so a statement that
  * quotes Markdown cannot end itself early. A note without a `# ` heading has
@@ -101,6 +111,7 @@ function statementOf(lines: string[]): { title: string | null; statement: string
   let fence: string | null = null;
   let title: string | null = null;
   let start = 0;
+  let end = -1;
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]!;
     const f = FENCE.exec(line);
@@ -110,9 +121,11 @@ function statementOf(lines: string[]): { title: string | null; statement: string
       continue;
     }
     if (fence !== null) continue;
+    if (end === -1 && SPOILER.test(line)) end = i;
     if (SOLUTION.test(line)) {
-      return { title, statement: lines.slice(start, i).join("\n").trim() };
+      return { title, statement: lines.slice(start, end).join("\n").trim() };
     }
+    if (end !== -1) continue;
     const t: RegExpExecArray | null = title === null ? TITLE.exec(line) : null;
     if (t && t[1]!.trim() !== "") {
       title = t[1]!.trim();

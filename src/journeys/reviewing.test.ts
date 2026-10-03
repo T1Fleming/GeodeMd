@@ -602,6 +602,17 @@ describe("an exercise is asked as the guide says", () => {
     expect(exerciseReason(summary)).toContain("a.md");
   });
 
+  it("is right that the statement ends sooner at a heading that would give the answer away", async () => {
+    expect(plain(await section())).toContain(
+      "The statement ends at ## Solution, or sooner at a heading that would give the answer away: ## Intuition, ## Approach, ## Hint or ## Hints, and ## Explanation.",
+    );
+    open = await newCollection();
+    await open.write("a.md", (await exampleNote()).replace("## Solution", "## Approach\n\nA stack.\n\n## Solution"));
+    await open.core.sync(T0);
+    const [spot] = open.core.getSpotReviews(T0, startOfDay(T0), 10);
+    expect(spot!.statement).not.toContain("stack");
+  });
+
   it("is right that a skill comes back in days, never minutes, whatever you press", async () => {
     expect(plain(await section())).toContain("A skill comes back in days, never minutes, whatever you press.");
     open = await newCollection();

@@ -46,6 +46,7 @@ New decisions from here get an ADR when they are made, not in a later sweep — 
 | [0036](0036-rating-one-is-called-forgot.md) | Rating `1` is called *forgot* | Accepted |
 | [0037](0037-mark-the-line-being-asked.md) | Mark the line being asked, and reveal the answer in its place | Accepted |
 | [0038](0038-exercises.md) | Exercises: schedule the skill, serve a different problem each time | Accepted |
+| [0039](0039-exercises-after-first-use.md) | Exercises after first use: what testing changed | Accepted |
 
 ## Writing one
 

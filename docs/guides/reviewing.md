@@ -207,7 +207,7 @@ Which skill does this call for? → ?
 What makes it work:
 
 - **Only `geode-skills` makes a note an exercise**, and it has to be a list, like `[two-pointers, greedy]`. Every other property is yours: `tags`, or a `form: exercise` you filter by, mean nothing to GeodeMD. In Obsidian, `geode-skills` is a list property you edit in the Properties panel.
-- **The statement ends at `## Solution`.** A review shows the title and everything after it up to that heading, and nothing else: no path line, no tags. A note with `geode-skills` but no `## Solution` heading is left out, and the sync summary names it. Otherwise a review would show your solution.
+- **The statement ends at `## Solution`, or sooner at a heading that would give the answer away:** `## Intuition`, `## Approach`, `## Hint` or `## Hints`, and `## Explanation`. A review shows the title and everything after it up to that heading, and nothing else: no path line, no tags. Sections that belong to the problem, like `## Examples`, stay in. A note with `geode-skills` but no `## Solution` heading is left out, and the sync summary names it. Otherwise a review would show your solution.
 - **Nothing is written into the note.** An exercise gets no id comment.
 - **Don't put the skill in the title.** "Daily Temperatures (monotonic stack)" answers the question before it is asked. The note's path is fine: it stays hidden until you reveal.
 - **Tag only the skills the note genuinely uses.** Since any tag counts as right, a note with two tags tests each of them less well.

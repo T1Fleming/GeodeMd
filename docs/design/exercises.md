@@ -23,7 +23,7 @@ Details worth knowing:
 - **Most notes with properties are not exercises.** If the block doesn't contain the text `geode-skills`, the YAML is never parsed. That keeps sync's cost where it was, and keeps a malformed block in an unrelated note from being reported.
 - **The YAML library is `yaml`** (eemeli), pinned exactly. It has no dependencies, is safe in the renderer bundle, and doesn't execute custom tags.
 - **The title** is the first `# ` heading, or the file name when there is none.
-- **The statement** is everything after the title up to `## Solution`. The heading is matched case-insensitively, with optional closing `#`s. Headings inside a fenced block don't count.
+- **The statement** is everything after the title up to the first **spoiler heading**: `## Solution`, `## Intuition`, `## Approach`, `## Hint`, `## Hints` or `## Explanation` ([ADR 0039](../decisions/0039-exercises-after-first-use.md)). Headings are matched case-insensitively, with optional closing `#`s. Headings inside a fenced block don't count. A note still needs `## Solution` itself; a spoiler heading alone is `no-solution`.
 - **Nothing is ever written into an exercise note.** No stamp is minted, which is why the card parser's skip list has nothing to guard here.
 
 `EXERCISE_VERSION` works like `CONTEXT_VERSION`. A database recorded under another version makes the next sync read every note once, with no warning, because nothing can be stamped.
