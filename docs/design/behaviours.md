@@ -11,11 +11,11 @@ app do*, and *where is that proven*. What it deliberately cannot tell you is wha
 app does **untested** — an area that looks thin here is thinly covered, and that is
 worth reading as a finding rather than a gap in the document.
 
-881 behaviours in 13 areas, which follow [the guides](../guides/) rather than the source tree.
+884 behaviours in 13 areas, which follow [the guides](../guides/) rather than the source tree.
 
 - [Reviewing](#reviewing) — 234
 - [Recognising a card](#recognising-a-card) — 129
-- [Exercises](#exercises) — 51
+- [Exercises](#exercises) — 53
 - [Syncing notes](#syncing-notes) — 89
 - [Recovery and the log](#recovery-and-the-log) — 54
 - [Moving between machines](#moving-between-machines) — 17
@@ -25,7 +25,7 @@ worth reading as a finding rather than a gap in the document.
 - [The database as a cache](#the-database-as-a-cache) — 7
 - [At scale](#at-scale) — 9
 - [Rules the project enforces on itself](#rules-the-project-enforces-on-itself) — 36
-- [The documentation tells the truth](#the-documentation-tells-the-truth) — 81
+- [The documentation tells the truth](#the-documentation-tells-the-truth) — 82
 
 ## Reviewing
 
@@ -746,7 +746,7 @@ _8 · `parser/parser.test.ts`_
 
 _Notes opted in by `geode-skills`: a skill scheduled in place of a card, and a different problem from its pool served each time it comes due (ADR 0038)._
 
-**51 behaviours.**
+**53 behaviours.**
 
 ### a note becomes an exercise only by naming its skills
 
@@ -821,11 +821,13 @@ _5 · `core/exercises.test.ts`_
 
 ### the Practice screen offers one solve at a time
 
-_4 · `core/exercises.test.ts`_
+_6 · `core/exercises.test.ts`_
 
 - offers the skill whose solve is most overdue, with an exercise picked by the same rules
 - is null when no skill is due for a solve
 - does not count a spot review against a solve: a spot shows no solution
+- counts a solve against every skill: a solved problem is not new to any of them
+- calls a solved problem a repeat when it is all a pool has left
 - counts skills due for a solve in the stats
 
 ### the exercises shown beside one once it is answered
@@ -1793,7 +1795,7 @@ _5 · `behaviours/areas.test.ts`_
 
 _Documents that make checkable claims, checked._
 
-**81 behaviours.**
+**82 behaviours.**
 
 ### the demo collection
 
@@ -1915,7 +1917,7 @@ _4 · `journeys/reviewing.test.ts`_
 
 ### an exercise is asked as the guide says
 
-_8 · `journeys/reviewing.test.ts`_
+_9 · `journeys/reviewing.test.ts`_
 
 - asks the guide's example as the guide draws it, and writes nothing into the note
 - names the same four ratings, in the same order, with the same words
@@ -1924,6 +1926,7 @@ _8 · `journeys/reviewing.test.ts`_
 - leaves out a note with no ## Solution, and the summary names it
 - is right that the statement ends sooner at a heading that would give the answer away
 - is right that a skill comes back in days, never minutes, whatever you press
+- is right that a problem you have solved is used up for every skill it is tagged with
 - says what it says when a skill has run out of exercises, and offers no annotation
 
 ### a solve on the Practice tab goes as the guide says

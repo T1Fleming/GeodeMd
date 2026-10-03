@@ -172,24 +172,27 @@ describe("which exercise a skill is served with", () => {
       await rate("greedy", "spot", "2026-10-19T08:31:55.184Z", 4),
       await rate("greedy", "spot", "2026-11-02T08:09:40.551Z", 4),
     ];
+    // ADR 0039 changed picks 5, 7 and 8: a solved exercise is used up for
+    // every skill. Pick 5 used to be Trapping Rain Water, three days after its
+    // solution — which names the stack — was read for two-pointers.
     expect(served).toEqual([
       "container-with-most-water",
       "jump-game",
       "daily-temperatures",
       "trapping-rain-water",
-      "trapping-rain-water",
-      "container-with-most-water",
+      "daily-temperatures",
       "container-with-most-water",
       "jump-game",
+      "container-with-most-water",
     ]);
     expect(pick("monotonic-stack", "solve", "2026-11-02T09:00:00.000Z")).toBe("leetcode/daily-temperatures.md");
 
-    // Only the last was a repeat: greedy had spotted both its exercises.
+    // The last is a repeat: greedy had spotted Jump Game, and solved Container.
     const lines = (await fs.readFile(path.join(notes, ".sr", "log", "test-2026-11.jsonl"), "utf8")).trim().split("\n");
     expect(JSON.parse(lines[0]!)).toEqual({
       skill: "greedy",
       kind: "spot",
-      exercise: "leetcode/jump-game.md",
+      exercise: "leetcode/container-with-most-water.md",
       at: "2026-11-02T08:09:40.551Z",
       rating: 4,
       repeat: true,
@@ -373,6 +376,32 @@ describe("the Practice screen offers one solve at a time", () => {
     // step 2 is per kind, so step 3 (never served first) decides.
     expect(core.getSolveReview(T0, dayOf(T0.toISOString()))!.filePath).toBe("b.md");
     expect(core.getSolveReview(T0, dayOf(T0.toISOString()))!.repeat).toBe(false);
+  });
+
+  it("counts a solve against every skill: a solved problem is not new to any of them", async () => {
+    // Seen in use (#81): Trapping Rain Water, solved for two-pointers, came
+    // back as a fresh exercise for monotonic-stack (ADR 0039). a.md is the
+    // least recently served, so only the solve keeps it from being picked.
+    await write("a.md", exercise(["two-pointers", "monotonic-stack"], "A"));
+    await write("b.md", exercise(["monotonic-stack", "sliding-window"], "B"));
+    await core.sync(T0);
+    await core.reviewSkill({ skill: "two-pointers", kind: "solve", exercise: "a.md", repeat: false }, 4, new Date("2026-10-01T08:00:00.000Z"), 900);
+    await core.reviewSkill({ skill: "sliding-window", kind: "spot", exercise: "b.md", repeat: false }, 4, new Date("2026-10-02T08:00:00.000Z"));
+    const day = dayOf(T0.toISOString());
+    expect(core.getSolveReview(T0, day)).toMatchObject({ skill: "monotonic-stack", filePath: "b.md", repeat: false });
+    expect(core.getSpotReviews(T0, day, 10).find((r) => r.skill === "monotonic-stack")).toMatchObject({
+      filePath: "b.md",
+      repeat: false,
+    });
+  });
+
+  it("calls a solved problem a repeat when it is all a pool has left", async () => {
+    await write("a.md", exercise(["two-pointers", "monotonic-stack"], "A"));
+    await core.sync(T0);
+    await core.reviewSkill({ skill: "two-pointers", kind: "solve", exercise: "a.md", repeat: false }, 4, new Date("2026-10-01T08:00:00.000Z"), 900);
+    const day = dayOf(T0.toISOString());
+    expect(core.getSolveReview(T0, day)).toMatchObject({ skill: "monotonic-stack", repeat: true });
+    expect(core.getSpotReviews(T0, day, 10).find((r) => r.skill === "monotonic-stack")!.repeat).toBe(true);
   });
 
   it("counts skills due for a solve in the stats", async () => {

@@ -176,7 +176,10 @@ export interface SkillReview {
   filePath: string;
   lineNo: null;
   locator: string;
-  /** This skill has served this exercise for this kind before: the pool has run out. */
+  /**
+   * Not new here: this skill served it for this kind before, or any skill
+   * solved it (ADR 0039). Either way the pool has nothing unseen left.
+   */
   repeat: boolean;
   /** Shown once the answer is: see `Related`. */
   related: Related;
@@ -203,11 +206,12 @@ export function isSpot(item: ReviewItem): item is SpotReview {
 }
 
 /**
- * Which exercise in a pool to serve, by the four rules of ADR 0038:
+ * Which exercise in a pool to serve, by the four rules of ADR 0038, with
+ * rule 2 as ADR 0039 changed it:
  *
  * 1. not served today, for any skill (`dayStart` and on, or `chosen` already
  *    in this sitting);
- * 2. not yet served for this skill and kind;
+ * 2. still new: not served for this skill and kind, and not solved for any skill;
  * 3. least recently served, for any skill — never served first;
  * 4. first by path.
  *
