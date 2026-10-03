@@ -22,6 +22,7 @@ const CH = {
   cardsReview: "geode:cards/review",
   skillsReview: "geode:skills/review",
   practiceNext: "geode:practice/next",
+  practiceHideClock: "geode:practice/hide-clock",
   runStart: "geode:run/start",
   runStatus: "geode:run/status",
   noteOpen: "geode:note/open",
@@ -70,6 +71,7 @@ contextBridge.exposeInMainWorld("geode", {
   skillsReview: (review: unknown, rating: number) =>
     ipcRenderer.invoke(CH.skillsReview, review, rating),
   practiceNext: () => ipcRenderer.invoke(CH.practiceNext),
+  practiceHideClock: (on: boolean) => ipcRenderer.invoke(CH.practiceHideClock, on),
   runStart: (kind: string, req: unknown) => ipcRenderer.invoke(CH.runStart, kind, req),
   runStatus: () => ipcRenderer.invoke(CH.runStatus),
   noteOpen: (filePath: string, line: number | null) =>

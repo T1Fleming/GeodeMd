@@ -45,6 +45,8 @@ export interface AppConfig {
   editor?: string;
   /** `o` shows the note inside the app rather than opening `editor` (#51). */
   viewNotesInside?: boolean;
+  /** The Practice clock is hidden, though it still counts (#81). */
+  hideClock?: boolean;
 }
 
 /** One vault in the list: a notes folder and its own database. */
@@ -304,6 +306,7 @@ export const CH = {
   cardsReview: "geode:cards/review",
   skillsReview: "geode:skills/review",
   practiceNext: "geode:practice/next",
+  practiceHideClock: "geode:practice/hide-clock",
   runStart: "geode:run/start",
   runStatus: "geode:run/status",
   noteOpen: "geode:note/open",
@@ -347,6 +350,8 @@ export interface GeodeApi {
   skillsReview(review: SkillReviewRequest, rating: 1 | 2 | 3 | 4): Promise<Result<Rated>>;
   /** The one solve the Practice screen offers, or null when no skill is due for one (ADR 0038). */
   practiceNext(): Promise<Result<SolveReview | null>>;
+  /** Hide or show the Practice clock, remembered machine-wide (#81). Answers the new setting. */
+  practiceHideClock(on: boolean): Promise<Result<boolean>>;
   runStart(kind: RunKind, req: SyncRequest): Promise<Result<RunStarted>>;
   runStatus(): Promise<Result<RunStatus>>;
   /** Open a card's note. `filePath` is relative to notesPath, as stored. */

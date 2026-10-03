@@ -655,6 +655,9 @@ button.primary.danger { border-color: #d0605e; color: #e07a78; }
 /* --- practice (ADR 0038) ------------------------------------------------ */
 
 .practice .clock { font-variant-numeric: tabular-nums; color: var(--muted); }
+/* The state beside the time: "not started" or "paused", or alone when the clock is hidden. */
+.practice .clock .state { margin-left: 0.6rem; }
+.practice .clock .time + .state::before { content: "· "; }
 /* Shorter than the viewer's, to leave room for the related list and a legend
    of eight buttons that may take two rows: the ratings must stay on screen. */
 .practice .viewer .note { max-height: calc(100vh - 24rem); }

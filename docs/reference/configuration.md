@@ -50,6 +50,7 @@ A **vault** is a notes folder together with its own database ([ADR 0027](../deci
 | `vaults` | yes | — | At least one. A config with no usable vault is treated as unreadable. |
 | `editor` | no | *(absent)* | Machine-wide. What `o` opens a card's note in during review. Normally set from the app's Vault screen. |
 | `viewNotesInside` | no | *(absent — off)* | Machine-wide. `true` makes `o` show the note read-only in the review window, with `e` there opening it in `editor`. Normally set from the app's Vault screen. |
+| `hideClock` | no | *(absent — shown)* | Machine-wide. `true` hides the Practice tab's clock. It still counts, and the time is still recorded. Set with `h` on the Practice tab. |
 
 Each vault:
 
@@ -89,6 +90,10 @@ Line-jumping is applied only for editors that are recognised — `vim +142`, `co
 Whether `o` shows the card's note inside GeodeMD — read-only, in the review window, scrolled to the card — instead of launching `editor`. Set from **Read notes inside GeodeMD first** on the Vault screen, under **Open notes in**.
 
 Only `true` turns it on; anything else, including the key being absent, leaves `o` opening the editor. Turning it off removes the key rather than writing `false`. It is a key of its own rather than a value of `editor`, so choosing it does not cost the editor: **open in editor** (`e`) in the viewer opens the note in `editor`, exactly as `o` would with this off. Like `editor`, it is kept when a vault is re-pointed. A change applies from the next review sitting. See [reading the note without leaving the review](../guides/reviewing.md#reading-the-note-without-leaving-the-review).
+
+### `hideClock`
+
+Whether the Practice tab hides its clock. Set by pressing `h` there, and remembered. Only `true` turns it on; showing the clock again removes the key. The clock still counts while it runs and the time of each solve is still recorded: only the ticking number is hidden, and the tab still says whether the clock is running. See [Solving: the Practice tab](../guides/reviewing.md#solving-the-practice-tab).
 
 ## Where the config comes from
 

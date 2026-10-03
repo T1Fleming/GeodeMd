@@ -29,6 +29,8 @@ import {
   repeatText,
   SPOT_PROMPT,
   startOfDay,
+  clockStateText,
+  startPauseLabel,
   clockText,
   interpretPracticeKey,
   nextSolveText,
@@ -525,14 +527,25 @@ describe("how the Practice screen is worded and keyed", () => {
     ]);
   });
 
-  it("stops the clock on Space or Enter only, and offers leave at both stages", () => {
-    expect(interpretPracticeKey(" ")).toEqual({ kind: "done" });
-    expect(interpretPracticeKey("Enter")).toEqual({ kind: "done" });
+  it("starts and pauses on Space, shows the solution only on d, and offers leave at both stages", () => {
+    // Space meant done until testing showed it pressed to start (#81).
+    expect(interpretPracticeKey(" ")).toEqual({ kind: "toggle" });
+    expect(interpretPracticeKey("d")).toEqual({ kind: "done" });
+    expect(interpretPracticeKey("h")).toEqual({ kind: "clock" });
+    expect(interpretPracticeKey("Enter")).toEqual({ kind: "ignore" });
     expect(interpretPracticeKey("x")).toEqual({ kind: "ignore" });
     // Escape would discard half an hour by reflex; leaving takes `q` (#81).
     expect(interpretPracticeKey("Escape")).toEqual({ kind: "ignore" });
-    expect(practiceKeysAt("solving").map((k) => k.shown)).toEqual(["space", "q"]);
+    expect(practiceKeysAt("solving").map((k) => k.shown)).toEqual(["space", "d", "h", "q"]);
     expect(practiceKeysAt("solved").map((k) => k.shown)).toEqual(["o", "q"]);
+  });
+
+  it("says whether the clock has started, and whether it is running", () => {
+    expect(clockStateText("not-started")).toBe("not started — space to start");
+    expect(clockStateText("paused")).toBe("paused — space to resume");
+    expect(clockStateText("running")).toBe("running");
+    // One button for Space, saying what it will do next.
+    expect(["not-started", "running", "paused"].map((s) => startPauseLabel(s as "running"))).toEqual(["start", "pause", "resume"]);
   });
 
   it("shows the clock as m:ss, and h:mm:ss past the hour", () => {

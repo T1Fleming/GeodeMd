@@ -15,6 +15,7 @@ import {
   readConfig,
   readSettings,
   setEditor,
+  setHideClock,
   setViewNotesInside,
   addVault,
   chooseVault,
@@ -245,6 +246,32 @@ describe("choosing an editor from the app", () => {
 
   it("is null when there is no config to set it in", async () => {
     expect(await setEditor(path.join(dir, "nope.json"), "code")).toBeNull();
+  });
+});
+
+describe("hiding the Practice clock", () => {
+  it("is remembered as its own key, beside the others", async () => {
+    // #81: the clock still counts; only the ticking number is hidden.
+    const file = path.join(dir, "config.json");
+    const first = await initConfig(file, dir);
+    await setViewNotesInside(file, true);
+    await setHideClock(file, true);
+    expect(await readConfig(file)).toEqual({ ...first, viewNotesInside: true, hideClock: true });
+  });
+
+  it("removes the key when shown again, and is on only for a literal true", async () => {
+    const file = path.join(dir, "config.json");
+    await initConfig(file, dir);
+    await setHideClock(file, true);
+    await setHideClock(file, false);
+    const raw = JSON.parse(await fs.readFile(file, "utf8")) as Record<string, unknown>;
+    expect("hideClock" in raw).toBe(false);
+    await fs.writeFile(file, JSON.stringify({ ...raw, hideClock: "yes" }), "utf8");
+    expect((await readConfig(file))!.hideClock).toBeUndefined();
+  });
+
+  it("is null when there is no config to set it in", async () => {
+    expect(await setHideClock(path.join(dir, "nope.json"), true)).toBeNull();
   });
 });
 

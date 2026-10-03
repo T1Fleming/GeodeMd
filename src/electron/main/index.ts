@@ -22,6 +22,7 @@ import {
   initConfig,
   renameVault,
   setEditor,
+  setHideClock,
   setViewNotesInside,
   settleConfigPath,
 } from "../../host/config.js";
@@ -101,6 +102,8 @@ function wire(c: VaultConfig): AppConfig {
     // The review screen reads it to know whether `o` shows the note inside
     // the app (#51). Machine-wide, so every vault's copy carries the same one.
     ...(c.viewNotesInside ? { viewNotesInside: true } : {}),
+    // Practice reads it to know whether to show its clock (#81).
+    ...(c.hideClock ? { hideClock: true } : {}),
   };
 }
 
@@ -212,6 +215,23 @@ function register(): void {
     guard<SolveReview | null>(async () => {
       const { core } = await active.ensure();
       return solveReview(core, new Date());
+    }),
+  );
+
+  /**
+   * Hide or show the Practice clock (#81). Machine-wide, like the viewer
+   * setting; the memoized config is updated to stay the same as the file.
+   */
+  ipcMain.handle(CH.practiceHideClock, (_e, on: boolean) =>
+    guard<boolean>(async () => {
+      const written = await setHideClock(configFile, on === true);
+      if (!written) throw new NoConfig();
+      const config = active.current?.config;
+      if (config) {
+        if (written.hideClock) config.hideClock = true;
+        else delete config.hideClock;
+      }
+      return written.hideClock === true;
     }),
   );
 
