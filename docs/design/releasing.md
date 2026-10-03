@@ -23,6 +23,8 @@ npm --prefix desktop run rebuild   # puts your own architecture back
 
 **The `files` glob has to cover all of `dist/`, not just `dist/electron/`.** `main/index.js` imports `core`, `host`, `files`, `store`, `parser` and `scheduler` by relative path. Package only `dist/electron/**/*` and you get a bundle whose main process resolves nothing, prints nothing, and never exits — a silent hang with no error anywhere. This is written down because it cost an hour to find and would cost it again.
 
+**Every root dependency must also be in `desktop/package.json`.** The main process imports `yaml`, `ts-fsrs` and `nanoid` by bare name. In development they resolve by walking up to the root `node_modules`; a packaged app bundles only `desktop/package.json`'s dependencies, so a missing one passes every development check and then stops the app on an error dialog before anything is logged. `boundaries.test.ts` fails when the two lists differ (#81).
+
 ## Signing and notarization
 
 **Not configured, deliberately** — it needs credentials this repository does not have. The build is signing-*ready*: `hardenedRuntime` is on and `build/entitlements.mac.plist` carries the JIT entitlements V8 needs, without which a signed app launches and immediately dies.

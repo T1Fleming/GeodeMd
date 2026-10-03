@@ -434,3 +434,16 @@ describe("electron, the interface", () => {
     expect(await readFile("electron/ipc.ts")).not.toMatch(/onProgress/);
   });
 });
+
+describe("the packaged app carries what the main process imports", () => {
+  it("lists every root dependency in desktop/package.json, at the same version", async () => {
+    // The main process is tsc output importing bare specifiers like `yaml`. In
+    // development they resolve by walking up to the root `node_modules`; in a
+    // packaged app only `desktop/package.json`'s dependencies are bundled, so a
+    // missing one passes every development check and then hangs the release
+    // on an error dialog (#81). See docs/design/releasing.md.
+    const root = JSON.parse(await fs.readFile(path.join(SRC, "../package.json"), "utf8"));
+    const desktop = JSON.parse(await fs.readFile(path.join(SRC, "../desktop/package.json"), "utf8"));
+    expect(desktop.dependencies).toEqual(root.dependencies);
+  });
+});
