@@ -552,15 +552,18 @@ function Finished({
           in the database until the next one. Saying "you opened 3 notes, run
           sync" after three read-only glances trains the user to ignore it. */}
       {/* Owed, but not due: shown when due, not before (ADR 0033). */}
-      {waiting && <p className="resting">{restingText(waiting.cards, new Date(waiting.at))}</p>}
       {onMore ? (
-        <button className="primary more" onClick={onMore}>
-          Review more
-        </button>
+        <>
+          {waiting && <p className="resting">{restingText(waiting.cards, new Date(waiting.at))}</p>}
+          <button className="primary more" onClick={onMore}>
+            Review more
+          </button>
+        </>
       ) : (
         // More is due than this sitting held, so "Review more" already covers
-        // it; otherwise watch for cards coming due (#67).
-        <IdleCheck nextDueAt={waiting?.at ?? null} onReview={onAgain} />
+        // it; otherwise watch for cards coming due (#67), and say when the
+        // owed ones come back until a check finds they have (#73).
+        <IdleCheck resting={waiting} onReview={onAgain} />
       )}
       {stale !== null && stale.length > 0 && (
         <p className="stale">

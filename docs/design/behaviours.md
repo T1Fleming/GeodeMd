@@ -11,9 +11,9 @@ app do*, and *where is that proven*. What it deliberately cannot tell you is wha
 app does **untested** — an area that looks thin here is thinly covered, and that is
 worth reading as a finding rather than a gap in the document.
 
-925 behaviours in 13 areas, which follow [the guides](../guides/) rather than the source tree.
+930 behaviours in 13 areas, which follow [the guides](../guides/) rather than the source tree.
 
-- [Reviewing](#reviewing) — 238
+- [Reviewing](#reviewing) — 243
 - [Recognising a card](#recognising-a-card) — 129
 - [Exercises](#exercises) — 79
 - [Syncing notes](#syncing-notes) — 89
@@ -31,7 +31,7 @@ worth reading as a finding rather than a gap in the document.
 
 _A session: which card is next, what the keys mean, what a rating records, and what comes back before the sitting ends._
 
-**238 behaviours.**
+**243 behaviours.**
 
 ### the order cards are served in
 
@@ -446,6 +446,16 @@ _3 · `electron/renderer/model/idle.test.ts`_
 - starts only one check at a time
 - offers cards that are due, and nothing when none are
 - keeps what it showed when a check fails, and lets the next one start
+
+### the finished screen stops saying when a card comes back once it has
+
+_5 · `electron/renderer/model/idle.test.ts`_
+
+- says when it comes back before any check has answered
+- still says so after a check that ran before that time
+- drops it once a check since that time offers the card as due now
+- drops it too when that check finds nothing due, since the card is no longer owed
+- keeps it when the check after that time failed, having learned nothing
 
 ### launching an editor without holding the app open
 

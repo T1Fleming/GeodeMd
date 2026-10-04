@@ -448,7 +448,7 @@ function ReviewScreen({
           {screen.total} cards in this vault. Sync after writing more.
         </p>
         {/* Cards that come due while this sits open are offered (#67). */}
-        <IdleCheck nextDueAt={null} onReview={() => void load()} />
+        <IdleCheck resting={null} onReview={() => void load()} />
       </main>
     );
   }
