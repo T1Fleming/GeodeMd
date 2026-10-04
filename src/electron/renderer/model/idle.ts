@@ -27,9 +27,11 @@ export interface Idle {
   checking: boolean;
   /** Cards due now, to offer as a new sitting; null when there is nothing. */
   offer: Found | null;
+  /** When the last check that answered began; null before one has. */
+  checkedAt: number | null;
 }
 
-export const idle: Idle = { checking: false, offer: null };
+export const idle: Idle = { checking: false, offer: null, checkedAt: null };
 
 /**
  * Begin a check, or null when one is already running. Focus, the timer and
@@ -40,12 +42,26 @@ export function startCheck(v: Idle): Idle | null {
 }
 
 /**
- * A check answered. Null means it failed, and the screen stays as it was —
- * an error on a screen that is only waiting would be noise.
+ * A check that began at `at` answered. Null means it failed, and the screen
+ * stays as it was — an error on a screen that is only waiting would be noise.
  */
-export function checked(v: Idle, found: Found | null): Idle {
+export function checked(v: Idle, found: Found | null, at: number): Idle {
   if (found === null) return { ...v, checking: false };
-  return { checking: false, offer: found.count > 0 ? found : null };
+  return { checking: false, offer: found.count > 0 ? found : null, checkedAt: at };
+}
+
+/**
+ * Whether the finished screen still says when its resting cards come back
+ * (#73). It does until a check has run since that time: by then the check
+ * has spoken for those cards, offering them as due now or finding them gone,
+ * and "comes back at 12:06" beside "1 due now" is a time already past.
+ *
+ * Keyed to when a check ran rather than to the clock, so the line changes
+ * when the offer does and not while someone is reading the screen. A failed
+ * check leaves `checkedAt` alone, and with it the line.
+ */
+export function showsResting(v: Idle, restingAt: number): boolean {
+  return v.checkedAt === null || v.checkedAt < restingAt;
 }
 
 /**

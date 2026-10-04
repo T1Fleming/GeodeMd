@@ -1172,6 +1172,11 @@ async function runRestingChecks(): Promise<void> {
     if (!offered) await settle(500);
   }
   check("once it is due, the finished screen offers it", offered, text(".done .due-now"));
+  check(
+    "and stops saying when it comes back, a time now past (#73)",
+    offered && !exists(".done .resting"),
+    text(".done .resting"),
+  );
   await shot("review-06-due-now");
   if (offered) {
     await click(".done .review-due", "Review");
